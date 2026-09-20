@@ -271,7 +271,7 @@ estimate of a model fit on nothing.
 The Monte Carlo estimate of bias and variance in the exercise is the most
 expensive item here only because it repeats the fit $T$ times; each individual
 fit is the same $O(np^2 + p^3)$ least-squares cost as lesson 2 will make cheap
-and stable. Doubling the number of resampled training sets halves the Monte
+and stable. Quadrupling the number of resampled training sets halves the Monte
 Carlo error in the bias and variance estimates, at the cost of $T$ appearing
 linearly in the runtime — a $\sqrt{T}$ return on a $T$ expense, the usual
 Monte Carlo trade.

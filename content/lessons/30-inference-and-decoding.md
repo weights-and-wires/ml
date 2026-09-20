@@ -75,15 +75,15 @@ $$
 
 independent of $d$ entirely. Decode processes one token per sequence, $B = 1$,
 so its intensity is fixed at $2/b$ regardless of model size — in bf16, $b=2$
-bytes, an intensity of exactly $1$ flop per byte, far below any accelerator's
-$P/M$. Decode is memory bound at every model scale, and the bottleneck is the
-time to stream the weights out of memory, not the matmuls themselves. Prefill
-processes the whole prompt as one batch, $B = T_{\text{prompt}}$, so its
-intensity grows linearly with prompt length and crosses into compute-bound
-territory once $T_{\text{prompt}}$ exceeds $b \cdot (P/M) / 2$ — a few hundred
-tokens, for the numbers above. This is why a long prompt's prefill takes
-noticeably longer per token than a short one, while decode's per-token cost
-barely changes with model width at all, only with how much has to be read.
+bytes, exactly $1$ flop per byte, far below any accelerator's $P/M$. Decode is
+memory bound at every model scale: the bottleneck is streaming the weights out
+of memory, not the matmuls. Prefill processes the whole prompt as one batch,
+$B = T_{\text{prompt}}$, so its intensity grows linearly with prompt length and
+crosses into compute-bound territory once $T_{\text{prompt}}$ exceeds
+$b \cdot (P/M) / 2$ — a few hundred tokens, for the numbers above. A long
+prompt's prefill therefore takes noticeably longer per token than a short one,
+while decode's per-token cost barely changes with model width, only with how
+much has to be read.
 
 Decode need not stay memory bound forever. Batching many independent sequences'
 single-token steps together shares one weight read across all of them, exactly
@@ -103,12 +103,12 @@ The fix is to keep every key and value vector computed so far. At step $t$, the
 model computes $Q$, $K$, and $V$ only for the new token, appends the new $K$ and
 $V$ to a per-layer cache, and attends the new query against everything cached,
 old and new. The projections now cost $O(d_{\text{model}}^2)$ per step,
-$O(T d_{\text{model}}^2)$ in total, and generation is linear in $T$ instead of
-quadratic. The attention scores themselves, $O(t \, d_{\text{head}})$ work at
-step $t$, still sum to $O(T^2 d_{\text{head}})$ — unavoidable, since every new
-token must be compared against every previous one — but $d_{\text{head}} \ll
-d_{\text{model}}$, so this term stays far below the projection cost the cache
-just removed, for sequence lengths well short of $d_{\text{model}}$.
+$O(T d_{\text{model}}^2)$ in total, linear in $T$ instead of quadratic. The
+attention scores themselves, $O(t \, d_{\text{head}})$ work at step $t$, still
+sum to $O(T^2 d_{\text{head}})$ — unavoidable, since every new token must be
+compared against every previous one — but $d_{\text{head}} \ll d_{\text{model}}$
+keeps this term far below the projection cost the cache just removed, for
+sequence lengths well short of $d_{\text{model}}$.
 
 The price is memory. Caching keys and values for $n_{\text{kv}}$ heads of width
 $d_{\text{head}}$, across $n_{\text{layer}}$ layers and $T$ cached positions, at
@@ -140,10 +140,9 @@ $n_{\text{kv}}$ groups that each share one key-value head, recovering ordinary
 multi-head attention at $n_{\text{kv}} = n_{\text{head}}$ and multi-query
 attention at $n_{\text{kv}} = 1$. Since the cache formula is linear in
 $n_{\text{kv}}$, grouping queries into $g = n_{\text{head}} / n_{\text{kv}}$
-groups shrinks the cache by exactly a factor of $g$, at the cost of every query
-in a group sharing the same keys and values rather than learning its own —
-a quality trade-off measured empirically, not derived, and typically small for
-$g$ up to eight or so.
+groups shrinks the cache by exactly $g$, at the cost of every query in a group
+sharing keys and values rather than learning its own — a trade-off measured
+empirically, not derived, and typically small for $g$ up to eight or so.
 
 ## Choosing a token
 
@@ -159,18 +158,17 @@ probability at most $0.6 \times 0.5 = 0.30$, while $(a, x)$ has probability
 $0.4 \times 0.99 = 0.396$ — a sequence greedy can never reach, because its
 first step already discarded $a$.
 
-**Beam search** keeps the $k$ highest cumulative-probability partial sequences
-at each step, expands each by the whole vocabulary, and keeps the top $k$ of the
+**Beam search** keeps the $k$ highest cumulative-probability partial sequences at
+each step, expands each by the whole vocabulary, and keeps the top $k$ of the
 resulting $k \lvert V \rvert$ candidates by cumulative log-probability. It costs
 $O(T k \lvert V \rvert)$ time and $O(k)$ sequences held in memory, recovering
-greedy at $k=1$ and, at $k = \lvert V \rvert^T$, exhaustive search. Because every
+greedy at $k=1$ and exhaustive search at $k = \lvert V \rvert^T$. Because every
 extra token multiplies the sequence probability by a factor at most one, raw
-cumulative log-probability only ever falls as a sequence grows, which biases
-beam search toward shorter completions regardless of quality. Dividing the
-cumulative log-probability by the sequence length before comparing candidates —
-scoring by the average per-token log-probability rather than the sum — removes
-this mechanical bias and lets beams of different lengths compete on quality
-instead of brevity.
+cumulative log-probability only falls as a sequence grows, biasing beam search
+toward shorter completions regardless of quality. Dividing by the sequence
+length before comparing candidates — scoring by the average per-token
+log-probability rather than the sum — removes this mechanical bias and lets
+beams of different lengths compete on quality instead of brevity.
 
 **Temperature** rescales the logits before the softmax:
 $\operatorname{softmax}(z/\tau)$. As $\tau \to 0^{+}$, divide numerator and
@@ -214,11 +212,11 @@ loop would otherwise reinforce.
 
 Decode is memory bound, so a small draft model $q$ is nearly as slow, per token,
 as the large target model $p$ it is meant to accelerate — both spend most of
-their time waiting on the same memory bandwidth. Speculative decoding uses that
-fact: let $q$ generate several tokens autoregressively, cheaply, then run $p$
+their time waiting on the same memory bandwidth. Speculative decoding exploits
+that: let $q$ generate several tokens autoregressively, cheaply, then run $p$
 once, in parallel, over the whole draft continuation — a prefill-shaped,
-compute-bound batch of the size arithmetic intensity rewards — and accept or
-reject each drafted token against $p$'s judgement.
+compute-bound batch — and accept or reject each drafted token against $p$'s
+judgement.
 
 For a drafted token $x$, accept it with probability $\min(1, p(x)/q(x))$. On
 acceptance, move to the next drafted token. On rejection, discard every draft

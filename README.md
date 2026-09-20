@@ -141,21 +141,37 @@ same harness and the same exercise directories, so a lesson behaves identically
 on either backend.
 
 With `RUNPOD_ENDPOINT_ID` unset, the GPU lessons fall back to the local CPU
-runner and everything still works. To turn the GPU on:
+runner and everything still works. That is how the deployment starts: the worker
+image is built and `RUNPOD_API_KEY` is set, and one step is left.
 
-1. Let the publish workflow build and push the worker. It runs on every push
-   that touches `gpu/`, `content/exercises/`, or the harness, and tags
+1. The publish workflow already builds and pushes the worker. It runs on every
+   push that touches `gpu/`, `content/exercises/`, or the harness, and tags
    `ghcr.io/weights-and-wires/ml-gpu-worker:latest`.
 
-2. Give RunPod read access to that image. Either make the package public in the
-   repository's package settings, or add a container registry credential in the
-   RunPod console holding a GitHub token with `read:packages`.
+2. **Give RunPod read access to that image.** A package published from Actions
+   starts private, and RunPod pulls anonymously. Make the package public under
+   the organisation's **Packages** settings, the same way
+   `kashifulhaque/learn-inference-worker` is public. The alternative is a
+   container registry credential in the RunPod console holding a GitHub token
+   with `read:packages`, which hands that token to RunPod.
 
-3. In the RunPod console, create a serverless endpoint from that image on the
-   GPU you want, and copy its ID.
+3. Create the endpoint and read back its ID:
 
-4. Set `RUNPOD_API_KEY` and `RUNPOD_ENDPOINT_ID` in the deployed `.env`, then
-   `docker compose up -d`.
+   ```bash
+   RUNPOD_API_KEY=... python3 scripts/runpod_endpoint.py
+   ```
+
+   The script refuses to run while the image is private, and says so. Pass
+   `--skip-pull-check` when you took the registry-credential route instead.
+
+4. Put `RUNPOD_ENDPOINT_ID` in the deployed `.env` and restart:
+
+   ```bash
+   ssh ifkash@vm.ifkash.dev "cd ~/docs/ml && docker compose up -d"
+   ```
+
+`/api/compute` reports what the endpoint has: whether it is reachable, how many
+workers are warm, and how many jobs are queued.
 
 ## Deploy
 
