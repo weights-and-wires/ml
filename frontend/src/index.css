@@ -32,10 +32,17 @@ html,
 body,
 #root {
   height: 100%;
+  /* A mobile browser's toolbars shrink the visible area; 100% resolves against
+     the larger initial containing block and pushes the layout off-screen.
+     Browsers without dvh ignore this line and keep the percentage above. */
+  height: 100dvh;
 }
 
 body {
   margin: 0;
+  /* The app scrolls inside its panes. Letting a pane's overscroll chain up to
+     the document is what triggers pull-to-refresh mid-lesson. */
+  overscroll-behavior: none;
   /* A flat near-black reads as a void on a large screen. Two very low-opacity
      washes give the page a light source without tinting the reading column. */
   background:
@@ -174,6 +181,7 @@ body {
   border-radius: 10px;
   padding: 0.95rem 1.1rem;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   font-size: 0.85rem;
   line-height: 1.6;
 }
@@ -194,6 +202,7 @@ body {
   font-size: 0.88rem;
   display: block;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 .lesson th,
 .lesson td {
@@ -219,8 +228,11 @@ body {
 }
 .lesson .katex-display {
   margin: 1.4em 0;
+  /* A wide equation scrolls inside its own box rather than widening the page,
+     which is how a phone reads the longer derivations. */
   overflow-x: auto;
   overflow-y: hidden;
+  overscroll-behavior-x: contain;
   padding: 0.3em 0;
 }
 .lesson .katex-display > .katex {

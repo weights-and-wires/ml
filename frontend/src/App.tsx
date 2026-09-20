@@ -98,7 +98,7 @@ export default function App() {
           onClick={() => setMenuOpen((v) => !v)}
           aria-label={menuOpen ? "Hide the lesson list" : "Show the lesson list"}
           aria-expanded={menuOpen}
-          className="rounded-md p-1.5 text-ink-400 transition hover:bg-ink-850 hover:text-ink-200 lg:hidden"
+          className="flex size-10 items-center justify-center rounded-md text-ink-400 transition hover:bg-ink-850 hover:text-ink-200 lg:hidden"
         >
           <MenuIcon />
         </button>
@@ -116,7 +116,7 @@ export default function App() {
 
         <Link
           to="/"
-          className="flex items-center gap-2 rounded-md py-0.5 pr-1.5 transition hover:opacity-85"
+          className="flex min-h-10 items-center gap-2 rounded-md py-0.5 pr-1.5 transition hover:opacity-85 lg:min-h-0"
         >
           <span className="flex size-6 items-center justify-center rounded-md bg-ink-850 ring-1 ring-ink-800">
             <Mark size={14} />
@@ -151,7 +151,7 @@ export default function App() {
               .then(() => setUsername(null))
               .catch(() => undefined)
           }
-          className="rounded-md border border-transparent px-2 py-1 text-[11px] text-ink-400 transition hover:border-ink-700 hover:bg-ink-850 hover:text-ink-200"
+          className="rounded-md border border-transparent px-3 py-2.5 text-[12px] text-ink-400 transition hover:border-ink-700 hover:bg-ink-850 hover:text-ink-200 lg:px-2 lg:py-1 lg:text-[11px]"
         >
           Sign out
         </button>

@@ -21,7 +21,7 @@ export default function Dashboard({ parts, progress, username }: Props) {
     lessons[0];
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto">
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
       <div className="mx-auto max-w-4xl px-6 py-10 lg:px-10">
         <header className="mb-8">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-ink-400">

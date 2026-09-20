@@ -2,6 +2,7 @@ import Editor, { type OnMount } from "@monaco-editor/react";
 import { useRef } from "react";
 
 import { EDITOR_OPTIONS, THEME } from "../lib/monaco";
+import { WIDE, useMediaQuery } from "../lib/useMediaQuery";
 
 type Props = {
   value: string;
@@ -22,6 +23,10 @@ export default function CodeEditor({
   onCheck,
   readOnly = false,
 }: Props) {
+  // A phone fits about 35 characters across, so unwrapped code spends most of
+  // its time off the right edge. Wide screens keep the lines as written.
+  const wide = useMediaQuery(WIDE);
+
   // The keyboard commands are registered once, against a ref, so that changing
   // the handler between renders does not re-register them.
   const run = useRef(onRun);
@@ -48,7 +53,15 @@ export default function CodeEditor({
       value={value}
       onChange={(next) => onChange(next ?? "")}
       onMount={mount}
-      options={{ ...EDITOR_OPTIONS, readOnly }}
+      options={{
+        ...EDITOR_OPTIONS,
+        readOnly,
+        wordWrap: wide ? "off" : "on",
+        // The 88-column ruler is meaningless once the lines wrap.
+        rulers: wide ? EDITOR_OPTIONS.rulers : [],
+        lineNumbersMinChars: wide ? 5 : 3,
+        folding: wide,
+      }}
       loading={
         <div className="flex h-full items-center justify-center text-xs text-ink-600">
           Loading the editor…

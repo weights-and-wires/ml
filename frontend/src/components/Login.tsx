@@ -100,6 +100,9 @@ function Field({
   autoComplete?: string;
   autoFocus?: boolean;
 }) {
+  // The field is 16px on a phone and only shrinks on a wider screen: iOS
+  // Safari zooms the page in when a smaller input takes focus, and it never
+  // zooms back out.
   return (
     <label className="block">
       <span className="mb-1.5 block text-xs font-medium text-ink-400">
@@ -111,7 +114,7 @@ function Field({
         autoComplete={autoComplete}
         autoFocus={autoFocus}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-lg border border-ink-800 bg-ink-850 px-3 py-2.5 text-sm text-ink-100 transition placeholder:text-ink-600 hover:border-ink-700 focus:border-wire-500/50 focus:bg-ink-900 focus:outline-none"
+        className="w-full rounded-lg border border-ink-800 bg-ink-850 px-3 py-2.5 text-base text-ink-100 transition placeholder:text-ink-600 hover:border-ink-700 focus:border-wire-500/50 focus:bg-ink-900 focus:outline-none sm:text-sm"
       />
     </label>
   );

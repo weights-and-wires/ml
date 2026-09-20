@@ -130,6 +130,23 @@ export default function Sidebar({
                     />
                   </svg>
                 </button>
+                {/* The drawer covers the header, and with it the button that
+                    opened the drawer, so it carries its own way out. */}
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close the lesson list"
+                  className="-mr-2 flex size-9 items-center justify-center rounded-md text-ink-400 transition hover:bg-ink-850 hover:text-ink-200 lg:hidden"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+                    <path
+                      d="M3.5 3.5l7 7M10.5 3.5l-7 7"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
               </span>
             </div>
             <div className="h-1 overflow-hidden rounded-full bg-ink-800">
@@ -170,12 +187,12 @@ export default function Sidebar({
                 onChange={(event) => setFilter(event.target.value)}
                 placeholder="Filter lessons"
                 aria-label="Filter lessons"
-                className="w-full rounded-lg border border-ink-800 bg-ink-850 py-1.5 pl-7 pr-2.5 text-xs text-ink-200 transition placeholder:text-ink-600 hover:border-ink-700 focus:border-wire-500/50 focus:bg-ink-900 focus:outline-none"
+                className="w-full rounded-lg border border-ink-800 bg-ink-850 py-2 pl-7 pr-2.5 text-base text-ink-200 transition placeholder:text-ink-600 hover:border-ink-700 focus:border-wire-500/50 focus:bg-ink-900 focus:outline-none lg:py-1.5 lg:text-xs"
               />
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2">
             {shown.map((part) => {
               const shut = shutParts.has(part.part) && !query;
               const done = part.lessons.filter(
@@ -188,7 +205,7 @@ export default function Sidebar({
                     type="button"
                     onClick={() => toggle(part.part)}
                     aria-expanded={!shut}
-                    className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[11px] font-medium uppercase tracking-[0.1em] text-ink-400 transition hover:bg-ink-850 hover:text-ink-300"
+                    className="flex w-full items-center gap-1.5 rounded-md px-2 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.1em] text-ink-400 transition hover:bg-ink-850 hover:text-ink-300 lg:py-1.5"
                   >
                     <svg
                       width="10"
@@ -217,7 +234,7 @@ export default function Sidebar({
                               to={`/lessons/${lesson.slug}`}
                               onClick={onClose}
                               className={({ isActive }) =>
-                                `group relative flex items-start gap-2 rounded-md py-1.5 pl-3 pr-2 text-[13px] leading-snug transition ${
+                                `group relative flex items-start gap-2 rounded-md py-2.5 pl-3 pr-2 text-[13px] leading-snug transition lg:py-1.5 ${
                                   isActive || slug === lesson.slug
                                     ? "bg-wire-500/12 text-ink-100 before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:rounded-full before:bg-wire-500"
                                     : "text-ink-300 hover:bg-ink-850 hover:text-ink-200"

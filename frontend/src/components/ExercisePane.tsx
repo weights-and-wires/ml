@@ -220,7 +220,7 @@ export default function ExercisePane({
             <button
               type="button"
               onClick={stop}
-              className="rounded-md border border-bad-500/40 bg-bad-500/10 px-2.5 py-1 text-xs font-medium text-bad-500 transition hover:bg-bad-500/20"
+              className="rounded-md border border-bad-500/40 bg-bad-500/10 px-3.5 py-2 text-xs font-medium text-bad-500 transition hover:bg-bad-500/20 lg:px-2.5 lg:py-1"
             >
               Stop
             </button>
@@ -229,7 +229,7 @@ export default function ExercisePane({
               <button
                 type="button"
                 onClick={() => start("run")}
-                className="rounded-md border border-ink-700 bg-ink-850 px-2.5 py-1 text-xs font-medium text-ink-200 transition hover:border-ink-600 hover:bg-ink-800"
+                className="rounded-md border border-ink-700 bg-ink-850 px-3.5 py-2 text-xs font-medium text-ink-200 transition hover:border-ink-600 hover:bg-ink-800 lg:px-2.5 lg:py-1"
                 title="Run the file (Cmd or Ctrl with Return)"
               >
                 Run
@@ -237,7 +237,7 @@ export default function ExercisePane({
               <button
                 type="button"
                 onClick={() => start("check")}
-                className="rounded-md bg-wire-500 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-wire-600"
+                className="rounded-md bg-wire-500 px-3.5 py-2 text-xs font-medium text-white transition hover:bg-wire-600 lg:px-2.5 lg:py-1"
                 title="Run the checks (Cmd or Ctrl with Shift and Return)"
               >
                 Check
@@ -251,7 +251,7 @@ export default function ExercisePane({
                         "a few seconds to start, so the checks are quicker on the CPU."
                       : "No GPU endpoint is configured, so every run stays on the CPU."
                   }
-                  className={`ml-1 flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition ${
+                  className={`ml-1 flex items-center gap-1.5 rounded-md border px-2.5 py-2 text-xs transition lg:px-2 lg:py-1 ${
                     !gpuAvailable
                       ? "cursor-not-allowed border-ink-800 text-ink-600"
                       : useGpu
@@ -282,7 +282,7 @@ export default function ExercisePane({
               type="button"
               onClick={() => setHintsOpen((v) => !v)}
               aria-expanded={hintsOpen}
-              className="rounded-md px-2 py-1 text-xs text-ink-400 transition hover:bg-ink-850 hover:text-ink-200"
+              className="rounded-md px-2.5 py-2 text-xs text-ink-400 transition hover:bg-ink-850 hover:text-ink-200 lg:px-2 lg:py-1"
             >
               Hints ({exercise.hints.length})
             </button>
@@ -290,14 +290,14 @@ export default function ExercisePane({
           <button
             type="button"
             onClick={reset}
-            className="rounded-md px-2 py-1 text-xs text-ink-400 transition hover:bg-ink-850 hover:text-ink-200"
+            className="rounded-md px-2.5 py-2 text-xs text-ink-400 transition hover:bg-ink-850 hover:text-ink-200 lg:px-2 lg:py-1"
           >
             Reset
           </button>
           <button
             type="button"
             onClick={reveal}
-            className="rounded-md px-2 py-1 text-xs text-ink-400 transition hover:bg-ink-850 hover:text-ink-200"
+            className="rounded-md px-2.5 py-2 text-xs text-ink-400 transition hover:bg-ink-850 hover:text-ink-200 lg:px-2 lg:py-1"
           >
             {revealed ? "Hide solution" : "Solution"}
           </button>
@@ -318,7 +318,7 @@ export default function ExercisePane({
       </header>
 
       {revealed !== null ? (
-        <div className="min-h-0 flex-1 overflow-auto bg-ink-950">
+        <div className="min-h-0 flex-1 overflow-auto overscroll-contain bg-ink-950">
           <div className="border-b border-ink-800 bg-ink-900 px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-ink-400">
             Reference solution
           </div>

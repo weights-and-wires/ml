@@ -20,6 +20,15 @@ type Props = {
   second: ReactNode;
   className?: string;
   label?: string;
+  /**
+   * Stop splitting and show one pane at a time, which is what a phone needs:
+   * half of 375px is too narrow to read prose or to write code in. The panes
+   * stay mounted either way, so crossing the breakpoint never costs the
+   * reader the code they have typed.
+   */
+  stacked?: boolean;
+  /** Which pane `stacked` shows. Ignored while the panes are split. */
+  active?: "first" | "second";
 };
 
 function remembered(key: string, fallback: number): number {
@@ -47,6 +56,8 @@ export default function SplitPane({
   second,
   className = "",
   label = "Resize the panes",
+  stacked = false,
+  active = "first",
 }: Props) {
   const [size, setSize] = useState(() => remembered(storageKey, initial));
   const [dragging, setDragging] = useState(false);
@@ -101,19 +112,32 @@ export default function SplitPane({
     setSize((current) => Math.min(max, Math.max(min, current + delta)));
   }
 
-  const firstStyle: CSSProperties = row
-    ? { width: `${size}%` }
-    : { height: `${size}%` };
+  // While stacked, the visible pane fills the container and the other is
+  // display:none. Monaco relays itself out when it comes back into view.
+  const firstStyle: CSSProperties | undefined = stacked
+    ? undefined
+    : row
+      ? { width: `${size}%` }
+      : { height: `${size}%` };
+
+  function paneClass(which: "first" | "second") {
+    if (!stacked) return "flex min-h-0 min-w-0 flex-col";
+    return active === which
+      ? "flex min-h-0 min-w-0 flex-1 flex-col"
+      : "hidden";
+  }
 
   return (
     <div
       ref={container}
-      className={`flex min-h-0 min-w-0 ${row ? "flex-row" : "flex-col"} ${className}`}
+      className={`flex min-h-0 min-w-0 ${row && !stacked ? "flex-row" : "flex-col"} ${className}`}
     >
-      <div className="flex min-h-0 min-w-0 flex-col" style={firstStyle}>
+      <div className={paneClass("first")} style={firstStyle}>
         {first}
       </div>
 
+      {/* `touch-none` keeps a drag on the divider from scrolling the pane
+          underneath it, which is the only way a touch screen can resize. */}
       <div
         role="separator"
         aria-orientation={row ? "vertical" : "horizontal"}
@@ -121,7 +145,8 @@ export default function SplitPane({
         aria-valuenow={Math.round(size)}
         aria-valuemin={min}
         aria-valuemax={max}
-        tabIndex={0}
+        tabIndex={stacked ? -1 : 0}
+        aria-hidden={stacked}
         onPointerDown={(event) => {
           event.preventDefault();
           setDragging(true);
@@ -136,20 +161,28 @@ export default function SplitPane({
           else return;
           event.preventDefault();
         }}
-        className={`group relative shrink-0 transition-colors ${
-          row ? "w-px cursor-col-resize" : "h-px cursor-row-resize"
-        } ${dragging ? "bg-wire-500" : "bg-ink-800 hover:bg-wire-500/60"}`}
+        className={`group relative shrink-0 touch-none transition-colors ${
+          stacked ? "hidden" : ""
+        } ${row ? "w-px cursor-col-resize" : "h-px cursor-row-resize"} ${
+          dragging ? "bg-wire-500" : "bg-ink-800 hover:bg-wire-500/60"
+        }`}
       >
         {/* The visible line is a hairline; this widens what the pointer hits. */}
         <span
           className={`absolute ${
-            row ? "-inset-x-2 inset-y-0" : "-inset-y-2 inset-x-0"
+            row ? "-inset-x-2.5 inset-y-0" : "-inset-y-2.5 inset-x-0"
           }`}
           aria-hidden
         />
       </div>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">{second}</div>
+      <div
+        className={
+          stacked ? paneClass("second") : "flex min-h-0 min-w-0 flex-1 flex-col"
+        }
+      >
+        {second}
+      </div>
     </div>
   );
 }

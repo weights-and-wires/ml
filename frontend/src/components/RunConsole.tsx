@@ -68,7 +68,7 @@ export default function RunConsole({
       </header>
 
       <div
-        className="min-h-0 flex-1 overflow-y-auto px-3 py-2 font-mono text-[12.5px] leading-relaxed"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2 font-mono text-[12.5px] leading-relaxed"
         onScroll={(event) => {
           const el = event.currentTarget;
           setStuck(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
