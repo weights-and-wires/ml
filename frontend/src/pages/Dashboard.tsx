@@ -50,17 +50,31 @@ export default function Dashboard({ parts, progress, username }: Props) {
         {next && (
           <Link
             to={`/lessons/${next.slug}`}
-            className="mb-9 block rounded-xl border border-wire-500/30 bg-wire-500/8 p-5 transition hover:border-wire-500/50 hover:bg-wire-500/12"
+            className="group mb-9 flex items-center gap-4 rounded-xl border border-wire-500/30 bg-gradient-to-br from-wire-500/12 to-wire-500/5 p-5 transition hover:border-wire-500/50 hover:from-wire-500/16"
           >
-            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-wire-400">
-              {progress[next.slug] ? "Carry on with" : "Start with"}
+            <span className="min-w-0 flex-1">
+              <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-wire-400">
+                {progress[next.slug] ? "Carry on with" : "Start with"}
+              </span>
+              <span className="mt-1.5 block text-lg font-medium text-ink-100">
+                {next.title}
+              </span>
+              <span className="mt-1 block text-[13px] leading-snug text-ink-300">
+                {next.summary}
+              </span>
             </span>
-            <h2 className="mt-1.5 text-lg font-medium text-ink-100">
-              {next.title}
-            </h2>
-            <p className="mt-1 text-[13px] leading-snug text-ink-300">
-              {next.summary}
-            </p>
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full border border-wire-500/30 text-wire-400 transition group-hover:translate-x-0.5 group-hover:border-wire-500/60 group-hover:bg-wire-500/15">
+              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+                <path
+                  d="M2 7h9m-3.5-4 4 4-4 4"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
           </Link>
         )}
 
@@ -77,7 +91,7 @@ export default function Dashboard({ parts, progress, username }: Props) {
                     <li key={lesson.slug}>
                       <Link
                         to={`/lessons/${lesson.slug}`}
-                        className="flex h-full flex-col rounded-lg border border-ink-800 bg-ink-900 p-3.5 transition hover:border-ink-700 hover:bg-ink-850"
+                        className="flex h-full flex-col rounded-lg border border-ink-800 bg-ink-900/70 p-3.5 transition duration-150 hover:-translate-y-px hover:border-wire-500/30 hover:bg-ink-850"
                       >
                         <div className="mb-1 flex items-center gap-2">
                           <span
@@ -119,7 +133,7 @@ export default function Dashboard({ parts, progress, username }: Props) {
               {me.runs.slice(0, 10).map((run, index) => (
                 <li
                   key={index}
-                  className="flex items-center gap-3 rounded-md px-2 py-1.5 font-mono text-[11.5px] text-ink-400 odd:bg-ink-900"
+                  className="flex items-center gap-3 rounded-md px-2 py-1.5 font-mono text-[11.5px] text-ink-400 transition odd:bg-ink-900/70 hover:bg-ink-850"
                 >
                   <span
                     className={`size-1.5 shrink-0 rounded-full ${run.ok ? "bg-good-500" : "bg-bad-500"}`}
@@ -149,7 +163,7 @@ export default function Dashboard({ parts, progress, username }: Props) {
 
 function Stat({ label, value, of }: { label: string; value: string; of?: string }) {
   return (
-    <div className="rounded-lg border border-ink-800 bg-ink-900 px-3.5 py-3">
+    <div className="rounded-lg border border-ink-800 bg-ink-900/70 px-3.5 py-3 transition hover:border-ink-700">
       <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-ink-400">
         {label}
       </div>

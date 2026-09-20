@@ -9,6 +9,7 @@
   --color-ink-800: #1a1e27;
   --color-ink-700: #252a36;
   --color-ink-600: #39404f;
+  --color-ink-500: #5b6475;
   --color-ink-400: #7b8496;
   --color-ink-300: #a3abba;
   --color-ink-200: #cdd3dd;
@@ -35,15 +36,46 @@ body,
 
 body {
   margin: 0;
-  background: var(--color-ink-950);
+  /* A flat near-black reads as a void on a large screen. Two very low-opacity
+     washes give the page a light source without tinting the reading column. */
+  background:
+    radial-gradient(
+      1100px 620px at 14% -8%,
+      color-mix(in oklab, var(--color-wire-500) 11%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      900px 520px at 96% 4%,
+      color-mix(in oklab, var(--color-good-500) 6%, transparent),
+      transparent 58%
+    ),
+    var(--color-ink-950);
+  background-attachment: fixed;
   color: var(--color-ink-200);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-wire-500) 32%, transparent);
+  color: var(--color-ink-100);
 }
 
 *:focus-visible {
   outline: 2px solid var(--color-wire-500);
   outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Honour a reader who has asked the system for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Scrollbars that do not shout in a dark pane. */

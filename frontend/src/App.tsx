@@ -2,10 +2,21 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import Login from "./components/Login";
+import Mark from "./components/Mark";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
 import LessonPage from "./pages/LessonPage";
 import { api, type Part, type ProgressMap } from "./lib/api";
+
+const COLLAPSED_KEY = "ml.sidebar.collapsed";
+
+function rememberedCollapse(): boolean {
+  try {
+    return window.localStorage.getItem(COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export default function App() {
   const [username, setUsername] = useState<string | null>(null);
@@ -14,6 +25,9 @@ export default function App() {
   const [progress, setProgress] = useState<ProgressMap>({});
   const [gpu, setGpu] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // menuOpen drives the drawer on a narrow screen; collapsed hides the lesson
+  // list on a wide one, which a reader wants once the editor is open.
+  const [collapsed, setCollapsed] = useState(rememberedCollapse);
   const location = useLocation();
 
   useEffect(() => {
@@ -42,6 +56,28 @@ export default function App() {
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(COLLAPSED_KEY, collapsed ? "1" : "0");
+    } catch {
+      // Storage being off only costs the reader their sidebar state.
+    }
+  }, [collapsed]);
+
+  // Cmd or Ctrl with B shows and hides the lesson list, the way an editor
+  // treats its own sidebar. Monaco leaves this combination alone.
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      if (event.key !== "b" && event.key !== "B") return;
+      event.preventDefault();
+      setCollapsed((v) => !v);
+      setMenuOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   if (!ready) {
     return (
       <div className="flex h-full items-center justify-center text-xs text-ink-600">
@@ -56,20 +92,35 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex shrink-0 items-center gap-3 border-b border-ink-800 bg-ink-900 px-3 py-2">
+      <header className="z-40 flex shrink-0 items-center gap-2 border-b border-ink-800 bg-ink-900/85 px-3 py-2 backdrop-blur-md">
         <button
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
-          aria-label="Show the lesson list"
+          aria-label={menuOpen ? "Hide the lesson list" : "Show the lesson list"}
+          aria-expanded={menuOpen}
           className="rounded-md p-1.5 text-ink-400 transition hover:bg-ink-850 hover:text-ink-200 lg:hidden"
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-            <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
+          <MenuIcon />
         </button>
 
-        <Link to="/" className="flex items-center gap-2">
-          <Mark />
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          aria-label={collapsed ? "Show the lesson list" : "Hide the lesson list"}
+          aria-expanded={!collapsed}
+          title={`${collapsed ? "Show" : "Hide"} the lesson list (Cmd or Ctrl with B)`}
+          className="hidden rounded-md p-1.5 text-ink-400 transition hover:bg-ink-850 hover:text-ink-200 lg:block"
+        >
+          <PanelIcon open={!collapsed} />
+        </button>
+
+        <Link
+          to="/"
+          className="flex items-center gap-2 rounded-md py-0.5 pr-1.5 transition hover:opacity-85"
+        >
+          <span className="flex size-6 items-center justify-center rounded-md bg-ink-850 ring-1 ring-ink-800">
+            <Mark size={14} />
+          </span>
           <span className="text-[13px] font-medium tracking-tight text-ink-100">
             Machine learning
           </span>
@@ -80,13 +131,17 @@ export default function App() {
         {gpu && (
           <span
             title="A RunPod GPU endpoint is configured"
-            className="hidden rounded border border-warm-500/30 bg-warm-500/10 px-1.5 py-px font-mono text-[10px] uppercase text-warm-500 sm:inline"
+            className="hidden items-center gap-1.5 rounded-full border border-warm-500/25 bg-warm-500/10 py-0.5 pl-2 pr-2.5 font-mono text-[10px] uppercase tracking-wide text-warm-500 sm:inline-flex"
           >
+            <span className="size-1.5 rounded-full bg-warm-500" />
             gpu ready
           </span>
         )}
-        <span className="hidden font-mono text-[11px] text-ink-400 sm:inline">
-          {username}
+        <span className="hidden items-center gap-1.5 rounded-full border border-ink-800 bg-ink-850 py-0.5 pl-1 pr-2.5 sm:inline-flex">
+          <span className="flex size-5 items-center justify-center rounded-full bg-wire-500/15 font-mono text-[10px] uppercase text-wire-400">
+            {username.slice(0, 1)}
+          </span>
+          <span className="font-mono text-[11px] text-ink-300">{username}</span>
         </span>
         <button
           type="button"
@@ -96,7 +151,7 @@ export default function App() {
               .then(() => setUsername(null))
               .catch(() => undefined)
           }
-          className="rounded-md px-2 py-1 text-[11px] text-ink-400 transition hover:bg-ink-850 hover:text-ink-200"
+          className="rounded-md border border-transparent px-2 py-1 text-[11px] text-ink-400 transition hover:border-ink-700 hover:bg-ink-850 hover:text-ink-200"
         >
           Sign out
         </button>
@@ -107,7 +162,9 @@ export default function App() {
           parts={parts}
           progress={progress}
           open={menuOpen}
+          collapsed={collapsed}
           onClose={() => setMenuOpen(false)}
+          onCollapse={() => setCollapsed(true)}
         />
 
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -130,19 +187,39 @@ export default function App() {
   );
 }
 
-function Mark() {
+function MenuIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="5" cy="6" r="2.2" fill="#4f8cff" />
-      <circle cx="5" cy="18" r="2.2" fill="#4f8cff" />
-      <circle cx="19" cy="12" r="2.2" fill="#35c489" />
-      <circle cx="12" cy="12" r="2.2" fill="#7b8496" />
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
       <path
-        d="M6.8 7 10.4 10.8M6.8 17 10.4 13.2M13.8 12h3"
-        stroke="#39404f"
+        d="M2 4h12M2 8h12M2 12h12"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** A pane outline whose left column fills in when the lesson list is showing. */
+function PanelIcon({ open }: { open: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect
+        x="1.75"
+        y="2.75"
+        width="12.5"
+        height="10.5"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+      <path
+        d="M6.25 3v10"
+        stroke="currentColor"
         strokeWidth="1.4"
         strokeLinecap="round"
       />
+      {open && <rect x="2.5" y="3.5" width="3" height="9" rx="1" fill="currentColor" />}
     </svg>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import { api, ApiError } from "../lib/api";
+import Mark from "./Mark";
 
 export default function Login({ onSignedIn }: { onSignedIn: (name: string) => void }) {
   const [username, setUsername] = useState("");
@@ -26,11 +27,13 @@ export default function Login({ onSignedIn }: { onSignedIn: (name: string) => vo
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-ink-950 px-6">
-      <div className="w-full max-w-sm">
-        <div className="mb-8">
+    <div className="flex min-h-full items-center justify-center px-6 py-10">
+      <div className="w-full max-w-sm rounded-2xl border border-ink-800 bg-ink-900/70 p-7 shadow-2xl shadow-ink-950/60 backdrop-blur-sm">
+        <div className="mb-7">
           <div className="mb-3 flex items-center gap-2.5">
-            <Mark />
+            <span className="flex size-7 items-center justify-center rounded-lg bg-ink-850 ring-1 ring-ink-800">
+              <Mark size={16} />
+            </span>
             <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-ink-400">
               Weights and wires
             </span>
@@ -72,7 +75,7 @@ export default function Login({ onSignedIn }: { onSignedIn: (name: string) => vo
           <button
             type="submit"
             disabled={busy || !username || !password}
-            className="w-full rounded-lg bg-wire-500 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-wire-600 disabled:cursor-not-allowed disabled:opacity-40"
+            className="w-full rounded-lg bg-wire-500 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-wire-500/20 transition hover:bg-wire-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
           >
             {busy ? "Signing in…" : "Sign in"}
           </button>
@@ -108,25 +111,8 @@ function Field({
         autoComplete={autoComplete}
         autoFocus={autoFocus}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-lg border border-ink-800 bg-ink-900 px-3 py-2.5 text-sm text-ink-100 transition placeholder:text-ink-600 focus:border-wire-500/50 focus:outline-none"
+        className="w-full rounded-lg border border-ink-800 bg-ink-850 px-3 py-2.5 text-sm text-ink-100 transition placeholder:text-ink-600 hover:border-ink-700 focus:border-wire-500/50 focus:bg-ink-900 focus:outline-none"
       />
     </label>
-  );
-}
-
-function Mark() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="5" cy="6" r="2.2" fill="#4f8cff" />
-      <circle cx="5" cy="18" r="2.2" fill="#4f8cff" />
-      <circle cx="19" cy="12" r="2.2" fill="#35c489" />
-      <circle cx="12" cy="12" r="2.2" fill="#7b8496" />
-      <path
-        d="M6.8 7 10.4 10.8M6.8 17 10.4 13.2M13.8 12h3"
-        stroke="#39404f"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-    </svg>
   );
 }
