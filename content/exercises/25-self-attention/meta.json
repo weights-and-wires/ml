@@ -1,0 +1,15 @@
+{
+  "id": "25-self-attention",
+  "title": "Scaled dot-product and multi-head attention",
+  "brief": "Implement scaled dot-product attention, multi-head attention, causal masking, and a flop counter, then prove the mask blocks the future exactly.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "softmax must subtract the max along the given axis before exponentiating, and divide by the sum along that same axis, with keepdims=True so the broadcast lines up.",
+    "scaled_dot_product_attention is scores = q @ k.T / sqrt(q.shape[-1]); add mask before softmax, never after, or the weights on the allowed positions will not sum to one.",
+    "causal_mask(T) is 0 on and below the diagonal and -inf strictly above it: build it with numpy.triu on an array of -inf with a diagonal offset of 1, or equivalently zero out the lower triangle of a matrix of -inf.",
+    "multi_head_attention splits Q, K, V into `heads` equal-width slices along the last axis, runs scaled_dot_product_attention on each slice with the same mask, concatenates the head outputs back along the last axis, then applies Wo once to the concatenation.",
+    "attention_backward can reuse the same softmax-Jacobian trick as the previous lesson: dscores = weights * (dweights - row_sum(weights * dweights)), applied per row."
+  ]
+}

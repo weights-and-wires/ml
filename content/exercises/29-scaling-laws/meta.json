@@ -1,0 +1,15 @@
+{
+  "id": "29-scaling-laws",
+  "title": "The compute-optimal frontier",
+  "brief": "Count a transformer's parameters, estimate its training compute, derive the compute-optimal split from a Lagrange multiplier, and fit a power law in log space.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "The non-embedding parameters are 4 * d_model^2 (attention) plus 2 * d_model * d_ff (feed-forward), per layer. Embeddings are vocab * d_model plus seq_len * d_model, added on top, not multiplied by layers.",
+    "training_flops is just 6 * params * tokens. Keep the arithmetic in float to avoid integer overflow at large scales.",
+    "chinchilla_optimal does not fit anything at runtime: hardcode E, A, B, alpha, beta from the lesson, then evaluate the closed form N*(C) = G * 6**(-a) * C**a with a = beta / (alpha + beta) and G = (alpha * A / (beta * B)) ** (1 / (alpha + beta)). Get D* from D* = C / (6 * N*).",
+    "fit_power_law works in log space: lx = log(x), ly = log(y), then k is the slope of ly against lx (covariance over variance) and c = exp(intercept). numpy.cov or a manual mean-centered dot product both work.",
+    "predict_loss is a one-line evaluation of E + A / N**alpha + B / D**beta. Unpack coeffs in the order the docstring gives."
+  ]
+}

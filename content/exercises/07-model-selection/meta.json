@@ -1,0 +1,15 @@
+{
+  "id": "07-model-selection",
+  "title": "Cross-validation, leave-one-out, and Rademacher complexity",
+  "brief": "Build k-fold cross-validation, the hat-matrix shortcut for leave-one-out, a learning curve, and a Rademacher complexity estimated by sampling sign vectors.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "k_fold_indices only needs rng.permutation(n) followed by numpy.array_split into k pieces, each sorted for a deterministic, readable order.",
+    "cross_val_score builds its own rng = numpy.random.default_rng(0) internally, so two calls on the same data always see the same folds.",
+    "The hat matrix for ridge regression is X @ inv(X.T @ X + lam * I) @ X.T; its diagonal gives the leverage h_ii, and the in-sample residual gives r_i. Divide elementwise: r_i / (1 - h_ii).",
+    "learning_curve draws one random split into a validation set and a pool, then reuses the same pool order (just truncated) for every training size, so the training sets are nested.",
+    "empirical_rademacher is a Monte Carlo average: draw a batch of sign vectors as a (num_draws, n) array, multiply by losses_matrix.T to get all inner products at once, take the max over hypotheses, then the mean over draws, then divide by n."
+  ]
+}

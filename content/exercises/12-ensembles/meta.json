@@ -1,0 +1,14 @@
+{
+  "id": "12-ensembles",
+  "title": "Bagging variance, out-of-bag error, and gradient boosting",
+  "brief": "Implement the bagging variance identity, a bagged-stump ensemble scored out-of-bag, and gradient boosting as functional gradient descent.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "bootstrap_indices is one call to rng.integers(0, n, size=n): n draws with replacement from {0, ..., n-1}.",
+    "bagging_variance is a one-line evaluation of rho * sigma2 + (1 - rho) * sigma2 / B.",
+    "fit_bagged_stumps should call bootstrap_indices once per estimator, fit a stump on that resample with the provided _fit_stump helper, and remember which indices were drawn so out_of_bag_error knows which trees to trust for which point.",
+    "In gradient_boost, initialise F to zeros, and at every round set target = loss_grad(y, F), fit a stump to (X, target), then update F += learning_rate * stump_predictions. Record the target and the updated F at every round; the checks inspect both."
+  ]
+}

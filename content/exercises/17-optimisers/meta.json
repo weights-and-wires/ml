@@ -1,0 +1,16 @@
+{
+  "id": "17-optimisers",
+  "title": "Four optimisers, one interface",
+  "brief": "Implement SGD, momentum, Adam, and AdamW behind a shared step interface, then watch each handle a badly conditioned quadratic.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "Every step function has the signature (w, grad, state, **hyperparams) -> (new_w, new_state), where state is a dict. sgd_step ignores state and can return it unchanged.",
+    "momentum_step's velocity has no (1 - beta) normalising factor: v = beta * v + grad. That missing factor is what produces the eta / (1 - beta) effective step.",
+    "adam_step needs t = state.get('t', 0) + 1 on every call, and must return it in the new state so the next call's bias correction uses the right power of beta.",
+    "adamw_step should call adam_step internally for the moment update, then subtract lr * weight_decay * w from the result. Do not add weight_decay to the gradient.",
+    "cosine_schedule needs three branches: before warmup ends, linear from 0 to peak; from warmup to total, the cosine curve; guard against warmup == total.",
+    "For the badly conditioned quadratic, tune each optimiser's own learning rate and step count independently; they do not need to share hyperparameters to each reach the target loss."
+  ]
+}

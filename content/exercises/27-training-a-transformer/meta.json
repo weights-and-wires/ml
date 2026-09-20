@@ -1,0 +1,15 @@
+{
+  "id": "27-training-a-transformer",
+  "title": "Train a tiny transformer with the real recipe",
+  "brief": "Implement the causal language-modelling loss, the warmup-cosine schedule, gradient clipping, and one AdamW step, then watch a tiny model memorise a string.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy", "torch"],
+  "hints": [
+    "causal_lm_loss should compute log_softmax by hand (logits minus their logsumexp along the last axis) and gather the true class's log-probability, rather than calling a built-in cross-entropy, so it works the same on any leading shape.",
+    "warmup_cosine_lr is peak * step / warmup below the warmup boundary, and floor + 0.5 * (peak - floor) * (1 + cos(pi * progress)) above it, with progress = (step - warmup) / (total - warmup). Check that both pieces agree exactly at step == warmup.",
+    "clip_global_norm computes the norm across every gradient array at once (the square root of the sum of squared norms), and multiplies every array in place by max_norm / total_norm only when total_norm exceeds max_norm.",
+    "train_step should backpropagate through model_fn(params, batch['inputs']) to populate each parameter's .grad, clip those gradients as one flock, then update every parameter with the bias-corrected AdamW rule, skipping weight decay for names listed in config['no_decay'].",
+    "Because train_step returns fresh leaf tensors each call, you do not need to zero gradients between calls: a newly created tensor's .grad starts as None."
+  ]
+}

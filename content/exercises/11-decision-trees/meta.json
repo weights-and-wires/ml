@@ -1,0 +1,14 @@
+{
+  "id": "11-decision-trees",
+  "title": "CART from split search to pruning",
+  "brief": "Implement Gini and entropy, an O(n log n) split search, tree growth, prediction, and cost-complexity pruning.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "Sort each feature once with numpy.argsort, then sweep a running left-side sum (and sum of squares, for mse) as you move one point at a time from right to left. Skip a candidate threshold when it falls between two equal feature values, since no split is possible there.",
+    "For gini and entropy, use numpy.bincount(y) to get class counts, divide by the total to get proportions, and apply the formulas directly. Guard entropy against log(0) by masking out zero-count classes before taking the log.",
+    "grow_tree should stop recursing when the node is already pure (impurity at or below a small tolerance), when max_depth is reached, when there are too few samples to make two leaves of size min_samples_leaf, or when best_split finds no split with positive gain.",
+    "cost_complexity_prune is a bottom-up recursion: at each internal node, compare the cost of collapsing it to a leaf (n_samples * impurity + alpha) against the summed cost of keeping its two (already-pruned) children, and keep whichever is cheaper."
+  ]
+}

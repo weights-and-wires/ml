@@ -1,0 +1,16 @@
+{
+  "id": "18-initialisation-and-norm",
+  "title": "Keep the signal from vanishing, then stop needing to",
+  "brief": "Derive Xavier and He initialisation, watch a fifty-layer ReLU network confirm the prediction, then implement batch norm and layer norm forward and backward.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "xavier_scale and he_scale return a standard deviation, not a variance: take the square root of 2/(n_in+n_out) and 2/n_in respectively.",
+    "forward_variance should draw a fresh random weight matrix and a fresh batch of inputs for every trial, apply the activation after each layer's matmul (never after the input itself), and pool the empirical variance over both the batch and the trials for a low-noise estimate.",
+    "batchnorm_forward reduces over axis 0 (the batch); layernorm_forward reduces over axis -1 (the features). Everything else in the two forward passes is the same formula.",
+    "Cache exactly what the backward pass needs: the input, the normalised output, the mean, the variance, gamma, and eps are enough for both batchnorm_backward and layernorm_backward.",
+    "The compact backward formula is dx = (istd / M) * (M * dxhat - sum(dxhat) - xhat * sum(dxhat * xhat)), where M is the size of the axis you reduced over (N for batch norm, D for layer norm) and the sums are taken over that same axis.",
+    "Check your backward pass against a finite difference of the scalar function sum(dout * forward(x, gamma, beta)[0]) with respect to x, gamma, and beta in turn, before trusting the analytic formula."
+  ]
+}

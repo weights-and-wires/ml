@@ -1,0 +1,15 @@
+{
+  "id": "05-logistic-regression",
+  "title": "Fit a logistic regression two ways",
+  "brief": "Implement the stable loss, its gradient and Hessian, then watch Newton's method finish in single digits while gradient descent needs hundreds of steps.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "log(1 + exp(z)) is np.maximum(z, 0) + np.log1p(np.exp(-np.abs(z))); the argument to exp is always at most 0, so it can only underflow to 0, never overflow.",
+    "sigmoid needs the same trick as log_loss: branch on the sign of z and evaluate exp on the negative branch only, so exp never sees a large positive argument.",
+    "The gradient is X.T @ (sigmoid(X @ w) - y) + ridge * w; no explicit loop over samples is needed.",
+    "The Hessian is (X * d[:, None]).T @ X + ridge * np.eye(d), where d = p * (1 - p) and p = sigmoid(X @ w). Scaling the rows of X by d before the matrix product avoids building the full diagonal matrix.",
+    "Newton's step solves hessian(w, X, y, ridge) @ delta = gradient(w, X, y, ridge) with numpy.linalg.solve, then sets w -= delta. Keep the ridge argument: it is what keeps the solve well posed once the data is close to separable."
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "06-exponential-families",
+  "title": "Fisher scoring for a Poisson GLM",
+  "brief": "Write the log-partition function for three exponential families, then fit a Poisson regression by Fisher scoring and check it against the logistic Newton step you already built.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "A(eta) is 0.5 * eta**2 for gaussian, log(1 + exp(eta)) (through log-sum-exp) for bernoulli, and exp(eta) for poisson.",
+    "mean_from_natural is A'(eta): eta itself for gaussian, sigmoid(eta) for bernoulli, exp(eta) for poisson.",
+    "variance_from_natural is A''(eta): 1 for gaussian, p * (1 - p) for bernoulli, exp(eta) again for poisson, since a Poisson's variance equals its mean.",
+    "glm_gradient and glm_fisher_information do not need a family-specific formula once mean_from_natural and variance_from_natural are correct: they are X.T @ (mu - y) and X.T @ diag(V) @ X for every family here, because the link is canonical.",
+    "fit_fisher_scoring is the same loop as fit_newton from the previous lesson, with the Hessian replaced by glm_fisher_information."
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "33-mixtures-of-experts",
+  "title": "Route, balance, and drop",
+  "brief": "Implement top-k routing, the auxiliary load-balancing loss, capacity-limited dispatch, and the router's own backward pass.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "router: compute logits = x @ W_gate, softmax them for the full probabilities, then use numpy.argpartition or numpy.argsort on the logits (or the probabilities, same order) to find each row's top-k indices, and renormalise the probabilities at those indices so each row's gate weights sum to one.",
+    "load_balancing_loss: f_i is the fraction of (token, slot) assignments equal to expert i, out of n_tokens * k total assignments. P_i is the mean of gate_probs[:, i] over tokens. The loss is n_experts * sum_i f_i * P_i.",
+    "moe_forward: process tokens in order, and for each of a token's k selected experts, only add that expert's contribution if the expert has not yet reached its capacity; otherwise count it as dropped and add nothing for that slot.",
+    "capacity is ceil(capacity_factor * n_tokens * k / n_experts); pass capacity_factor=None for an effectively unlimited capacity so nothing is ever dropped.",
+    "router_backward: for each token, let g be its gate weights and c_i = grad_output[token] . expert_outputs[token, i] for each selected expert i. The gradient into that token's logit for expert i is g_i * (c_i - sum_j g_j c_j), and zero for every expert not selected by that token."
+  ]
+}

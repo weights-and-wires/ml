@@ -1,0 +1,15 @@
+{
+  "id": "09-support-vector-machines",
+  "title": "The soft-margin dual, by hand",
+  "brief": "Implement the hinge loss, one clipped two-variable SMO update, and the KKT test that tells you when to stop.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy", "scipy"],
+  "hints": [
+    "The hinge loss is only non-smooth where a margin is exactly 1. Away from that kink, max(0, 1 - z) has derivative -1 where z < 1 and 0 where z > 1; the finite-difference check only probes points away from the kink.",
+    "smo_step needs both f(x_i) and f(x_j) under the CURRENT alpha and b before it changes either one: f(x_i) = sum_k alpha_k y_k K[i, k] + b.",
+    "eta = K[i, i] + K[j, j] - 2 * K[i, j] is the squared distance between x_i and x_j in feature space. It is zero only when x_i and x_j coincide; treat that as a no-op step rather than dividing by zero.",
+    "The clipping box [L, H] for alpha_j comes from intersecting the line alpha_i y_i + alpha_j y_j = constant with the square [0, C] x [0, C]. The two cases (y_i == y_j or not) give different lines and therefore different boxes.",
+    "kkt_violation should read alpha_i against 0 and C with a small tolerance, not an exact equality; floating point rarely lands exactly on either boundary."
+  ]
+}

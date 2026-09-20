@@ -1,0 +1,15 @@
+{
+  "id": "03-gradient-descent",
+  "title": "Gradient descent, heavy ball, and Nesterov on a quadratic",
+  "brief": "Implement fixed-step gradient descent, exact line search, heavy-ball momentum, and Nesterov acceleration, and measure the rates the lesson predicts.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "gradient_descent, heavy_ball, and nesterov should all return the full trajectory as an array of shape (iters + 1, d), with row 0 equal to w0, so the checks can inspect convergence at any iteration.",
+    "heavy_ball needs a previous iterate to form (w_k - w_{k-1}); initialise it to w0 itself, which makes the very first step identical to plain gradient descent.",
+    "nesterov evaluates the gradient at the extrapolated point y_k = w_k + momentum * (w_k - w_{k-1}), not at w_k.",
+    "exact_line_search_step for a quadratic with Hessian A minimises f(w - alpha * g) over alpha in closed form: differentiate with respect to alpha and set the result to zero.",
+    "For the momentum-versus-plain-gradient-descent comparison, the optimal heavy-ball step and momentum for a quadratic with extreme eigenvalues mu and L are 4 / (sqrt(L) + sqrt(mu))**2 and ((sqrt(L) - sqrt(mu)) / (sqrt(L) + sqrt(mu)))**2."
+  ]
+}

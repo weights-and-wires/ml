@@ -1,0 +1,14 @@
+{
+  "id": "08-generative-classifiers",
+  "title": "Two Gaussians and a shared covariance",
+  "brief": "Fit Gaussian discriminant analysis, show its posterior is exactly logistic regression, then build both flavours of naive Bayes.",
+  "needs_gpu": false,
+  "timeout": 45,
+  "packages": ["numpy", "scipy"],
+  "hints": [
+    "The pooled covariance is an MLE, so it divides by n, not by n - K. Accumulate the sum of (x_i - mean_k)(x_i - mean_k)^T over every point regardless of class, then divide once by n.",
+    "Use a Cholesky factor of the shared covariance to evaluate the Gaussian log-density: solve a triangular system for the Mahalanobis term instead of forming the inverse, and read the log-determinant off the diagonal of the factor.",
+    "gda_to_logistic only has to handle two classes. w = inv(cov) @ (means[1] - means[0]); b collects the two quadratic terms and the log prior ratio.",
+    "For the multinomial estimator, sum the count vectors of every document in a class before smoothing. Laplace smoothing adds alpha to every count and alpha * vocab_size to every denominator."
+  ]
+}
