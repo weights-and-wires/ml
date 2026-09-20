@@ -1,0 +1,210 @@
+@import "tailwindcss";
+@import "katex/dist/katex.min.css";
+@import "highlight.js/styles/github-dark.min.css";
+
+@theme {
+  --color-ink-950: #08090c;
+  --color-ink-900: #0d0f14;
+  --color-ink-850: #12151c;
+  --color-ink-800: #1a1e27;
+  --color-ink-700: #252a36;
+  --color-ink-600: #39404f;
+  --color-ink-400: #7b8496;
+  --color-ink-300: #a3abba;
+  --color-ink-200: #cdd3dd;
+  --color-ink-100: #e8ebf0;
+
+  --color-wire-500: #4f8cff;
+  --color-wire-400: #74a5ff;
+  --color-wire-600: #3a6fd8;
+
+  --color-good-500: #35c489;
+  --color-bad-500: #f2555a;
+  --color-warm-500: #f0a637;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink-950);
+  color: var(--color-ink-200);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-wire-500);
+  outline-offset: 2px;
+}
+
+/* Scrollbars that do not shout in a dark pane. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-700) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-ink-700);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-600);
+  background-clip: content-box;
+}
+
+/* The lesson body. Tailwind's typography plugin is not installed, so the
+   handful of element rules a Markdown document needs live here. */
+.lesson {
+  color: var(--color-ink-200);
+  font-size: 0.975rem;
+  line-height: 1.75;
+}
+.lesson > * + * {
+  margin-top: 1.05em;
+}
+.lesson h1 {
+  font-size: 1.9rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--color-ink-100);
+  margin-top: 0;
+  line-height: 1.2;
+}
+.lesson h2 {
+  font-size: 1.28rem;
+  font-weight: 620;
+  color: var(--color-ink-100);
+  margin-top: 2.2em;
+  padding-top: 0.9em;
+  border-top: 1px solid var(--color-ink-800);
+  letter-spacing: -0.01em;
+}
+.lesson h3 {
+  font-size: 1.06rem;
+  font-weight: 600;
+  color: var(--color-ink-100);
+  margin-top: 1.8em;
+}
+.lesson p {
+  margin-block: 0;
+}
+.lesson strong {
+  color: var(--color-ink-100);
+  font-weight: 600;
+}
+.lesson a {
+  color: var(--color-wire-400);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.lesson ul,
+.lesson ol {
+  padding-left: 1.4em;
+}
+.lesson ul {
+  list-style: disc;
+}
+.lesson ol {
+  list-style: decimal;
+}
+.lesson li + li {
+  margin-top: 0.4em;
+}
+.lesson li::marker {
+  color: var(--color-ink-400);
+}
+.lesson code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--color-ink-850);
+  border: 1px solid var(--color-ink-800);
+  border-radius: 5px;
+  padding: 0.1em 0.34em;
+  color: var(--color-ink-100);
+}
+.lesson pre {
+  background: var(--color-ink-900);
+  border: 1px solid var(--color-ink-800);
+  border-radius: 10px;
+  padding: 0.95rem 1.1rem;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+.lesson pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+}
+.lesson blockquote {
+  border-left: 3px solid var(--color-ink-700);
+  padding-left: 1rem;
+  color: var(--color-ink-300);
+}
+.lesson table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  display: block;
+  overflow-x: auto;
+}
+.lesson th,
+.lesson td {
+  border: 1px solid var(--color-ink-800);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+.lesson th {
+  background: var(--color-ink-900);
+  color: var(--color-ink-100);
+  font-weight: 600;
+}
+.lesson hr {
+  border: none;
+  border-top: 1px solid var(--color-ink-800);
+}
+
+/* KaTeX defaults to the browser's text colour and a font size that is too
+   large beside 0.975rem body text. */
+.lesson .katex {
+  font-size: 1.04em;
+}
+.lesson .katex-display {
+  margin: 1.4em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.3em 0;
+}
+.lesson .katex-display > .katex {
+  color: var(--color-ink-100);
+}
+
+@keyframes pulse-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.appear {
+  animation: pulse-in 140ms ease-out;
+}

@@ -1,0 +1,62 @@
+# The course app.
+#
+# Caddy on this host terminates TLS and proxies to ml:8000 over the shared
+# `edge` network, the same way the other services here are reached. This bundle
+# must never publish 80 or 443 itself.
+#
+#   docker compose up -d --build
+#
+# This directory is a clone of the repository. A deploy is `git pull --ff-only`
+# then the line above; scripts/deploy.sh does both from a workstation.
+
+name: ml
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # scripts/deploy.sh sets this to the commit being deployed.
+        GIT_SHA: ${GIT_SHA:-unknown}
+    image: ml-course:local
+    container_name: ml
+    restart: unless-stopped
+    expose:
+      - "8000"
+    ports:
+      # Localhost only. Caddy reaches the container over `edge`, so this is not
+      # a route in from outside; it exists so the app can be reached through an
+      # SSH tunnel before its DNS record resolves:
+      #   ssh -L 8093:127.0.0.1:8093 ifkash@vm.ifkash.dev
+      - "127.0.0.1:8093:8000"
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ml-data:/data
+    networks:
+      - edge
+    # A reader's submission is a subprocess inside this container, so cap what
+    # the container as a whole can take from the host.
+    cpus: 2.0
+    mem_limit: 3g
+    pids_limit: 512
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  ml-data:
+
+networks:
+  edge:
+    external: true
