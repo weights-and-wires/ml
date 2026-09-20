@@ -37,6 +37,10 @@ echo "Building"
 ssh -i "$KEY" "$HOST" "cd ~/$REMOTE_DIR && GIT_SHA=$SHA docker compose up -d --build" 2>&1 \
   | tail -20
 
+# The VM's disk runs close to full, and each rebuild leaves a couple of
+# gigabytes of build cache behind. Keep the recent layers and drop the rest.
+ssh -i "$KEY" "$HOST" "docker builder prune -f --filter until=72h >/dev/null 2>&1 || true"
+
 echo "Waiting for the health check to report $SHA"
 for _ in $(seq 1 60); do
   reported="$(ssh -i "$KEY" "$HOST" \

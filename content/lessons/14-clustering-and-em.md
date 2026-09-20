@@ -60,7 +60,9 @@ $$
 
 This is a joint optimisation over a continuous variable (the centers) and a
 combinatorial one (the assignment), and the combinatorial part is what makes
-it hard: there are $k^n / k!$ distinct partitions to search over, and finding
+it hard: the number of distinct partitions to search over is the Stirling
+number of the second kind $S(n,k)$, which grows asymptotically like
+$k^n / k!$, and finding
 the one that minimises $J$ is NP-hard, exactly for $k = 2$ when the dimension
 $d$ is part of the input, and separately for any fixed $d \geq 2$ when $k$ is
 part of the input. No algorithm is known that solves it exactly in time

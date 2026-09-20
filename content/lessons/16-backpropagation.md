@@ -291,7 +291,7 @@ forward difference has no cancellation in its truncation term, which is
 $O(h)$ rather than $O(h^2)$; balancing $O(h) + O(\varepsilon_{\text{machine}}
 /h)$ gives $h^\star \propto \varepsilon_{\text{machine}}^{1/2}$ and a worse
 floor of $O(\varepsilon_{\text{machine}}^{1/2}) \approx 10^{-8}$. Central
-differences buy roughly five more digits of accuracy than forward
+differences buy roughly three more digits of accuracy than forward
 differences for the same reason QR beats the normal equations in lesson 2:
 cancelling a lower-order error term before it competes with rounding.
 Either way, no finite-difference scheme reaches machine precision, which is
