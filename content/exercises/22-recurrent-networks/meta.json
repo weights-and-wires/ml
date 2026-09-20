@@ -1,0 +1,16 @@
+{
+  "id": "22-recurrent-networks",
+  "title": "BPTT and the spectral radius that decides it",
+  "brief": "Implement a vanilla RNN cell, backpropagation through time, and gradient clipping, then measure the vanishing and exploding regimes the spectral radius predicts.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "bptt runs one backward recursion over time: carry a running gradient forward-in-time-index but backward-in-loop from the last step to the first, adding each step's own upstream gradient dH[t] to whatever has been carried in from later steps before multiplying by tanh's local derivative.",
+    "tanh'(z_t) equals 1 - h_t**2, so once you have h_t from the forward pass you never need z_t itself.",
+    "The gradient with respect to h0 is exactly whatever the backward recursion has carried past step 0; nothing further multiplies it.",
+    "truncated_bptt can call your own bptt once per chunk of length k, using the true forward hidden state at each chunk boundary as a constant initial state and discarding the gradient that would otherwise flow into it.",
+    "clip_by_global_norm needs the norm of the concatenation of every array, not the norm of each array separately: accumulate the sum of squared Frobenius norms across the whole list before taking one square root.",
+    "gradient_scale_over_time's spectral radius is the largest magnitude among numpy.linalg.eigvals(W), which returns complex numbers even for a real matrix."
+  ]
+}
