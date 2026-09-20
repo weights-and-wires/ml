@@ -1,0 +1,14 @@
+{
+  "id": "02-linear-regression",
+  "title": "Least squares three ways",
+  "brief": "Solve the same problem through the normal equations, QR, and the SVD, then watch the first one lose its digits.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "numpy.linalg.cholesky returns the lower factor L with A = L L^T. Solve L z = b, then L^T w = z, with scipy-free triangular solves built from numpy.linalg.solve_triangular's absence in mind: numpy has no triangular solve, so use scipy.linalg.solve_triangular.",
+    "numpy.linalg.qr(X, mode='reduced') gives the thin factorisation. R is upper triangular, so back substitution is a triangular solve against Q.T @ y.",
+    "For the pseudoinverse, zero out every singular value at or below rcond * s.max(), and invert only the rest. Slicing V and U to the surviving columns gives the minimum-norm solution for free.",
+    "condition_number is s.max() / s.min() from numpy.linalg.svd(X, compute_uv=False)."
+  ]
+}
