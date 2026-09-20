@@ -175,15 +175,18 @@ workers are warm, and how many jobs are queued.
 
 ## Deploy
 
-The VM holds a clone at `~/docs/ml` and runs it behind the shared Caddy on the
+The VM holds the tree at `~/docs/ml` and runs it behind the shared Caddy on the
 external `edge` network. This bundle never publishes 80 or 443 itself.
 
 ```bash
 ./scripts/deploy.sh
 ```
 
-That pushes the current commit, fetches and rebuilds on the VM, and waits until
-`/api/health` reports the commit it sent. `Caddyfile.example` holds the vhost
+The repository is private and the organisation disables deploy keys, so the VM
+holds no GitHub credential. The script ships the committed tree with
+`git archive` over SSH, rebuilds, and waits until `/api/health` reports the
+commit it sent. `.env` on the VM is never touched, because it holds the session
+secret and the RunPod key. `Caddyfile.example` holds the vhost
 block, including the buffering and timeout settings the run stream needs.
 
 To reach the app before its DNS record resolves, tunnel the container's
