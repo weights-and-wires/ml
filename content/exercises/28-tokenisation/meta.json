@@ -1,0 +1,15 @@
+{
+  "id": "28-tokenisation",
+  "title": "Byte-pair encoding from scratch",
+  "brief": "Train a byte-level BPE tokeniser by hand-tracing its merge loop, then encode, decode, and measure how efficiently it compresses text.",
+  "needs_gpu": false,
+  "timeout": 45,
+  "packages": [],
+  "hints": [
+    "get_pair_counts sums a plain dict over every adjacent pair in every word, across every word in token_lists; a word contributing the pair (a, b) twice adds 2 to that pair's count.",
+    "merge_pair scans one word left to right: when the current position and the next one match `pair`, emit `new_id` and skip both positions; otherwise emit the current symbol and advance by one. Do this independently for every word.",
+    "train_bpe assigns new_id = 256 + i to the i-th merge it performs, in order, and stops once the vocabulary reaches vocab_size or no pair remains to merge. Break ties in the most frequent pair by choosing the smaller pair as a tuple of IDs.",
+    "encode must know, for merges[i], that it produced ID 256 + i; it does not need the vocabulary dictionary at all. Apply every merge in the list, in order, to the whole word before moving to the next merge.",
+    "decode is `b''.join(vocab[i] for i in ids).decode('utf-8')`; every vocabulary entry, base byte or merged, is a bytes object, and concatenating them in order reproduces the original bytes exactly."
+  ]
+}

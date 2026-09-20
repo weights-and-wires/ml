@@ -1,0 +1,15 @@
+{
+  "id": "31-parameter-efficient-tuning",
+  "title": "A LoRA layer from scratch",
+  "brief": "Implement LoRA's forward pass, its parameter and memory accounting, the merge that makes it free at inference, and the best rank-r approximation the method leans on.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "lora_forward is x @ W.T + (alpha / r) * (x @ A.T) @ B.T. Keep the two matmul orders separate; do not form B @ A first unless you are implementing merge_lora.",
+    "merge_lora is W + (alpha / r) * (B @ A), the same shape as W. lora_forward(x, W, A, B, alpha, r) and x @ merge_lora(W, A, B, alpha, r).T should agree to machine precision.",
+    "optimiser_memory_bytes uses 16 bytes per trainable parameter in both modes; the mode argument documents which parameter count you are charging, it does not change the rate.",
+    "best_rank_approximation: numpy.linalg.svd(delta_w, full_matrices=False) gives U, s, Vt with s sorted descending. Truncate all three to the first r components and reconstruct U[:, :r] @ diag(s[:r]) @ Vt[:r, :].",
+    "For the gradient-direction check: with L = 0.5 * ||merge_lora(W, A, B, alpha, r) - target||^2, the gradient with respect to the effective weight is G = merge_lora(...) - target, and the chain rule through BA gives dL/dA = (alpha/r) * B.T @ G, dL/dB = (alpha/r) * G @ A.T."
+  ]
+}

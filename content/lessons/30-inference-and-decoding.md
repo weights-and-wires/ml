@@ -20,21 +20,20 @@ exercise: 30-inference-and-decoding
 
 Training a transformer is one forward and one backward pass, batched as large as
 the accelerator allows, running until the loss stops falling. Serving one is a
-different computation entirely: one token at a time, one sequence a user is
-waiting on, with a cost model dominated not by how many flops the chip can do but
-by how fast it can read its own weights from memory. Nothing in the training loop
-prepares you for that, and every serving system's design — the KV cache, the
-choice of attention shape, the decision to run a second, smaller model alongside
-the real one — follows from taking that cost model seriously.
+different computation: one token at a time, one sequence a user is waiting on,
+with a cost dominated not by how many flops the chip can do but by how fast it
+can read its own weights from memory. Every serving system's design — the KV
+cache, the choice of attention shape, running a second, smaller model alongside
+the real one — follows from taking that cost seriously.
 
-The second half of this lesson is a different problem: given the model's next-
-token distribution, which token do you actually emit? Greedy decoding, beam
-search, and sampling with temperature, top-k, or nucleus truncation are four
-different answers, and none of them is "the correct one" outright — each trades off
-determinism, diversity, and a tendency toward degenerate repetition in its own
-way. Speculative decoding closes the lesson by showing that you can use a cheap,
-inaccurate model to speed up an expensive, accurate one without changing the
-output distribution at all, which is a stronger guarantee than it sounds.
+The second half of this lesson asks a different question: given the model's
+next-token distribution, which token do you emit? Greedy decoding, beam search,
+and sampling with temperature, top-k, or nucleus truncation are four different
+answers, and none is "the correct one" outright — each trades off determinism,
+diversity, and a tendency toward degenerate repetition. Speculative decoding
+closes the lesson by showing that a cheap, inaccurate model can speed up an
+expensive, accurate one without changing the output distribution at all, a
+stronger guarantee than it sounds.
 
 ## What you already know
 

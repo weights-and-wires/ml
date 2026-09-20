@@ -115,18 +115,16 @@ $$
 
 The first term is the **pure identity path**: an exact, unattenuated copy of
 the loss gradient at the top of the stack, reaching the bottom regardless of
-what any $J_l$ is. It survives even if every $J_l$ is singular, or has
-spectral norm zero, or has spectral norm ten — the identity term never
-depends on the branches at all. A plain stack has no such term: its gradient
-is $\partial\ell/\partial x_0 = (\partial\ell/\partial x_L) J_L J_{L-1} \cdots
-J_1$, a single product with nothing added to it, so if every $\lVert J_l
-\rVert \le \rho < 1$ the product is bounded by $\rho^L$ and decays
-geometrically in depth; if every $\lVert J_l \rVert \ge \rho > 1$ it grows the
-same way. The residual sum does not stop the higher-order terms from
-vanishing or exploding — but their sum is added to a term of magnitude
-exactly $\lVert \partial\ell/\partial x_L \rVert$, so the total can never fall
-below what cancellation among the remaining $2^L - 1$ terms permits, and
-generically does not.
+what any $J_l$ is — even if every $J_l$ is singular, or has spectral norm
+zero, or ten. A plain stack has no such term: its gradient is
+$\partial\ell/\partial x_0 = (\partial\ell/\partial x_L) J_L J_{L-1} \cdots
+J_1$, a single product with nothing added, so if every $\lVert J_l \rVert \le
+\rho < 1$ it is bounded by $\rho^L$ and decays geometrically in depth, and if
+every $\lVert J_l \rVert \ge \rho > 1$ it grows the same way. The residual sum
+does not stop the higher-order terms from vanishing or exploding, but their
+sum is added to a term of magnitude exactly $\lVert \partial\ell/\partial x_L
+\rVert$, so the total can never fall below what cancellation among the
+remaining $2^L - 1$ terms permits, and generically does not.
 
 Near initialisation the branches are small: with $\lVert J_l \rVert \approx
 \varepsilon$ for every $l$, a term built from $k$ of the $J_l$'s is $O(\varepsilon^k)$,
@@ -138,12 +136,12 @@ $$
 \left( I + \sum_{l=1}^{L} J_l \right) ,
 $$
 
-a gradient within $O(L\varepsilon)$ of the identity term itself. This is the
-precise sense in which a 100-layer residual stack keeps gradients within an
-order of magnitude of their value at the top, while a 100-layer plain stack
-with the same per-layer Jacobian norms collapses or blows up exponentially:
-the residual sum has an $O(1)$ floor that never depends on $L$, and the plain
-product has none.
+a gradient within $O(L\varepsilon)$ of the identity term itself — the precise
+sense in which a 100-layer residual stack keeps gradients within an order of
+magnitude of their value at the top, while a plain stack with the same
+per-layer Jacobian norms collapses or blows up exponentially: the residual
+sum has an $O(1)$ floor that never depends on $L$, and the plain product has
+none.
 
 ## Pre-activation: making the identity path exactly clean
 

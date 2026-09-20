@@ -2,7 +2,7 @@
 title: Recurrent networks and BPTT
 slug: 22-recurrent-networks
 part: "Part 4 — Vision and sequences"
-summary: Backpropagation through time derived as a sum of chain rules, the spectral radius that decides whether it vanishes or explodes, and why the recursion caps parallelism.
+summary: Backpropagation through time as a sum of chain rules, the spectral radius that decides vanishing versus exploding, and why the recursion caps parallelism.
 minutes: 55
 gpu: false
 objectives:
@@ -129,7 +129,7 @@ every spatial position it touched.
 
 Consider a stretch of steps where the local slope stays roughly constant,
 $\phi'(z_s) \approx \kappa$ for $s = t+1, \dots, t'$ — the linearised regime
-near a fixed point, or simply small pre-activations. The repeated Jacobian
+near a fixed point, or small pre-activations generally. The repeated Jacobian
 product becomes $(\kappa W_{hh})^{\,t' - t}$ up to the reordering that
 diag-times-matrix products in general prevent, and Gelfand's formula gives
 the precise asymptotic behaviour of its norm:

@@ -20,22 +20,22 @@ exercise: 20-convolutions
 A multilayer perceptron applied to a 224-by-224 RGB image flattens it into a
 vector of 150,528 numbers and multiplies by a dense weight matrix that has no
 notion of which pixel sits next to which. Learning a detector for some pattern
-this way means learning it independently at every location the pattern might
-appear, because nothing in the architecture says that a shape found in the
-top-left corner is the same shape when it turns up in the bottom-right.
-Backpropagation, from the previous lesson, tells you how to differentiate that
-dense matrix. It has nothing to say about why the matrix should be dense.
+this way means learning it independently at every location it might appear,
+because nothing in the architecture says that a shape found in the top-left
+corner is the same shape when it turns up in the bottom-right. Backpropagation,
+from the previous lesson, tells you how to differentiate that dense matrix. It
+has nothing to say about why the matrix should be dense.
 
 Convolution replaces the dense matrix with two constraints written directly
 into the weights: locality, so each output depends on a small neighbourhood of
 the input, and weight sharing, so the same small set of weights is reused at
-every neighbourhood. Neither is a consequence of the data. Both are priors you
+every neighbourhood. Neither is a consequence of the data; both are priors you
 impose because natural images are approximately stationary — a texture looks
-the same statistics wherever it appears — and because an object's identity does
-not depend on its pixel coordinates. This lesson makes those two constraints
-precise: what they buy in parameter count, the equivariance they prove, the
-backward pass they imply, and the single matrix multiply, `im2col`, that makes
-the whole operation fast on hardware built for dense linear algebra.
+the same wherever it appears — and an object's identity does not depend on its
+pixel coordinates. This lesson makes those two constraints precise: what they
+buy in parameter count, the equivariance they prove, the backward pass they
+imply, and the matrix multiply, `im2col`, that makes the operation fast on
+hardware built for dense linear algebra.
 
 ## What you already know
 
@@ -65,14 +65,14 @@ which is still linear in $x$, so it is still $y = Wx$ for some matrix — but
 now $W$ is banded (row $i$ is zero outside columns $i, \dots, i+k-1$, which is
 locality) and every diagonal is constant (row $i$ and row $i+1$ carry the same
 $k$ numbers shifted by one, which is weight sharing). Locality and weight
-sharing are exactly the statement that $W$ is banded and Toeplitz. The number
-of free parameters drops from $n^2$ to $k$, independent of $n$: the entire
+sharing are exactly the statement that $W$ is banded and Toeplitz, dropping
+the free parameter count from $n^2$ to $k$, independent of $n$: the entire
 saving of a convolution is the claim that this restricted class of matrices is
 the right hypothesis class for images and audio.
 
-In two dimensions, with $C_{\text{in}}$ input channels and $C_{\text{out}}$
-output channels, the forward map with kernel $w \in \mathbb{R}^{C_{\text{out}}
-\times C_{\text{in}} \times k \times k}$, stride $s$, and padding $p$ is
+In two dimensions, with $C_{\text{in}}$ input and $C_{\text{out}}$ output
+channels, the forward map with kernel $w \in \mathbb{R}^{C_{\text{out}} \times
+C_{\text{in}} \times k \times k}$, stride $s$, and padding $p$ is
 
 $$
 y[c_o, i, j] = b[c_o] + \sum_{c_i=1}^{C_{\text{in}}} \sum_{d_h=0}^{k-1}
@@ -98,13 +98,12 @@ $$
 So $w * (T_a x) = T_a (w * x)$: shifting the input shifts the output by the
 same amount, exactly. This is **equivariance**, not invariance — the output
 moves with the input rather than staying fixed — and it is a theorem about the
-operator, true for every kernel $w$, not a property that training has to
-discover. It is also exact only for signals with no boundary, or with circular
-padding. Zero padding breaks it near the edges: a shift that pulls fresh zeros
-into the receptive field of a boundary output produces a different value than
-the shift theorem predicts, because $x_p$ is not literally a shifted copy of
-itself there. The theorem is exact in the interior and approximate within $k$
-pixels of the border.
+operator, true for every kernel $w$, not something training has to discover.
+It is exact only for signals with no boundary, or with circular padding.
+Zero padding breaks it near the edges, because a shift that pulls fresh zeros
+into a boundary output's receptive field makes $x_p$ no longer a literal
+shifted copy of itself there: the theorem holds in the interior and only
+approximately within $k$ pixels of the border.
 
 ## From equivariance to invariance: pooling
 
@@ -158,10 +157,10 @@ $$
 r_l = r_{l-1} + (k_l - 1) \prod_{i < l} s_i , \qquad r_0 = 1 .
 $$
 
-The product $\prod_{i<l} s_i$ is the jump of the *previous* layer,
-$j_{l-1}$, which is why the recursion needs both quantities: $r_l$ tracks
-size, $j_l$ tracks spacing, and only spacing compounds multiplicatively.
-Three stride-2, kernel-3 layers make this concrete:
+The product $\prod_{i<l} s_i$ is the jump of the *previous* layer, $j_{l-1}$,
+which is why the recursion tracks both quantities: $r_l$ is size, $j_l$ is
+spacing, and only spacing compounds multiplicatively. A worked stack makes
+this concrete:
 
 | Layer | $k_l$ | $s_l$ | $r_l$ | $j_l$ |
 |---|---|---|---|---|
@@ -179,35 +178,27 @@ to grow the receptive field.
 ## Parameters and flops: conv versus dense
 
 A conv layer with kernel $k \times k$, $C_{\text{in}}$ input and
-$C_{\text{out}}$ output channels has
-
-$$
-\#\text{params} = C_{\text{out}} (C_{\text{in}} k^2 + 1),
-$$
-
-independent of the spatial size $H \times W$. Producing an output of shape
-$C_{\text{out}} \times H_{\text{out}} \times W_{\text{out}}$ costs
-$H_{\text{out}} W_{\text{out}} C_{\text{out}} C_{\text{in}} k^2$
-multiply-adds, so $2 H_{\text{out}} W_{\text{out}} C_{\text{out}}
-C_{\text{in}} k^2$ flops.
-
-A dense layer connecting the same flattened input to the same flattened output
-has $C_{\text{in}} H W \cdot C_{\text{out}} H_{\text{out}} W_{\text{out}}$
-parameters, and the same number of multiply-adds. The ratio of dense to conv
-parameters is
+$C_{\text{out}}$ output channels has $\#\text{params} = C_{\text{out}}
+(C_{\text{in}} k^2 + 1)$, independent of the spatial size $H \times W$, and
+producing an output of shape $C_{\text{out}} \times H_{\text{out}} \times
+W_{\text{out}}$ costs $H_{\text{out}} W_{\text{out}} C_{\text{out}}
+C_{\text{in}} k^2$ multiply-adds. A dense layer connecting the same flattened
+input to the same flattened output needs $C_{\text{in}} H W \cdot
+C_{\text{out}} H_{\text{out}} W_{\text{out}}$ parameters — the same count as
+its multiply-adds — so the ratio of dense to conv parameters is
 
 $$
 \frac{\#\text{params}_{\text{dense}}}{\#\text{params}_{\text{conv}}}
 \approx \frac{H W H_{\text{out}} W_{\text{out}}}{k^2} .
 $$
 
-For a $32 \times 32$ input, a $32 \times 32$ output, and $k=3$, that ratio is
-$32^4 / 9 \approx 1.16 \times 10^5$: the dense layer needs on the order of a
-hundred thousand times more parameters to represent a map that, if it happens
-to be local and shift-invariant, the conv layer represents exactly. The cost
-of that compression is expressive power: a conv layer cannot represent a map
-that genuinely depends on distant pixels without stacking enough layers to
-grow the receptive field there.
+For a $32 \times 32$ input and output with $k=3$, that ratio is $32^4/9
+\approx 1.16 \times 10^5$: the dense layer needs on the order of a hundred
+thousand times more parameters to represent a map that, if it happens to be
+local and shift-invariant, the conv layer represents exactly. The cost of
+that compression is expressive power: a conv layer cannot represent a map
+depending on distant pixels without stacking enough layers to grow the
+receptive field there.
 
 ## Convolution as a matrix multiply: `im2col`
 
@@ -250,11 +241,10 @@ $$
 = \sum_{i,j} \frac{\partial L}{\partial y[c_o,i,j]}\, x_p[c_i,\, si+d_h,\, sj+d_w] .
 $$
 
-This is a correlation: slide the $H_{\text{out}} \times W_{\text{out}}$
-gradient map, with stride $s$, over the padded input, and read off one number
-per kernel tap — the same sliding-window sum that computed the forward pass,
-with the roles of "input" and "kernel" swapped between $x_p$ and $\partial
-L/\partial y$.
+This is a correlation: slide the gradient map, with stride $s$, over the
+padded input, and read off one number per kernel tap — the same sliding-window
+sum that computed the forward pass, with $x_p$ and $\partial L/\partial y$
+trading places.
 
 **Input.** Every $x_p[c_i, m, n]$ contributes to $y[c_o,i,j]$ whenever
 $m = si + d_h$ and $n = sj + d_w$ for some valid kernel offset, so by the
@@ -266,16 +256,17 @@ $$
 w[c_o,c_i,d_h,d_w]\, \frac{\partial L}{\partial y[c_o,i,j]} .
 $$
 
-For stride $s=1$, substitute $d_h' = k-1-d_h$ (and likewise for $d_w$) to flip
+For stride $s=1$, substituting $d_h' = k-1-d_h$ (and likewise for $d_w$) flips
 the kernel: the sum becomes a correlation of the flipped kernel with the
 gradient map, padded by $k-1-p$ — the **full correlation with the flipped
-kernel** that gives this section its name. For $s > 1$, the same identity
-holds after inserting $s-1$ zeros between consecutive entries of $\partial
-L/\partial y$ along each spatial axis, which is the operation this course
-calls a transposed convolution when it appears as a layer in its own right.
+kernel** that names this section. For $s > 1$, the same identity holds after
+inserting $s-1$ zeros between consecutive entries of $\partial L/\partial y$
+along each spatial axis, the operation this course calls a transposed
+convolution when it appears as a layer of its own.
 
-In the `im2col` picture this is one line of matrix calculus. Since $Y_{\text{mat}}
-= W_{\text{mat}} X_{\text{col}} + b\mathbf{1}^{\top}$ and $X_{\text{col}} = Sx$,
+In the `im2col` picture this is one line of matrix calculus. Since
+$Y_{\text{mat}} = W_{\text{mat}} X_{\text{col}} + b\mathbf{1}^{\top}$ and
+$X_{\text{col}} = Sx$,
 
 $$
 \frac{\partial L}{\partial W_{\text{mat}}} = \frac{\partial L}{\partial Y_{\text{mat}}} X_{\text{col}}^{\top}, \qquad
@@ -283,29 +274,29 @@ $$
 \frac{\partial L}{\partial x} = S^{\top} \frac{\partial L}{\partial X_{\text{col}}} .
 $$
 
-$S^{\top}$ scatters each entry of $\partial L / \partial X_{\text{col}}$ back
-to the input position it was copied from and sums the contributions where
-patches overlapped — the operation usually named `col2im`, and precisely the
-adjoint of the gather that `im2col` performed. The index-chasing derivation
-above and this one-line matrix derivation compute the same numbers; the first
-tells you what the answer means, the second tells you how to implement it.
+$S^{\top}$ scatters each entry back to the input position it was copied from
+and sums the contributions where patches overlapped — the operation usually
+named `col2im`, the adjoint of the gather `im2col` performed. This one-line
+matrix derivation and the index-chasing one above compute the same numbers;
+the first tells you how to implement the backward pass, the second what it
+means.
 
 ## $1 \times 1$ convolutions and depthwise separable convolutions
 
 Set $k = 1$: the sum over $d_h, d_w$ disappears and $y[c_o,i,j] =
 b[c_o] + \sum_{c_i} w[c_o,c_i]\, x[c_i,i,j]$ is a single linear map applied
-independently at every spatial position — pure channel mixing, with no
-spatial receptive field at all. It costs $H W C_{\text{in}} C_{\text{out}}$
+independently at every spatial position — pure channel mixing, no spatial
+receptive field at all. It costs $H W C_{\text{in}} C_{\text{out}}$
 multiply-adds and is the cheapest way to change channel count, which is why
 bottleneck blocks (next lesson) use it to compress and expand.
 
-A depthwise separable convolution factors a $k \times k$ conv into two
-cheaper stages: a **depthwise** stage that convolves each of the
-$C_{\text{in}}$ channels with its own $k \times k$ filter and no mixing across
-channels, at $H_{\text{out}} W_{\text{out}} C_{\text{in}} k^2$ multiply-adds,
-followed by a $1 \times 1$ **pointwise** stage that mixes channels, at
-$H_{\text{out}} W_{\text{out}} C_{\text{in}} C_{\text{out}}$ multiply-adds.
-The ratio of separable cost to standard cost is
+A depthwise separable convolution factors a $k \times k$ conv into two cheaper
+stages: a **depthwise** stage convolving each of the $C_{\text{in}}$ channels
+with its own $k \times k$ filter and no cross-channel mixing, at
+$H_{\text{out}} W_{\text{out}} C_{\text{in}} k^2$ multiply-adds, followed by a
+$1 \times 1$ **pointwise** stage that mixes channels, at $H_{\text{out}}
+W_{\text{out}} C_{\text{in}} C_{\text{out}}$ multiply-adds. The ratio of
+separable cost to standard cost is
 
 $$
 \frac{H_{\text{out}}W_{\text{out}} C_{\text{in}} (k^2 + C_{\text{out}})}
@@ -342,35 +333,31 @@ algorithms) avoid materialising it in full.
 ## Where this breaks
 
 **Non-stationary signals.** Locality and weight sharing are correct priors
-exactly when the statistics of the signal do not depend on position. Tabular
-data with unrelated columns, or an image task where absolute position carries
-meaning (a digit's position on a cheque, not the digit itself), gets nothing
-from convolution and sometimes actively suffers from it; those tasks add
-explicit positional inputs or drop the constraint back to a dense layer.
+exactly when the signal's statistics do not depend on position. Tabular data
+with unrelated columns, or a task where absolute position carries meaning (a
+digit's position on a cheque, not the digit itself), gets nothing from
+convolution and sometimes suffers from it; such tasks add explicit positional
+inputs or drop back to a dense layer.
 
-**Pooling degrades continuously, not categorically.** Because invariance from
-subsampling holds only for shifts smaller than the stride and only away from
-window boundaries, a network's actual robustness to shift is an empirical,
-graded property, not the exact guarantee that equivariance is. Strided
-convolutions used for downsampling inherit the same aliasing weakness pooling
-has, for the same reason: subsampling any signal above its new Nyquist rate
-loses information no amount of training recovers.
+**Pooling degrades continuously, not categorically.** Invariance from
+subsampling holds only for shifts smaller than the stride and away from
+window boundaries, so a network's robustness to shift is an empirical, graded
+property, not equivariance's exact guarantee. Strided convolutions used for
+downsampling inherit the same aliasing weakness, for the same reason:
+subsampling above the new Nyquist rate loses information no training recovers.
 
-**Zero padding is not translation-equivariant.** The proof of equivariance
-assumed no boundary. Every network with zero padding has border artefacts —
-features near the edge behave differently from features in the interior — and
-deep stacks compound this near the border more than the interior, which is
-why some architectures replace zero padding with reflection or circular
-padding when the border matters.
+**Zero padding is not translation-equivariant.** The proof above assumed no
+boundary. Every network with zero padding has border artefacts, and deep
+stacks compound them, which is why some architectures replace zero padding
+with reflection or circular padding when the border matters.
 
 **Fixed receptive fields cap long-range reasoning.** Growing the receptive
-field to cover a whole image by stacking small kernels costs depth
-logarithmic in the image size with aggressive striding, but each layer added
-this way is still local at every individual step. Tasks that need one output
-to depend on two far-apart, dynamically-determined input positions — the kind
-of dependency language modelling needs constantly — are exactly what motivates
-dropping the locality constraint altogether, which is the opening self-attention
-walks through in Part 5.
+field to cover a whole image by stacking small kernels costs depth logarithmic
+in the image size with aggressive striding, but each added layer is still
+local at every step. A task that needs one output to depend on two far-apart,
+dynamically determined input positions — the kind of dependency language
+modelling needs constantly — is exactly what motivates dropping the locality
+constraint altogether, the opening self-attention walks through in Part 5.
 
 ## The exercise
 

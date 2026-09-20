@@ -25,13 +25,13 @@ data is not twice as good either. Before scaling laws, the field's answer was
 intuition and whatever fit on the hardware at hand. After them, the answer is a
 regression.
 
-The claim this lesson makes precise is that the pretraining loss of a transformer,
-as a function of its parameter count $N$ and the number of tokens it trains on
-$D$, follows a smooth and remarkably predictable curve. That curve lets you run a
-handful of small, cheap experiments and extrapolate the loss of a model a thousand
-times larger before you pay to train it. It also turns "how big should this model
-be" into a constrained optimization problem with a closed-form answer, which is
-the compute-optimal frontier this lesson derives.
+The claim this lesson makes precise is that a transformer's pretraining loss, as a
+function of its parameter count $N$ and the number of tokens it trains on $D$,
+follows a smooth and predictable curve. That curve lets you run a handful of
+small, cheap experiments and extrapolate the loss of a model a thousand times
+larger before you pay to train it, and it turns "how big should this model be"
+into a constrained optimization problem with a closed-form answer — the
+compute-optimal frontier this lesson derives.
 
 ## What you already know
 
@@ -69,42 +69,40 @@ meaning:
   power of $D$.
 
 Holding $D$ fixed and letting $N \to \infty$ leaves $E + B/D^{\beta}$: a model of
-unlimited size still cannot beat the data-limited floor. The two error terms are
-additive and independent to a good approximation, which is itself the empirical
-finding: capacity and data act as separate bottlenecks, not as a single effective
-resource.
+unlimited size still cannot beat the data-limited floor. That the two error terms
+are additive and independent is itself the empirical finding: capacity and data
+act as separate bottlenecks, not a single effective resource.
 
 ## From Kaplan to Chinchilla
 
 The form $L(N,D) = E + A/N^{\alpha} + B/D^{\beta}$ was fitted twice, three years
 apart, with materially different conclusions.
 
-Kaplan and collaborators fitted it by training models across a wide range of $N$
-while giving each one a training budget chosen by a fixed schedule, rather than
-independently sweeping $N$ and $D$ at each compute level. Their learning rate
-schedule and warm-up were also not retuned per run. The resulting fit said that
-compute should be spent overwhelmingly on parameters: model size should grow
-close to linearly with compute while token count grows far more slowly.
+Kaplan and collaborators trained models across a wide range of $N$, but gave each
+one a training budget set by a fixed schedule rather than independently sweeping
+$N$ and $D$ at each compute level, and did not retune the learning rate schedule
+or warm-up per run. The resulting fit said compute should go overwhelmingly to
+parameters: model size should grow close to linearly with compute while token
+count grows far more slowly.
 
-Hoffmann and collaborators, training the model that gave this lesson its exercise
-its constants, instead trained a grid of models that independently varied $N$ and
-$D$ at each of several fixed compute budgets, with a cosine decay schedule tuned
-to the length of each individual run. Under that more controlled design, the
-fitted exponents came out close to equal, and the compute-optimal conclusion
-reversed: most large models of the Kaplan era, GPT-3 included, were
-significantly undertrained for their size. A model a quarter the size, trained on
-four times the data, would have reached the same loss for the same compute. The
-lesson generalizes past this one comparison: an extrapolated power law is only as
-trustworthy as the experimental design it was fitted from, and a fixed schedule
-confounded with model size was enough to send the Kaplan exponents in the wrong
-direction.
+Hoffmann and collaborators, whose fit supplies this lesson's exercise its
+constants, instead trained a grid of models that independently varied $N$ and $D$
+at each of several fixed compute budgets, with a cosine decay tuned to the length
+of each run. Under that more controlled design, the fitted exponents came out
+close to equal, and the compute-optimal conclusion reversed: most large models of
+the Kaplan era, GPT-3 included, were significantly undertrained for their size —
+a model a quarter the size, trained on four times the data, would have reached
+the same loss for the same compute. The general lesson outlasts this one
+comparison: an extrapolated power law is only as trustworthy as the experimental
+design it was fitted from, and a schedule confounded with model size was enough
+to send the Kaplan exponents the wrong way.
 
 ## Counting a transformer's parameters
 
 The compute estimate below needs a parameter count, so derive it first. Take a
 transformer with `layers` blocks, model width `d_model`, feed-forward width
-`d_ff`, vocabulary size `vocab`, and a learned absolute position embedding table
-of length `seq_len`, all biases omitted since they are lower order.
+`d_ff`, vocabulary size `vocab`, and a learned position embedding table of length
+`seq_len`, biases omitted as lower order.
 
 Each block's attention sublayer holds four square projections, $W_Q$, $W_K$,
 $W_V$, and $W_O$, each $d_{\text{model}} \times d_{\text{model}}$ regardless of
@@ -118,32 +116,29 @@ $$
 4 d_{\text{model}}^2 + 8 d_{\text{model}}^2 = 12 d_{\text{model}}^2 ,
 $$
 
-and $n_{\text{layer}}$ of them cost $12\, n_{\text{layer}}\, d_{\text{model}}^2$.
-That is the figure quoted everywhere in the scaling-law literature. On top of it
-sit the token embedding, $\text{vocab} \times d_{\text{model}}$ parameters, and
-the position embedding, $\text{seq\_len} \times d_{\text{model}}$ parameters,
-with the output projection tied to the token embedding and so free.
+and $n_{\text{layer}}$ of them cost $12\, n_{\text{layer}}\, d_{\text{model}}^2$,
+the figure quoted everywhere in the scaling-law literature. On top of it sit the
+token embedding, $\text{vocab} \times d_{\text{model}}$ parameters, and the
+position embedding, $\text{seq\_len} \times d_{\text{model}}$ parameters, with
+the output projection tied to the token embedding and so free.
 
-This split matters for more than bookkeeping. An embedding lookup is an index
-into a table, not a matrix multiply, so it costs no floating point operations at
-inference or training time beyond the update itself. The $N$ that appears in the
-compute estimate below, and in the power law above, is the **non-embedding**
-parameter count, $12\, n_{\text{layer}}\, d_{\text{model}}^2$ under the
-$4\times$ feed-forward convention. Embedding parameters buy capacity without
-buying compute, so they are excluded from the quantity that flop-counting cares
-about.
+This split matters beyond bookkeeping: an embedding lookup is an index into a
+table, not a matrix multiply, so it costs no floating point operations beyond the
+update itself. The $N$ in the compute estimate below and in the power law above
+is the **non-embedding** parameter count, $12\, n_{\text{layer}}\,
+d_{\text{model}}^2$ under the $4\times$ feed-forward convention. Embedding
+parameters buy capacity without buying compute, so flop-counting excludes them.
 
 ## The compute cost of training
 
 Every non-embedding parameter takes part in exactly one multiply-accumulate per
-token during the forward pass: a weight is read once and combined with an
-activation, one multiplication and one addition, so the forward pass costs
-$2N$ flops per token, summed over all parameters. Backpropagation needs two more
-matmuls of the same total size for every one in the forward pass: one to compute
-the gradient with respect to the weights, and one to compute the gradient with
-respect to the incoming activations so it can propagate to the layer before. Each
-costs another $2N$ flops per token, for $4N$ in the backward pass. Forward and
-backward together cost
+token during the forward pass — one multiplication and one addition — so the
+forward pass costs $2N$ flops per token, summed over all parameters.
+Backpropagation needs two more matmuls of that same total size: one for the
+gradient with respect to the weights, and one for the gradient with respect to
+the incoming activations, so it can propagate to the layer before. Each costs
+another $2N$ flops per token, for $4N$ in the backward pass. Forward and backward
+together cost
 
 $$
 C_{\text{token}} \approx 2N + 4N = 6N \quad \text{flops per token},
@@ -229,9 +224,9 @@ the single number most often quoted from this line of work.
 ## Inference changes the optimum
 
 The frontier above minimises training compute alone. A model trained once and
-queried billions of times pays a second compute bill, roughly $2N$ flops per
-generated token, that scales with $N$ and not with $D$. Write the lifetime cost
-of a model that will generate $D_{\text{inf}}$ tokens after training as
+queried billions of times pays a second bill, roughly $2N$ flops per generated
+token, that scales with $N$ and not with $D$. Write the lifetime cost of a model
+that will generate $D_{\text{inf}}$ tokens after training as
 
 $$
 C_{\text{total}} = 6ND + 2N D_{\text{inf}} ,
@@ -239,14 +234,13 @@ $$
 
 and minimise it subject to reaching a target loss $L(N, D) = L_{\text{target}}$
 instead of a fixed training budget. Because the inference term grows linearly in
-$N$ alone, increasing $D_{\text{inf}}$ makes small $N$ strictly more attractive:
-the constraint can still be met by pushing more of the burden onto $D$, which
-carries no inference penalty at all. A model destined for heavy deployment should
-sit to the left of the training-compute-optimal point on the frontier, smaller
-and trained on more tokens than $N^{*}(C)$ and $D^{*}(C)$ alone would recommend.
-This is why production models are routinely trained well past the token count
-that minimises training compute: every token of extra training is repaid every
-time the smaller model answers a query more cheaply than a larger one would.
+$N$ alone, increasing $D_{\text{inf}}$ makes small $N$ more attractive: the
+constraint can still be met by pushing more of the burden onto $D$, which carries
+no inference penalty. A model destined for heavy deployment should sit to the
+left of the training-compute-optimal point, smaller and trained on more tokens
+than $N^{*}(C)$ and $D^{*}(C)$ alone recommend — every token of extra training is
+repaid each time the smaller model answers a query more cheaply than a larger
+one would.
 
 ## Fitting the law in log space
 
@@ -259,26 +253,26 @@ x_i^{k})^2$ directly, weights every point by the square of its own scale: a run
 at $x = 10^{9}$ contributes a residual that dwarfs anything a run at $x = 10^{6}$
 could produce, however badly the small run is fit. Fitting in log space
 minimises $\sum_i (\log y_i - \log \hat{y}_i)^2$, which is, to first order, a sum
-of squared *relative* errors, $\sum_i \big((y_i - \hat{y}_i)/y_i\big)^2$. A
-relative error of ten percent counts the same whether it comes from the cheapest
-run in the study or the most expensive one. Since a scaling-law study can usually
-afford many small runs and only a few large ones, log-space regression is what
-lets the many cheap points anchor the fit rather than being swamped by the one or
-two runs large enough to dominate an unweighted sum of squares.
+of squared *relative* errors, $\sum_i \big((y_i - \hat{y}_i)/y_i\big)^2$: a ten
+percent error counts the same whether it comes from the cheapest run in the study
+or the most expensive one. A scaling-law study can usually afford many small runs
+and only a few large ones, so log-space regression is what lets the many cheap
+points anchor the fit rather than being swamped by the one or two large enough to
+dominate an unweighted sum of squares.
 
 ## What scaling laws do not tell you
 
 The fitted curve predicts pretraining cross-entropy, and only that. It does not
 predict accuracy on any downstream benchmark, which can move in steps that look
-discontinuous even while the loss underneath moves smoothly. It does not predict
-when a specific capability appears, only that the loss the model achieves will
-keep falling. The constants $E$, $A$, $B$, $\alpha$, and $\beta$ belong to one
-data distribution, one tokenizer, and one architecture family: change any of
-them and the constants need refitting, not just rescaling. It says nothing about
-behaviour introduced after pretraining, by instruction tuning or reinforcement
-learning, and it is only as reliable outside the range of compute it was fitted
-on as the experimental design that produced it, which is precisely the failure
-mode that separated the Kaplan exponents from the Chinchilla ones.
+discontinuous even while the loss underneath moves smoothly, and it does not
+predict when a specific capability appears, only that the loss will keep
+falling. The constants $E$, $A$, $B$, $\alpha$, and $\beta$ belong to one data
+distribution, one tokenizer, and one architecture family: change any of them and
+the constants need refitting, not just rescaling. It says nothing about
+behaviour introduced after pretraining, and it is only as reliable outside the
+compute range it was fitted on as the experimental design that produced it —
+precisely the failure mode that separated the Kaplan exponents from the
+Chinchilla ones.
 
 ## Cost and scaling
 
@@ -296,10 +290,9 @@ lesson's constants for $N^{*}(C)$ and $D^{*}(C)$:
 
 The last row is why frontier training runs are distributed across thousands of
 accelerators rather than sped up on one: the compute is fixed by the frontier,
-and only the number of accelerators working in parallel turns years into weeks.
-Training memory scales more gently, at roughly 16 bytes per parameter for
-mixed-precision Adam, so a $92$ billion parameter model needs on the order of
-1.5 TB of optimizer state alone before a single activation is stored — split
+and only parallelism turns years into weeks. Training memory scales more gently,
+at roughly 16 bytes per parameter for mixed-precision Adam, so a 92 billion
+parameter model needs on the order of 1.5 TB of optimizer state alone, split
 across the same accelerators that share the compute.
 
 ## Where this breaks
