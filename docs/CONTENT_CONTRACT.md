@@ -67,6 +67,10 @@ exercise: 05-logistic-regression
 ---
 ```
 
+Every value that holds a colon must be wrapped in double quotes, or YAML reads
+the item as a mapping rather than a string. A mapping that reaches the client
+renders as nothing at all, so `scripts/check_content.py` rejects one.
+
 Every field is required except `prereqs`, which can be omitted. `gpu` is `true`
 only when the exercise genuinely needs a GPU. `minutes` is an honest reading and
 working estimate.

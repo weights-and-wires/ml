@@ -19,6 +19,27 @@ import frontmatter
 from .config import get_settings
 
 
+def _text_list(value: Any) -> list[str]:
+    """Coerce a front-matter list to strings.
+
+    An unquoted colon in a YAML list item parses as a mapping rather than a
+    string, and a mapping reaching the client renders as nothing at all — React
+    refuses to render an object and blanks the page. `scripts/check_content.py`
+    rejects that at authoring time; this keeps a slip from taking the app down.
+    """
+    if not isinstance(value, list):
+        return []
+    out: list[str] = []
+    for item in value:
+        if isinstance(item, str):
+            out.append(item)
+        elif isinstance(item, dict):
+            out.extend(f"{k}: {v}" for k, v in item.items())
+        else:
+            out.append(str(item))
+    return out
+
+
 def _lessons_dir() -> Path:
     return get_settings().content_dir / "lessons"
 
@@ -45,8 +66,8 @@ def load_lessons() -> list[dict[str, Any]]:
                 "part": meta.get("part", "Uncategorised"),
                 "summary": meta.get("summary", ""),
                 "minutes": meta.get("minutes"),
-                "objectives": meta.get("objectives", []),
-                "prereqs": meta.get("prereqs", []),
+                "objectives": _text_list(meta.get("objectives", [])),
+                "prereqs": _text_list(meta.get("prereqs", [])),
                 "exercise": meta.get("exercise"),
                 "gpu": bool(meta.get("gpu", False)),
                 "body": post.content,

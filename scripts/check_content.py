@@ -47,25 +47,12 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
     raw, body = text[4:end], text[end + 5 :]
     try:
         import yaml
-
-        return yaml.safe_load(raw) or {}, body
     except ImportError:
-        pass
-    # A dependency-free reader for the subset the contract allows.
-    meta: dict = {}
-    key = None
-    for line in raw.splitlines():
-        if not line.strip() or line.strip().startswith("#"):
-            continue
-        if line.startswith("  - ") and key:
-            meta.setdefault(key, []).append(line[4:].strip().strip('"'))
-        elif ":" in line and not line.startswith(" "):
-            key, _, value = line.partition(":")
-            key = key.strip()
-            value = value.strip().strip('"')
-            meta[key] = value if value else []
-    return meta, body
-
+        raise SystemExit(
+            "This checker needs PyYAML, because the front-matter faults it has to "
+            "catch are the ones a simpler parser cannot see. pip install pyyaml"
+        ) from None
+    return yaml.safe_load(raw) or {}, body
 
 def run_harness(mode: str, exercise: Path, submission: Path, timeout: int) -> list[dict]:
     env_path = f"{ROOT}"
@@ -169,6 +156,23 @@ def check_lesson(path: Path, problems: list[str], seen_exercises: set[str]) -> N
         problems.append(f"{path.name}: summary is longer than 160 characters")
     if not isinstance(meta.get("objectives"), list) or len(meta["objectives"]) < 3:
         problems.append(f"{path.name}: needs at least three objectives")
+
+    for field in ("title", "part", "summary", "slug", "exercise"):
+        if not isinstance(meta.get(field), str):
+            problems.append(
+                f"{path.name}: {field} parsed as "
+                f"{type(meta.get(field)).__name__}, not a string. An unquoted "
+                "colon does this; wrap the value in double quotes."
+            )
+    for field in ("objectives", "prereqs"):
+        for i, item in enumerate(meta.get(field) or []):
+            if not isinstance(item, str):
+                problems.append(
+                    f"{path.name}: {field}[{i}] parsed as "
+                    f"{type(item).__name__}, not a string. An unquoted colon "
+                    "makes YAML read the item as a mapping; wrap it in double "
+                    "quotes."
+                )
 
     for heading in REQUIRED_SECTIONS:
         if heading not in body:

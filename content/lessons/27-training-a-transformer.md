@@ -7,7 +7,7 @@ minutes: 70
 gpu: true
 objectives:
   - Derive why an untrained model's loss sits at log V, and read perplexity as an effective branching factor.
-  - Justify each element of the AdamW training recipe: the warmup-into-cosine schedule, global-norm clipping, weight tying, and excluding norms and biases from decay.
+  - "Justify each element of the AdamW training recipe: the warmup-into-cosine schedule, global-norm clipping, weight tying, and excluding norms and biases from decay."
   - Explain why fp16 needs loss scaling and bf16 does not, from the two formats' exponent widths.
   - Derive the 6ND training-flops estimate from the forward and backward passes.
 prereqs:
