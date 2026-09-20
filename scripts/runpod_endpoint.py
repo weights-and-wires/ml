@@ -15,7 +15,8 @@ The image is published by `.github/workflows/publish-gpu-worker.yml` to
 Actions starts private, and RunPod pulls anonymously, so make the package public
 in the organisation's package settings first. `--skip-pull-check` goes ahead
 anyway, for when you have added a container registry credential in the RunPod
-console instead.
+console instead. `--registry-auth-id <id>` attaches that credential to the
+template, and `--registry-auth-id list` prints the ones the account has.
 """
 
 from __future__ import annotations
@@ -24,38 +25,66 @@ import argparse
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 
 API = "https://api.runpod.io/graphql"
+
+# Cloudflare fronts both api.runpod.io and ghcr.io, and it rejects urllib's
+# default user agent with error 1010. Every request here sends its own.
+USER_AGENT = "weights-and-wires-ml/1.0"
 IMAGE = "ghcr.io/weights-and-wires/ml-gpu-worker:latest"
 TEMPLATE_NAME = "ml-gpu-worker"
 ENDPOINT_NAME = "ml-course-gpu"
 
 
-def post(query: str, api_key: str) -> dict:
-    request = urllib.request.Request(
-        f"{API}?api_key={api_key}",
-        data=json.dumps({"query": query}).encode(),
-        headers={"Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(request, timeout=60) as response:
-        body = json.loads(response.read())
-    if "errors" in body:
-        raise SystemExit(f"RunPod rejected the request: {body['errors']}")
-    return body["data"]
+def post(query: str, api_key: str, attempts: int = 3) -> dict:
+    """Send one GraphQL request, retrying the statuses RunPod returns in bursts."""
+    for attempt in range(1, attempts + 1):
+        request = urllib.request.Request(
+            f"{API}?api_key={api_key}",
+            data=json.dumps({"query": query}).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": USER_AGENT,
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                body = json.loads(response.read())
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", "replace")[:400]
+            if exc.code in (403, 429, 500, 502, 503) and attempt < attempts:
+                time.sleep(2 * attempt)
+                continue
+            raise SystemExit(
+                f"RunPod returned HTTP {exc.code}. {detail}\n"
+                "A 403 here usually means the API key is wrong or rate limited."
+            ) from None
+        except urllib.error.URLError as exc:
+            if attempt < attempts:
+                time.sleep(2 * attempt)
+                continue
+            raise SystemExit(f"Could not reach RunPod: {exc.reason}") from None
+
+        if "errors" in body:
+            raise SystemExit(f"RunPod rejected the request: {body['errors']}")
+        return body["data"]
+    raise SystemExit("RunPod did not answer after several attempts.")
 
 
 def image_is_pullable(image: str) -> tuple[bool, str]:
     """Ask GHCR for an anonymous pull token and then for the manifest."""
     repository, _, tag = image.removeprefix("ghcr.io/").partition(":")
     tag = tag or "latest"
+    token_request = urllib.request.Request(
+        "https://ghcr.io/token"
+        f"?scope=repository:{repository}:pull&service=ghcr.io",
+        headers={"User-Agent": USER_AGENT},
+    )
     try:
-        with urllib.request.urlopen(
-            "https://ghcr.io/token"
-            f"?scope=repository:{repository}:pull&service=ghcr.io",
-            timeout=30,
-        ) as response:
+        with urllib.request.urlopen(token_request, timeout=30) as response:
             token = json.loads(response.read()).get("token", "")
     except urllib.error.HTTPError as exc:
         return False, f"GHCR refused an anonymous token: {exc.code}"
@@ -66,6 +95,7 @@ def image_is_pullable(image: str) -> tuple[bool, str]:
         f"https://ghcr.io/v2/{repository}/manifests/{tag}",
         headers={
             "Authorization": f"Bearer {token}",
+            "User-Agent": USER_AGENT,
             "Accept": ", ".join(
                 [
                     "application/vnd.oci.image.index.v1+json",
@@ -91,7 +121,12 @@ def existing_endpoint(api_key: str) -> dict | None:
     return None
 
 
-def create_template(api_key: str, disk_gb: int) -> str:
+def create_template(api_key: str, disk_gb: int, registry_auth_id: str = "") -> str:
+    # A private image needs the id of a container registry credential saved in
+    # the RunPod console. A public image needs no credential at all.
+    auth = (
+        f'containerRegistryAuthId: "{registry_auth_id}"' if registry_auth_id else ""
+    )
     query = f"""
     mutation {{
       saveTemplate(input: {{
@@ -102,12 +137,18 @@ def create_template(api_key: str, disk_gb: int) -> str:
         isServerless: true
         dockerArgs: ""
         env: []
+        {auth}
         readme: "The GPU worker for the lessons marked gpu: true."
       }}) {{ id name imageName }}
     }}
     """
     template = post(query, api_key)["saveTemplate"]
     return template["id"]
+
+
+def registry_creds(api_key: str) -> list[dict]:
+    data = post("query { myself { containerRegistryCreds { id name } } }", api_key)
+    return data["myself"]["containerRegistryCreds"] or []
 
 
 def create_endpoint(
@@ -147,6 +188,13 @@ def main() -> int:
         help="Seconds a worker stays warm after a job, before scaling to zero.",
     )
     parser.add_argument("--container-disk-gb", type=int, default=25)
+    parser.add_argument(
+        "--registry-auth-id",
+        default="",
+        help="The id of a container registry credential saved in the RunPod "
+        "console, for a private image. Pass `list` to print the ones the "
+        "account has.",
+    )
     parser.add_argument("--skip-pull-check", action="store_true")
     args = parser.parse_args()
 
@@ -155,7 +203,17 @@ def main() -> int:
         print("Set RUNPOD_API_KEY in the environment first.", file=sys.stderr)
         return 2
 
-    if not args.skip_pull_check:
+    if args.registry_auth_id == "list":
+        creds = registry_creds(api_key)
+        if not creds:
+            print("The account has no container registry credentials.")
+        for cred in creds:
+            print(f"{cred['id']}  {cred['name']}")
+        return 0
+
+    # A saved credential is what makes a private image pullable, so the
+    # anonymous check does not apply when one is given.
+    if not args.skip_pull_check and not args.registry_auth_id:
         ok, why = image_is_pullable(IMAGE)
         if not ok:
             print(f"{IMAGE} is not pullable: {why}.\n", file=sys.stderr)
@@ -173,7 +231,9 @@ def main() -> int:
         print(f"Endpoint {ENDPOINT_NAME} already exists.")
         endpoint_id = found["id"]
     else:
-        template_id = create_template(api_key, args.container_disk_gb)
+        template_id = create_template(
+            api_key, args.container_disk_gb, args.registry_auth_id
+        )
         print(f"Created template {template_id}")
         endpoint = create_endpoint(
             api_key,
