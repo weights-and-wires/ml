@@ -8,7 +8,10 @@ import SplitPane from "./SplitPane";
 type Props = {
   exercise: ExerciseDetail;
   initialCode: string;
+  /** Whether a RunPod endpoint is configured at all. */
   gpuAvailable: boolean;
+  /** Whether this lesson's work is worth sending to a GPU. */
+  gpuLesson: boolean;
   onSolved: () => void;
 };
 
@@ -18,6 +21,7 @@ export default function ExercisePane({
   exercise,
   initialCode,
   gpuAvailable,
+  gpuLesson,
   onSolved,
 }: Props) {
   const [code, setCode] = useState(initialCode);
@@ -31,12 +35,17 @@ export default function ExercisePane({
     null,
   );
   const [hintsOpen, setHintsOpen] = useState(false);
+  // Checks are sized for the CPU and a cold serverless worker costs more than
+  // the whole suite, so the GPU is opt-in and only where a lesson asks for it.
+  const [useGpu, setUseGpu] = useState(false);
   const [revealed, setRevealed] = useState<string | null>(null);
   const [saved, setSaved] = useState<"idle" | "saving" | "saved">("idle");
 
   const abort = useRef<AbortController | null>(null);
   const codeRef = useRef(code);
   codeRef.current = code;
+  const gpuRef = useRef(useGpu);
+  gpuRef.current = useGpu;
 
   // A new exercise resets everything the previous one left behind.
   useEffect(() => {
@@ -48,6 +57,7 @@ export default function ExercisePane({
     setMode(null);
     setBackend(null);
     setHintsOpen(false);
+    setUseGpu(false);
     setRevealed(null);
     setSaved("idle");
   }, [exercise.id, initialCode]);
@@ -87,6 +97,7 @@ export default function ExercisePane({
             exercise_id: exercise.id,
             mode: next,
             code: codeRef.current,
+            prefer_gpu: gpuRef.current,
           },
           controller.signal,
         )) {
@@ -180,12 +191,12 @@ export default function ExercisePane({
           <h2 className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink-100">
             {exercise.title}
           </h2>
-          {exercise.needs_gpu && (
+          {gpuLesson && (
             <span
               title={
                 gpuAvailable
-                  ? "This exercise runs on a RunPod GPU worker"
-                  : "No GPU endpoint is configured, so this falls back to the CPU runner"
+                  ? "The larger run in this exercise is worth a GPU"
+                  : "No GPU endpoint is configured, so every run stays on the CPU"
               }
               className={`rounded border px-1.5 py-px font-mono text-[10px] uppercase ${
                 gpuAvailable
@@ -231,6 +242,33 @@ export default function ExercisePane({
               >
                 Check
               </button>
+
+              {gpuLesson ? (
+                <label
+                  title={
+                    gpuAvailable
+                      ? "Send this run to a RunPod GPU worker. A cold worker takes " +
+                        "a few seconds to start, so the checks are quicker on the CPU."
+                      : "No GPU endpoint is configured, so every run stays on the CPU."
+                  }
+                  className={`ml-1 flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition ${
+                    !gpuAvailable
+                      ? "cursor-not-allowed border-ink-800 text-ink-600"
+                      : useGpu
+                        ? "cursor-pointer border-warm-500/40 bg-warm-500/10 text-warm-500"
+                        : "cursor-pointer border-ink-700 text-ink-400 hover:border-ink-600 hover:text-ink-300"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="size-3 accent-warm-500"
+                    checked={useGpu && gpuAvailable}
+                    disabled={!gpuAvailable}
+                    onChange={(event) => setUseGpu(event.target.checked)}
+                  />
+                  GPU
+                </label>
+              ) : null}
             </>
           )}
 

@@ -2,9 +2,11 @@
   "id": "21-residual-networks",
   "title": "Gradient flow through a residual stack",
   "brief": "Implement a residual block by hand, then measure the additive identity term that keeps its gradient alive at depth 50 while a plain stack's collapses.",
-  "needs_gpu": true,
+  "needs_gpu": false,
   "timeout": 60,
-  "packages": ["numpy"],
+  "packages": [
+    "numpy"
+  ],
   "hints": [
     "The shortcut contributes dY to dx directly, because dy/dx through the addition is the identity; add the branch's own contribution, dh1 @ W1, on top of it rather than instead of it.",
     "Zeroing W2 and b2 makes h2 the zero array regardless of a1, so the block collapses to y = x + 0 for every input, not just on average.",

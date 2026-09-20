@@ -200,6 +200,7 @@ export default function LessonPage({ gpuAvailable, onProgress }: Props) {
           exercise={lesson.exercise_detail}
           initialCode={lesson.draft ?? lesson.exercise_detail.starter}
           gpuAvailable={gpuAvailable}
+          gpuLesson={lesson.gpu}
           onSolved={onSolved}
         />
       }
