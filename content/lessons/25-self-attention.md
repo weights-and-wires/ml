@@ -141,8 +141,8 @@ projections.
 Counting the projections: $Q = XW_Q$ costs $2Td^2$ flops regardless of whether
 $W_Q$ is one $(d,d)$ matrix or $h$ separate $(d, d_k)$ blocks, because
 $h \cdot d \cdot d_k = d \cdot (h \cdot d_k) = d \cdot d = d^2$ either way — the
-same identity that keeps the LSTM-versus-GRU parameter ratio exact in the
-previous lesson's arithmetic, applied here to heads instead of gates. The same
+same identity that keeps the LSTM-versus-GRU parameter ratio exact in lesson
+23's arithmetic, applied here to heads instead of gates. The same
 holds for $K$, $V$, and the output projection $W_O$: four projections at
 $2Td^2$ flops each. Inside the heads, each of the $h$ heads computes
 $QK^{\top}$ at cost $2T^2 d_k$ and the weighted sum $\cdot V$ at cost $2T^2
