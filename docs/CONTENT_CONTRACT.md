@@ -8,31 +8,38 @@ depend on it.
 
 ## Audience
 
-Readers hold a graduate-level background in calculus, linear algebra, probability,
-and optimization. They know what a gradient, a Jacobian, an eigendecomposition, a
-convex function, and a maximum likelihood estimator are. Write for them:
+Readers hold a working background in calculus, linear algebra, and probability.
+They know what a derivative, a matrix, and a probability distribution are. They
+read a lesson to learn what a method does, why it works, and when it fails --
+not to reconstruct its proofs. Write for them:
 
-- Derive results. Don't assert them. A chapter that says "the gradient of the
-  logistic loss is `X^T(sigma(Xw) - y)`" without showing the two lines that get
-  there has failed.
-- Never explain what a derivative is, what a matrix is, or what probability means.
-- Use notation without apologising for it. Define only symbols specific to the
-  lesson.
+- Lead with the result and what it means. State the gradient, the bound, or the
+  update rule, then say in one sentence what it tells you.
+- Keep the mathematics the exercise needs, and cut the rest. Every formula the
+  reader implements has to appear in the lesson. A derivation that no check
+  depends on belongs in a linked reference, or nowhere.
+- Replace a long derivation with the one step that carries the idea. When a
+  result takes six lines to prove, give the line that explains why it holds and
+  state the rest as fact. Say where the full derivation can be found.
+- Define every symbol you use, including ones a graduate course would assume.
+- Prefer the concrete to the general. A worked two-by-two example beats an
+  index expression that covers every case.
 - State assumptions precisely: when a result needs convexity, full rank, i.i.d.
-  sampling, or a bounded second moment, say so.
-- Prefer the sharp statement to the friendly one. "The Hessian is
-  `X^T D X` with `D = diag(p(1-p))`, so the loss is convex and strictly convex
-  when `X` has full column rank" beats "the loss curves nicely".
+  sampling, or a bounded second moment, say so. Reducing the mathematics does
+  not mean hiding the conditions a result depends on.
 - Connect each result to what it costs to compute: flops, memory, and how the
   cost scales.
 
-Do not pad. A lesson is not longer because it is better.
+Do not pad. Cutting a derivation is not licence to fill the space with prose.
 
 ## Prose style
 
 Follow the Google developer documentation style guide:
 
 - Address the reader as "you". Use active voice and present tense.
+- One idea per sentence. Split any sentence that needs a second comma-spliced
+  clause to land. Long subordinate chains are the main thing that made these
+  lessons hard to read.
 - Sentence case for every heading. Start task headings with a bare infinitive.
 - Serial commas. Em dashes with no surrounding spaces.
 - Code, filenames, and identifiers in code font. No `simply`, `just`, `easily`,
@@ -93,8 +100,9 @@ Every lesson body includes, in this order:
    lesson is not enough. Two or three paragraphs. No heading.
 2. `## What you already know` — a short list of the results the lesson builds on,
    stated as facts rather than explained. Keep it to five bullets.
-3. The substance, in as many `##` sections as the material needs. Derivations
-   live here.
+3. The substance, in as many `##` sections as the material needs. State each
+   result, explain what it means, and show only the mathematics the reader
+   needs to implement it.
 4. `## Cost and scaling` — flops, memory, and how both scale with the relevant
    dimensions. A table works well.
 5. `## Where this breaks` — the failure modes, and what practitioners do about
@@ -103,7 +111,7 @@ Every lesson body includes, in this order:
    implements and what the checks verify. Name the functions by their exact
    identifiers.
 
-Aim for 1200 to 2200 words of body, plus math.
+Aim for 1000 to 1800 words of body, plus math.
 
 ## Exercise directory
 
@@ -217,8 +225,12 @@ Rules for checks:
 
 ## Mathematical accuracy
 
-Every derivation, gradient, and complexity claim in a lesson must be correct.
-When you state a result, check it. When you write a gradient in prose, the check
-that verifies it in `tests.py` must use finite differences, so the prose and the
-code confirm each other. If those two disagree, the lesson is wrong, not the
-reader.
+Every result, gradient, and complexity claim in a lesson must be correct. A
+lesson that states a result without deriving it carries the same burden as one
+that derives it: if it is on the page, it is right. When you write a gradient in
+prose, the check that verifies it in `tests.py` must use finite differences, so
+the prose and the code confirm each other. If those two disagree, the lesson is
+wrong, not the reader.
+
+Cutting a derivation must never change what a result says. Shortening the path
+to a formula is editing; changing the formula is breaking the lesson.

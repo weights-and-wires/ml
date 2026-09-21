@@ -182,7 +182,7 @@ def check_lesson(path: Path, problems: list[str], seen_exercises: set[str]) -> N
 
     words = len(body.split())
     if words < 900:
-        problems.append(f"{path.name}: {words} words, the contract asks for 1200 or more")
+        problems.append(f"{path.name}: {words} words, the contract asks for 1000 or more")
 
     prose = re.sub(r"```.*?```", "", body, flags=re.S)
     for pattern in BANNED:
