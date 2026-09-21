@@ -2,14 +2,14 @@
 title: Linear regression
 slug: 02-linear-regression
 part: "Part 1 — Foundations"
-summary: Least squares as an orthogonal projection, three ways to compute it, and the conditioning that decides which one you can trust.
-minutes: 55
+summary: Least squares as an orthogonal projection, three ways to compute it, and why the textbook formula loses digits the others don't.
+minutes: 50
 gpu: false
 objectives:
-  - Derive the normal equations from the first-order condition and read them as an orthogonality statement.
+  - State the normal equations, and read them as an orthogonality condition on the residual.
   - Explain why forming X^T X squares the condition number, and what that costs in digits.
   - Solve least squares through QR and through the SVD, and state when each is the right choice.
-  - Characterise the solution set when X is rank deficient, and identify the minimum-norm element.
+  - Describe the solution set when X is rank deficient, and identify the minimum-norm element.
 prereqs:
   - 01-the-learning-problem
 exercise: 02-linear-regression
@@ -17,176 +17,89 @@ exercise: 02-linear-regression
 
 # Linear regression
 
-Empirical risk minimisation over the squared loss and a linear hypothesis class
-is the one nontrivial learning problem with a closed-form answer. That closed
-form is a projection, and almost every idea in the rest of this course is a
-response to the fact that the projection is not available once the hypothesis
-class stops being a linear subspace.
+Least squares has a closed-form answer, and that answer is a projection. Almost every idea in the rest of this course responds to the fact that once the hypothesis class stops being a linear subspace, the projection is gone and you need something else.
 
-The optimisation is settled in four lines. What takes the rest of this lesson is
-the numerical question underneath it: the textbook formula
-$\hat{w} = (X^{\top}X)^{-1}X^{\top}y$ is the one you must not implement. It
-loses roughly twice as many digits as the problem itself requires, and on the
-design matrices that turn up in practice — correlated features, a column of
-ones, wildly different units — that difference decides whether your coefficients
-mean anything.
+The formula most textbooks print, $\hat{w} = (X^{\top}X)^{-1}X^{\top}y$, is also the one you must not implement. It throws away roughly twice as many digits as the problem itself requires. On the design matrices you meet in practice — correlated features, a column of ones, wildly different units — that difference decides whether your coefficients mean anything at all.
 
-This lesson derives the solution, reads it geometrically, then builds the two
-factorisations that compute it without the squaring.
+This lesson states the solution, reads it geometrically, and builds the two factorisations that compute it without the digit loss.
 
 ## What you already know
 
-- Empirical risk minimisation, and that a held-out estimate is the only honest
-  measure of risk.
+- Empirical risk minimisation, and that a held-out estimate is the only honest measure of risk.
 - The gradient of a quadratic form: $\nabla_w \, w^{\top}Aw = (A + A^{\top})w$.
 - Orthogonal matrices preserve the Euclidean norm, and $Q^{\top}Q = I$.
-- Every real matrix has a singular value decomposition, and the singular values
-  are the square roots of the eigenvalues of $X^{\top}X$.
+- Every real matrix has a singular value decomposition, and its singular values are the square roots of the eigenvalues of $X^{\top}X$.
 - Floating-point arithmetic carries about 16 decimal digits in double precision.
 
 ## The normal equations
 
-Take $X \in \mathbb{R}^{n \times d}$ with rows $x_i^{\top}$, and
-$y \in \mathbb{R}^n$. The empirical risk under squared loss is
-
-$$
-L(w) = \frac{1}{2}\lVert Xw - y \rVert_2^2 .
-$$
-
-The factor of one half is bookkeeping; it cancels in the gradient. Expanding,
-
-$$
-L(w) = \tfrac{1}{2} w^{\top} X^{\top} X w - w^{\top} X^{\top} y + \tfrac{1}{2} y^{\top} y ,
-$$
-
-so $\nabla L(w) = X^{\top}Xw - X^{\top}y$ and
-$\nabla^2 L(w) = X^{\top}X \succeq 0$. The Hessian is constant and positive
-semidefinite, so $L$ is convex and every stationary point is a global minimum.
-Setting the gradient to zero gives the **normal equations**:
+Take $X \in \mathbb{R}^{n \times d}$ with rows $x_i^{\top}$, and $y \in \mathbb{R}^n$. The empirical risk under squared loss is $L(w) = \tfrac{1}{2}\lVert Xw - y \rVert_2^2$, with gradient $\nabla L(w) = X^{\top}Xw - X^{\top}y$ and constant Hessian $X^{\top}X \succeq 0$. A constant, positive semidefinite Hessian means $L$ is convex, so every stationary point is a global minimum. Setting the gradient to zero gives the **normal equations**:
 
 $$
 X^{\top} X \hat{w} = X^{\top} y .
 $$
 
-They are consistent for every $X$ and $y$, because $X^{\top}y$ always lies in the
-range of $X^{\top}X$. When $X$ has full column rank, $X^{\top}X$ is positive
-definite and the solution is unique.
+They have a solution for every $X$ and $y$, because $X^{\top}y$ always lies in the range of $X^{\top}X$. When $X$ has full column rank, $X^{\top}X$ is positive definite and that solution is unique.
 
 ### The projection reading
 
-Rewrite the normal equations as $X^{\top}(y - X\hat{w}) = 0$. The residual
-$r = y - X\hat{w}$ is orthogonal to every column of $X$, so it is orthogonal to
-$\operatorname{range}(X)$. That is the whole content of least squares:
-$X\hat{w}$ is the orthogonal projection of $y$ onto the column space of $X$, and
-$\hat{w}$ is the coordinate vector of that projection in the basis given by the
-columns.
+Rewrite the normal equations as $X^{\top}(y - X\hat{w}) = 0$. The residual $r = y - X\hat{w}$ is orthogonal to every column of $X$, hence to the whole column space of $X$. That single fact is the geometry of least squares: $X\hat{w}$ is the orthogonal projection of $y$ onto the column space of $X$, and $\hat{w}$ is the coordinate vector of that projection in the basis the columns give you.
 
-The projection matrix is $P = X(X^{\top}X)^{-1}X^{\top}$, which satisfies
-$P^2 = P$ and $P^{\top} = P$. Its trace is $d$, and $\operatorname{tr}(I - P)$
-is $n - d$ — the degrees of freedom left in the residual, and the reason the
-unbiased variance estimate divides by $n - d$ rather than $n$.
+Take a two-column example to see it directly. If $X$'s two columns are already orthogonal, projecting $y$ onto their span decomposes into two independent one-dimensional projections, one per column, and $\hat w$ is just the pair of those two dot products divided by the column norms squared. Correlated columns lose that independence, which is exactly why the rest of this lesson exists.
 
-This reading explains why the fit cannot improve when you add a feature that is
-already a linear combination of existing ones: the column space does not grow, so
-the projection does not move.
+This reading also explains a fact you can otherwise find surprising: adding a feature that is already a linear combination of existing features never improves the fit, because the column space does not grow, so the projection does not move.
 
 ## Why not to invert
 
-Define the condition number of a full-rank $X$ as
-$\kappa_2(X) = \sigma_{\max}(X) / \sigma_{\min}(X)$, the ratio of its extreme
-singular values. It bounds how much a relative perturbation of the data can
-change the answer.
+Define the condition number of a full-rank $X$ as $\kappa_2(X) = \sigma_{\max}(X) / \sigma_{\min}(X)$, the ratio of its extreme singular values. It bounds how much a relative perturbation of the data can change the answer: a large $\kappa_2(X)$ means a design matrix where small measurement noise can swing the fitted coefficients by a lot.
 
-Since the singular values of $X^{\top}X$ are $\sigma_i^2$,
+Because the singular values of $X^{\top}X$ are $\sigma_i^2$,
 
 $$
 \kappa_2(X^{\top}X) = \kappa_2(X)^2 .
 $$
 
-Forming the Gram matrix squares the conditioning. In double precision you start
-with about 16 digits; solving through $X^{\top}X$ leaves you roughly
-$16 - 2\log_{10}\kappa_2(X)$. A design matrix with $\kappa_2(X) = 10^{8}$ —
-unremarkable when one feature is in metres and another in micrometres — leaves
-nothing at all.
+Forming the Gram matrix $X^\top X$ squares the conditioning, before you have even started solving anything. In double precision you begin with about 16 digits, and solving through $X^{\top}X$ leaves roughly $16 - 2\log_{10}\kappa_2(X)$ of them. A design matrix with $\kappa_2(X) = 10^{8}$ — unremarkable when one feature is measured in metres and another in micrometres — leaves nothing at all. Two columns that differ only in the last representable digit become numerically identical inside $X^{\top}X$, and Cholesky factorisation can fail outright on a matrix that is mathematically positive definite.
 
-Worse, the squaring happens before any solve. Two columns that differ in the
-last representable digit become numerically identical in $X^{\top}X$, and the
-Cholesky factorisation fails outright with a matrix that is mathematically
-positive definite.
-
-The fix is to never form the Gram matrix. Both alternatives work on $X$ directly.
+The fix is to never form the Gram matrix, and both alternatives below work on $X$ directly.
 
 ### QR
 
-Factor $X = QR$ with $Q \in \mathbb{R}^{n \times d}$ having orthonormal columns
-and $R \in \mathbb{R}^{d \times d}$ upper triangular — the thin, or reduced,
-factorisation. Because $Q$ preserves norms on its range,
+Factor $X = QR$, the thin factorisation with $Q \in \mathbb{R}^{n \times d}$ having orthonormal columns and $R \in \mathbb{R}^{d \times d}$ upper triangular. Because $Q$ preserves norms on its range, minimising $\lVert Xw - y \rVert_2^2$ is the same as minimising $\lVert Rw - Q^{\top}y \rVert_2^2$ plus a constant that does not involve $w$. That means solving one triangular system by back substitution:
 
 $$
-\lVert Xw - y \rVert_2^2 = \lVert QRw - y \rVert_2^2
-= \lVert Rw - Q^{\top}y \rVert_2^2 + \lVert (I - QQ^{\top}) y \rVert_2^2 .
+R \hat{w} = Q^{\top} y .
 $$
 
-The second term is free of $w$. Minimising the first means solving the triangular
-system
-
-$$
-R \hat{w} = Q^{\top} y ,
-$$
-
-by back substitution, in $O(d^2)$. The factorisation itself, by Householder
-reflections, costs $2nd^2 - \tfrac{2}{3}d^3$ flops and is backward stable: the
-computed $\hat{w}$ is the exact solution of a nearby problem, with the error
-governed by $\kappa_2(X)$ and not its square.
+Back substitution costs $O(d^2)$. The Householder factorisation that produces $Q$ and $R$ costs $2nd^2 - \tfrac{2}{3}d^3$ flops, and it is backward stable: the computed $\hat{w}$ solves a nearby problem exactly, with error governed by $\kappa_2(X)$ itself rather than its square.
 
 ### The SVD
 
-Factor $X = U \Sigma V^{\top}$ with $U \in \mathbb{R}^{n \times r}$,
-$V \in \mathbb{R}^{d \times r}$ having orthonormal columns, $\Sigma$ diagonal and
-positive, and $r = \operatorname{rank}(X)$. Then
+Factor $X = U \Sigma V^{\top}$, with $U \in \mathbb{R}^{n \times r}$ and $V \in \mathbb{R}^{d \times r}$ having orthonormal columns, $\Sigma$ diagonal and positive, and $r = \operatorname{rank}(X)$. The least squares solution is
 
 $$
 \hat{w} = V \Sigma^{-1} U^{\top} y = X^{+} y ,
 $$
 
-where $X^{+}$ is the Moore-Penrose pseudoinverse. Expanding the sum makes the
-conditioning visible term by term:
+where $X^{+}$ is the Moore-Penrose pseudoinverse. Writing the sum out term by term makes the conditioning visible directly:
 
 $$
 \hat{w} = \sum_{i=1}^{r} \frac{u_i^{\top} y}{\sigma_i} \, v_i .
 $$
 
-Each direction $v_i$ is weighted by $1/\sigma_i$. A small singular value
-multiplies whatever noise happens to project onto $u_i$ by a large factor, which
-is exactly the instability that ridge regression will damp in lesson 4 by
-replacing $1/\sigma_i$ with $\sigma_i / (\sigma_i^2 + \lambda)$.
+Each direction $v_i$ carries a weight of $1/\sigma_i$. A small singular value multiplies whatever noise lands on $u_i$ by a large factor — the same instability the condition number predicts, and the instability that ridge regression will damp in lesson 4 by replacing $1/\sigma_i$ with $\sigma_i / (\sigma_i^2 + \lambda)$.
 
 ### Rank deficiency
 
-When $\operatorname{rank}(X) = r < d$, the normal equations still hold but no
-longer pin down $\hat{w}$. The solution set is an affine subspace
+When $\operatorname{rank}(X) = r < d$, the normal equations still hold, but they no longer pin down a unique $\hat{w}$. The solution set is an affine subspace of dimension $d - r$: one particular solution plus anything in $X$'s null space. Every element of that set gives the same fitted values and the same training loss, so the data cannot tell them apart.
 
-$$
-\{\, \hat{w}_0 + v : v \in \operatorname{null}(X) \,\} ,
-$$
+The pseudoinverse picks one of them: $X^{+}y$ is the element of smallest Euclidean norm, because by construction it puts zero weight on every null-space direction. That is a choice, not a consequence forced by the data — and it is the same choice that gradient descent makes on its own when started from $w_0 = 0$, the first implicit-regularisation result you meet in this course.
 
-of dimension $d - r$. Every element gives the same fitted values and the same
-training loss, so the data cannot distinguish them.
-
-The pseudoinverse selects one: $X^{+}y$ is the element of smallest Euclidean
-norm, because it puts zero weight on every null-space direction by construction.
-That is a choice, not a consequence — and it is the same choice that gradient
-descent from $w_0 = 0$ makes on its own, which is the first implicit
-regularisation result you will meet.
-
-Numerically, rank is decided by a tolerance: singular values below
-$\max(n, d) \cdot \varepsilon \cdot \sigma_{\max}$ are treated as zero. That
-threshold is a modelling decision disguised as a numerical one.
+Numerically, rank is a judgment call rather than a fact: singular values at or below $\max(n, d) \cdot \varepsilon \cdot \sigma_{\max}$ get treated as zero, and that threshold is a modelling decision wearing a numerical disguise.
 
 ## Cost and scaling
 
-The three routes agree in exact arithmetic and differ in flops and in the digits
-they keep. The following table assumes $n \geq d$ and counts leading terms.
+The three routes agree in exact arithmetic and differ in flops and in the digits they keep. The following table assumes $n \geq d$ and counts leading terms.
 
 | Route | Flops | Extra memory | Digits lost |
 |---|---|---|---|
@@ -194,60 +107,26 @@ they keep. The following table assumes $n \geq d$ and counts leading terms.
 | Householder QR | $2nd^2 - \tfrac{2}{3}d^3$ | $d^2$ | $\log_{10}\kappa_2(X)$ |
 | SVD | $\approx 6nd^2 + 20d^3$ | $nd$ | $\log_{10}\kappa_2(X)$ |
 
-Cholesky on the Gram matrix is the cheapest by a factor of two and the only one
-that never needs to touch $X$ again, which matters when $n$ is large enough that
-$X$ does not fit in memory: you can accumulate $X^{\top}X$ and $X^{\top}y$ in a
-single streaming pass in $O(d^2)$ space. That is a real advantage, and it is why
-the Gram route survives in practice for well-conditioned, low-dimensional
-problems where you also standardise the columns first.
+Cholesky on the Gram matrix is the cheapest route by about a factor of two, and the only one that never needs $X$ again once $X^\top X$ and $X^\top y$ are formed — useful when $n$ is large enough that $X$ does not fit in memory, since you can accumulate both in a single streaming pass using $O(d^2)$ space. That is why the Gram route survives in practice, for well-conditioned, low-dimensional problems where you also standardise the columns first.
 
-For $n \gg d$ every route is $O(nd^2)$, so the constant is what separates them.
-When $d$ approaches $n$, the $d^3$ terms dominate and the SVD becomes expensive
-enough that iterative methods take over — the subject of lesson 3.
+For $n \gg d$, every route costs $O(nd^2)$, so the constant in front is what separates them. As $d$ approaches $n$, the $d^3$ terms start to dominate, and the SVD grows expensive enough that iterative methods take over — the subject of lesson 3.
 
 ## Where this breaks
 
-**Correlated features.** Near-collinearity makes $\sigma_{\min}$ small without
-making it zero. The fit is fine and the coefficients are meaningless: they have
-enormous variance, $\operatorname{Var}(\hat{w}) = \sigma^2 (X^{\top}X)^{-1}$,
-whose trace is $\sigma^2 \sum_i \sigma_i^{-2}$. Two features that measure nearly
-the same thing produce a large positive coefficient and a large negative one that
-cancel. Ridge regression is the standard response.
+**Correlated features.** Near-collinearity makes $\sigma_{\min}$ small without making it zero. The fit stays fine and the coefficients turn meaningless: their variance is $\operatorname{Var}(\hat{w}) = \sigma^2 (X^{\top}X)^{-1}$, with a trace of $\sigma^2 \sum_i \sigma_i^{-2}$. Two features that measure almost the same thing typically produce one large positive coefficient and one large negative one that cancel. Ridge regression, in lesson 4, is the standard response.
 
-**Unscaled columns.** A column in different units changes $\kappa_2(X)$ without
-changing the model at all. Standardise before fitting, and remember that the
-intercept must be excluded from the penalty once you add one.
+**Unscaled columns.** A column measured in different units changes $\kappa_2(X)$ without changing the model at all. Standardise before fitting, and exclude the intercept from any penalty you add later.
 
-**More features than samples.** With $d > n$ the problem is always rank
-deficient, the training residual is zero, and the choice among solutions is the
-entire modelling content. This is the regime modern models live in, and the
-minimum-norm solution is the reason gradient descent generalises there at all.
+**More features than samples.** With $d > n$ the problem is always rank deficient, the training residual is zero, and the choice among the many exact-fitting solutions carries the entire modelling content. Modern models live in this regime routinely, and the minimum-norm solution is a large part of why gradient descent generalises there at all.
 
-**Heavy-tailed noise.** Squared loss is the maximum likelihood estimator under
-Gaussian noise, and nothing else. A single outlier moves $\hat{w}$ without bound,
-because the influence of a point grows linearly in its residual. Huber loss
-bounds that influence and gives up the closed form.
+**Heavy-tailed noise.** Squared loss is the maximum-likelihood estimator under Gaussian noise, and only under Gaussian noise. A single outlier can move $\hat{w}$ without bound, because a point's influence on the fit grows linearly with its residual. Huber loss bounds that influence, at the cost of the closed form.
 
 ## The exercise
 
-You implement least squares three times and measure the difference the
-factorisation makes.
+You implement least squares three times, and measure the difference the factorisation makes.
 
-Write `fit_normal_equations`, `fit_qr`, and `fit_svd`, each taking a design
-matrix `X` and targets `y` and returning the coefficient vector. Build them from
-`numpy.linalg` primitives — `cholesky`, `qr`, `svd`, and the triangular solve —
-rather than calling `numpy.linalg.lstsq`, which would do the whole exercise.
-`fit_svd` takes an `rcond` tolerance and must return the minimum-norm solution
-when the design matrix is rank deficient.
+Write `fit_normal_equations`, `fit_qr`, and `fit_svd`, each taking a design matrix `X` and targets `y` and returning the coefficient vector. Build them from `numpy.linalg` primitives — `cholesky`, `qr`, `svd`, and a triangular solve — rather than calling `numpy.linalg.lstsq`, which would do the whole exercise for you. `fit_svd` takes an `rcond` tolerance, and must return the minimum-norm solution when the design matrix is rank deficient.
 
-Then write `residual_orthogonality`, which returns
-$\lVert X^{\top}(y - X\hat{w}) \rVert_\infty$ for a fitted `w`, and
-`condition_number`, which returns $\kappa_2(X)$ from the singular values.
+Then write `residual_orthogonality`, which returns $\lVert X^{\top}(y - X\hat{w}) \rVert_\infty$ for a fitted `w`, and `condition_number`, which returns $\kappa_2(X)$ computed from the singular values.
 
-The checks verify the three routes agree to high precision on a well-conditioned
-problem, that the residual is orthogonal to the column space, that `fit_svd`
-returns the minimum-norm element on a deliberately rank-deficient design, and
-that on a Hilbert-like matrix with $\kappa_2 \approx 10^{9}$ the normal-equations
-route loses the digits the table predicts while QR and the SVD keep them. The
-last check is the point of the lesson: it fails if your `fit_normal_equations` is
-secretly calling something stable.
+The checks verify that the three routes agree to high precision on a well-conditioned problem, that the residual is orthogonal to the column space, and that `fit_svd` returns the minimum-norm element on a deliberately rank-deficient design. The last check is the point of the lesson: on a Hilbert-like matrix with $\kappa_2 \approx 10^{9}$, it confirms that the normal-equations route loses the digits the table above predicts while QR and the SVD keep them — and it fails if your `fit_normal_equations` is secretly calling something stable.

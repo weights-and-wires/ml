@@ -2,14 +2,14 @@
 title: Self-attention
 slug: 25-self-attention
 part: "Part 5 — Transformers"
-summary: Scaled dot-product attention derived from the variance of a random dot product, multi-head projection, and causal masking.
-minutes: 60
+summary: Scaled dot-product attention, multi-head projection, and causal masking, with the reasoning behind each.
+minutes: 45
 gpu: false
 objectives:
-  - Derive the 1/sqrt(d_k) scale from the variance of a dot product of independent unit-variance entries.
-  - Write multi-head attention as per-head projection and concatenation, and show its flop count does not depend on the number of heads.
-  - Explain why causal masking has to happen before the softmax rather than after.
-  - State the time and memory cost of self-attention and why it is permutation equivariant.
+  - Explain why dividing by the square root of the key dimension keeps attention scores from saturating the softmax.
+  - Write multi-head attention as per-head projection and concatenation, and explain why splitting into heads leaves the flop count unchanged.
+  - Explain why causal masking must happen before the softmax rather than after.
+  - State the time and memory cost of self-attention and why it treats a sequence as an unordered set.
 prereqs:
   - 24-seq2seq-attention
 exercise: 25-self-attention
@@ -17,47 +17,41 @@ exercise: 25-self-attention
 
 # Self-attention
 
-The previous lesson let a decoder query a separate encoder's states. Self-
-attention is the special case where the query, the keys, and the values all
-come from the same sequence: every position looks at every other position,
-including itself, using the same query-key-value machinery, with no encoder or
-decoder distinction left at all. That single simplification is what removes
-the sequential dependency the last two lessons could not: computing the
-attention output for every position uses the same fixed set of keys and
-values, so every position's output is computable in parallel once the
-projections are done, unlike a recurrent cell whose state at time $t$ requires
-the state at time $t-1$ to already exist.
+The previous lesson let a decoder query a separate encoder's states. Self-attention
+removes that separation: the query, the keys, and the values all come from the
+same sequence, so every position can look at every other position, including
+itself, using the same machinery. That single change removes the sequential
+dependency of a recurrent cell. A recurrent cell's state at time $t$ needs the
+state at time $t-1$ to exist first, but self-attention computes every
+position's output from the same fixed set of keys and values, so every
+position's output is computable in parallel once the projections are done.
 
-Two problems appear immediately once attention is asked to do this job at
-scale. The score $q_i^{\top}k_j$ grows with the dimension of $q$ and $k$ in a
-way that pushes the softmax into a regime where it stops being useful, which is
-fixed by a single scalar rescaling derived below. And a self-attending sequence
-has no notion of order at all — permuting the input permutes the output the
-same way — which the mechanism itself cannot fix and later lessons address with
-explicit position information. This lesson derives both facts, builds
-multi-head attention on top of the single-head mechanism, and works out
-exactly what masking future positions costs and why it has to happen before
-the softmax rather than after.
+Running attention over a whole sequence exposes two problems. The score
+$q_i^\top k_j$ grows with the dimension of $q$ and $k$, and an oversized score
+pushes the softmax toward a near one-hot output with no useful gradient — one
+rescaling fixes it. And a self-attending sequence carries no notion of order:
+permute the input and the output permutes the same way, a limitation the
+mechanism itself cannot fix. This lesson derives the scale, builds multi-head
+attention on top of single-head attention, and works out what masking future
+positions costs.
 
 ## What you already know
 
-- Attention as a query, keys, and values: scores between a query and every key,
-  a softmax over those scores, and a context vector as the resulting weighted
-  average of the values.
-- $\operatorname{Var}(XY) = \mathbb{E}[X^2]\mathbb{E}[Y^2] - \mathbb{E}[X]^2\mathbb{E}[Y]^2$
-  for independent $X, Y$, which is $\mathbb{E}[X^2]\mathbb{E}[Y^2]$ when both
-  have mean zero.
+- Attention as a query, keys, and values: scores between a query and every
+  key, a softmax over those scores, and a context vector as the resulting
+  weighted average of the values.
+- For independent, mean-zero random variables $X$ and $Y$,
+  $\operatorname{Var}(XY) = \mathbb{E}[X^2]\mathbb{E}[Y^2]$.
 - The softmax Jacobian is $\operatorname{diag}(p) - pp^{\top}$ for
-  $p = \operatorname{softmax}(z)$, with diagonal entries $p_k(1-p_k)$.
+  $p = \operatorname{softmax}(z)$.
 - A matrix product $AB$ with $A \in \mathbb{R}^{p \times q}$,
   $B \in \mathbb{R}^{q \times r}$ costs $2pqr$ flops.
-- Concatenating vectors is linear: a function applied independently to each
-  concatenated block and then stacked is linear in the full input exactly when
-  each block's function is linear in that block alone.
+- Concatenating vectors is linear whenever each concatenated block's own
+  transform is linear.
 
 ## Scaled dot-product attention
 
-For a single query $q \in \mathbb{R}^{d_k}$ against keys $k_1, \dots, k_T \in
+For a query $q \in \mathbb{R}^{d_k}$ against keys $k_1, \dots, k_T \in
 \mathbb{R}^{d_k}$ and values $v_1, \dots, v_T \in \mathbb{R}^{d_v}$, stack the
 keys and values as rows of $K \in \mathbb{R}^{T \times d_k}$ and
 $V \in \mathbb{R}^{T \times d_v}$, and define
@@ -68,58 +62,29 @@ $$
 \right) V ,
 $$
 
-applying the softmax along each row of $QK^{\top}/\sqrt{d_k}$ so every query's
-weights sum to one over the source positions, exactly as in the additive and
-multiplicative forms from the previous lesson. Self-attention sets $Q, K, V$ to
-three learned linear projections of the same sequence $X \in \mathbb{R}^{T
-\times d}$: $Q = XW_Q$, $K = XW_K$, $V = XW_V$.
+applying the softmax along each row so every query's weights sum to one.
+Self-attention sets $Q$, $K$, and $V$ to three learned linear projections of
+the same sequence $X \in \mathbb{R}^{T \times d}$: $Q = XW_Q$, $K = XW_K$,
+$V = XW_V$.
 
-### Why $1/\sqrt{d_k}$
-
-Take one entry of $QK^{\top}$ before scaling: $q^{\top}k = \sum_{l=1}^{d_k}
-q_l k_l$, and suppose the entries of $q$ and $k$ are independent, mean zero,
-and unit variance — a reasonable model for freshly initialised projections
-of normalised inputs. Each term $q_l k_l$ has
-
-$$
-\mathbb{E}[q_l k_l] = \mathbb{E}[q_l]\mathbb{E}[k_l] = 0, \qquad
-\operatorname{Var}(q_l k_l) = \mathbb{E}[q_l^2]\mathbb{E}[k_l^2] - 0 = 1 ,
-$$
-
-using independence of $q_l$ and $k_l$ for the first equality and their unit
-variance for the second. Summing $d_k$ independent, identically distributed
-terms adds variances:
-
-$$
-\operatorname{Var}(q^{\top}k) = \sum_{l=1}^{d_k} \operatorname{Var}(q_l k_l) = d_k .
-$$
-
-The typical magnitude of an unscaled score grows like $\sqrt{d_k}$. Feed scores
-of that size into a softmax and it saturates: for two scores separated by a gap
-of order $\sqrt{d_k}$, the softmax output is close to one-hot, because
-$\operatorname{softmax}$ is shift-invariant but not scale-invariant, and
-multiplying every logit by a growing constant sharpens the distribution toward
-a point mass. A saturated softmax has Jacobian $\operatorname{diag}(p) -
-pp^{\top}$ with every $p_k$ near zero or one, so every entry $p_k(1-p_k)$ is
-near zero — the gradient flowing back through the softmax vanishes exactly
-where the largest logit differences are, which is precisely the regime large
-$d_k$ pushes the network into. Dividing every score by $\sqrt{d_k}$ restores
-unit variance regardless of $d_k$,
-
-$$
-\operatorname{Var}\!\left(\frac{q^{\top}k}{\sqrt{d_k}}\right)
-= \frac{1}{d_k}\operatorname{Var}(q^{\top}k) = 1 ,
-$$
-
-keeping the softmax in the regime where its gradient does not vanish by
-construction, independent of how wide the attention projections are.
+The $\sqrt{d_k}$ divides out a size effect, not a modelling choice. Suppose
+the entries of $q$ and $k$ are independent, mean zero, and unit variance, a
+reasonable model for freshly initialised projections of normalised inputs.
+Each of the $d_k$ terms in $q^{\top}k = \sum_l q_l k_l$ then has variance one,
+so the dot product itself has variance $d_k$, and its typical magnitude grows
+with $\sqrt{d_k}$. Feed scores that large into a softmax and the output
+saturates near a one-hot vector, where the softmax Jacobian
+$\operatorname{diag}(p) - pp^{\top}$ is close to zero and gradients stop
+flowing. Dividing every score by $\sqrt{d_k}$ restores unit variance
+regardless of $d_k$, which keeps the softmax's gradient away from zero no
+matter how wide the projections are.
 
 ## Multi-head attention
 
 A single attention operation computes one weighted average per query, using
 one notion of similarity. Multi-head attention runs $h$ independent copies of
-scaled dot-product attention in parallel, each on a lower-dimensional
-projection, and lets each head specialise in a different notion of relevance:
+scaled dot-product attention on lower-dimensional projections, letting each
+head specialise:
 
 $$
 \begin{aligned}
@@ -129,36 +94,24 @@ $$
 $$
 
 with each $W_Q^{(i)}, W_K^{(i)}, W_V^{(i)} \in \mathbb{R}^{d \times d_k}$ using
-$d_k = d/h$, so the concatenated heads have total width $h \cdot d_k = d$
-again, and $W_O \in \mathbb{R}^{d \times d}$ mixes the heads back together.
-Implementations fold the $h$ separate projection matrices per role into one
-matrix of shape $(d, d)$ and reshape the result into $h$ blocks of width
-$d_k$, which is arithmetically identical to running $h$ separate smaller
-projections.
+$d_k = d/h$, so the concatenated heads have total width $h d_k = d$ again,
+and $W_O \in \mathbb{R}^{d \times d}$ mixes the heads back together. An
+implementation folds the $h$ per-role projections into one $(d, d)$ matrix and
+reshapes the result into $h$ blocks of width $d_k$, which is the identical
+arithmetic to running the heads separately.
 
-### Heads do not change the flop count
-
-Counting the projections: $Q = XW_Q$ costs $2Td^2$ flops regardless of whether
-$W_Q$ is one $(d,d)$ matrix or $h$ separate $(d, d_k)$ blocks, because
-$h \cdot d \cdot d_k = d \cdot (h \cdot d_k) = d \cdot d = d^2$ either way — the
-same identity that keeps the LSTM-versus-GRU parameter ratio exact in lesson
-23's arithmetic, applied here to heads instead of gates. The same
-holds for $K$, $V$, and the output projection $W_O$: four projections at
-$2Td^2$ flops each. Inside the heads, each of the $h$ heads computes
-$QK^{\top}$ at cost $2T^2 d_k$ and the weighted sum $\cdot V$ at cost $2T^2
-d_k$; summed over $h$ heads with $d_k = d/h$, that totals $h \cdot 4T^2(d/h) =
-4T^2 d$, independent of $h$ again. The total flop count,
-$8Td^2 + 4T^2 d$, is the same whether attention uses one head or sixteen. What
-changes with $h$ is not the compute budget but the representational structure:
-sixteen heads of width $d/16$ can each specialise in a narrow notion of
-similarity that a single head of width $d$ would have to represent as one
-mixture, at identical cost.
+Splitting one wide head into $h$ narrow ones changes nothing about the
+compute budget: $h \cdot d \cdot d_k = d^2$ regardless of $h$, so the four
+projections still cost $8Td^2$ flops between them, and the per-head score
+computation still totals $4T^2d$ flops summed over every head. Doubling the
+head count buys each head a narrower, more specialised notion of similarity
+at no extra cost — only the representation changes, never the flop count.
 
 ## Causal masking
 
-Autoregressive models must not let position $t$ see positions $t+1, \dots, T$,
-because at generation time those positions do not exist yet. Enforce this by
-adding a mask to the scores before the softmax:
+Autoregressive models must not let position $t$ see positions
+$t+1, \dots, T$, because those positions do not exist yet at generation time.
+Add a mask to the scores before the softmax:
 
 $$
 \operatorname{Attention}(Q,K,V,\text{mask}) = \operatorname{softmax}\!\left(
@@ -167,59 +120,30 @@ $$
 M_{t,j} = \begin{cases} 0 & j \le t \\ -\infty & j > t \end{cases} .
 $$
 
-Adding $-\infty$ before the exponential sends $e^{-\infty} = 0$, so masked
-positions receive exactly zero weight and the softmax renormalises over only
-the allowed positions $j \le t$, exactly reproducing what attention restricted
-to $\{1, \dots, t\}$ from the start would compute. Masking after the softmax
-instead — zeroing the disallowed weights post hoc — computes the softmax over
-all $T$ positions first, so the denominator $\sum_j e^{z_j}$ already includes
-the masked entries; zeroing some weights afterward leaves the surviving weights
-summing to less than one, systematically under-weighting every position
-$t$ attends to and breaking the promise that attention output is a convex
-combination of the values it is allowed to see. Masking has to happen inside
-the normalisation, not after it.
+Adding $-\infty$ before the exponential sends $e^{-\infty} = 0$, so the
+softmax renormalises over only the allowed positions. Masking has to happen
+before the softmax, not after: the softmax's denominator would otherwise sum
+over every position, including the ones a later step zeros out, leaving the
+surviving weights summing to less than one and understating every attended
+position's true share.
 
-## Permutation equivariance
+## Order and permutation equivariance
 
-Let $P$ be a $T \times T$ permutation matrix. Replacing $X$ with $PX$ permutes
-$Q, K, V$ by the same $P$, since each is a fixed linear map applied row-wise:
-$PX W_Q = P(XW_Q)$. Then
-
-$$
-(PQ)(PK)^{\top} = PQK^{\top}P^{\top} ,
-$$
-
-which permutes both the rows and the columns of the score matrix — row $t$ of
-the scores is now what used to be row $P(t)$, scored against keys reordered the
-same way. A row-wise softmax commutes with this: permuting a row's entries and
-then normalising gives the same distribution, permuted. The final product with
-$PV$ then gives $\operatorname{Attention}(PQ, PK, PV) = P\,
-\operatorname{Attention}(Q,K,V)$: self-attention applied to a permuted sequence
-returns the same outputs, permuted the same way, with no dependence on the
-original ordering surviving anywhere in the computation. A set-processing
-operation with this property cannot recover which input arrived at which
-position, which is why every practical use of self-attention adds positional
-information to $X$ before projecting — a fix external to attention itself,
-covered in the next lesson.
-
-## What one layer of attention can and cannot express
-
-One layer of self-attention computes, for every position, a single convex
-combination of the sequence's value vectors, chosen by a content-based
-similarity to that position's query. It can copy, average, and route
-information between any two positions in one step, with no distance penalty —
-the $O(T^2)$ cost pays for direct access to every pair, not only nearby ones.
-It cannot, in one layer, compose two such lookups: attending to "the token two
-positions before the token this position matches" requires a lookup whose
-result feeds a second lookup, which is exactly what stacking layers is for. Nor
-can a single head express a hard, discrete choice — the output is always a
-weighted average, never a selection — so tasks that need to count, index by
-exact position, or apply strict logic over attended content need either
-several layers, positional structure to exploit, or both.
+Attention has no notion of order built in. Permute the rows of $X$ and the
+same permutation $P$ carries through to $Q$, $K$, and $V$, because each is a
+row-wise linear map. A row-wise softmax commutes with a row permutation, so
+$\operatorname{Attention}(PQ, PK, PV) = P \cdot \operatorname{Attention}(Q,K,V)$:
+self-attention applied to a reordered sequence returns the same outputs,
+reordered the same way, with no trace of the original order surviving
+anywhere in the computation. A mechanism with this property cannot recover
+which input arrived at which position on its own, which is why every
+practical use of self-attention adds positional information to $X$ before
+projecting, the subject of the next lesson.
 
 ## Cost and scaling
 
-For a sequence of length $T$ and model width $d$ split across $h$ heads:
+For a sequence of length $T$ and model width $d$ split across $h$ heads, the
+following costs apply.
 
 | Quantity | Cost | Where it shows up |
 |---|---|---|
@@ -230,28 +154,31 @@ For a sequence of length $T$ and model width $d$ split across $h$ heads:
 
 The $4T^2 d$ term dominates once $T$ exceeds $2d$, so doubling the sequence
 length quadruples the dominant cost while doubling the model width only
-doubles it — the reverse of a recurrent cell, whose cost is linear in $T$ and
-where the sequential dependency, not the flop count, was the binding
-constraint. Self-attention pays $O(T^2)$ up front to buy $O(1)$-depth access to
-every pair of positions and full parallelism across time.
+doubles it — the reverse of a recurrent cell, whose cost is linear in $T$ but
+whose sequential dependency was the real bottleneck. Self-attention trades an
+$O(T^2)$ compute bill for direct, one-step access between every pair of
+positions and full parallelism across time.
 
 ## Where this breaks
 
-**Quadratic cost at long context.** $T^2$ scaling makes attention the dominant
-cost once sequences reach the thousands of tokens, both in compute and in the
-memory needed to hold every head's $T \times T$ score matrix for the backward
-pass — the reason sparse and linear-time approximations to attention exist,
-trading exactness for a computation that scales sub-quadratically.
+**Quadratic cost at long context.** The $T^2$ term makes attention the
+dominant cost once sequences reach the thousands of tokens, both in compute
+and in the memory needed to hold every head's $T \times T$ score matrix for
+the backward pass. Sparse and linear-time approximations to attention trade
+exactness for sub-quadratic scaling.
 
 **No sense of order without help.** Permutation equivariance is exact, so a
-bag of positions with no positional signal added is indistinguishable from any
-reordering of it. Every architecture built on self-attention has to inject
+sequence with no positional signal added is indistinguishable from any
+reordering of it. Every architecture built on self-attention injects
 position from outside the attention mechanism itself.
 
-**One layer, one hop.** Reasoning that requires chaining two attention lookups
-needs two layers at minimum, and tasks with a natural sequential or recursive
-structure can need a number of layers that scales with the structure's depth,
-not with $T$.
+**One layer, one hop.** A single layer computes one convex combination of
+the value vectors per position, chosen by a content-based similarity to that
+position's query. It copies, averages, and routes information between any
+two positions in one step, but it cannot compose two such lookups on its own:
+attending to "the token before the token this position matches" needs the
+result of one lookup to feed a second, which is exactly what stacking layers
+provides.
 
 ## The exercise
 
