@@ -41,6 +41,9 @@ $$
 
 Read it aloud in two pieces. The second piece, $(1-\rho)\sigma^2 / B$, shrinks as you add more models $B$. The first piece, $\rho\sigma^2$, does not depend on $B$ at all. It is a floor. However many trees you average, the variance cannot drop below $\rho\sigma^2$.
 
+> [!KEY]
+> Averaging more models shrinks only the $(1-\rho)$ part of the variance. The $\rho\sigma^2$ part stays, however large $B$ gets.
+
 ```python
 var_avg = rho * sigma2 + (1 - rho) * sigma2 / B
 ```
@@ -70,6 +73,9 @@ $$
 
 Read it aloud: the chance of missing a row once, multiplied by itself $n$ times. For large $n$ this is close to $1/e$. So about 36.8% of rows are left out of each sample, and about 63.2% ($1 - 1/e$) are in it. Those left-out rows are called **out-of-bag** for that tree.
 
+> [!KEY]
+> A bootstrap sample holds about 63.2% of the distinct rows. The other 36.8% are out-of-bag for that tree.
+
 ```python
 in_bag_fraction = len(np.unique(idx)) / n   # close to 0.632 for large n
 ```
@@ -84,11 +90,17 @@ in_bag[idx] = True       # [True, False, True, True]
 oob = ~in_bag            # [False, True, False, False]
 ```
 
+> [!TIP]
+> Repeated indices set the same entry of `in_bag` more than once, which does no harm. You don't need `np.unique` to build the mask.
+
 ## Out-of-bag error: a free test set
 
 Each row is out-of-bag for roughly a third of the trees. Those trees never saw that row. So if you average only their predictions for that row, you get an honest, held-out prediction.
 
 Do that for every row, and compute the mean squared error against the true labels. The result is the **out-of-bag (OOB) error**. It estimates test error without setting aside any data, and it tracks cross-validation closely once you have many trees.
+
+> [!KEY]
+> Score each row with only the trees that never saw it. That gives you a held-out error estimate from the training data alone.
 
 The recipe for each tree $b$:
 
@@ -97,6 +109,9 @@ The recipe for each tree $b$:
 3. Add 1 to a running `count` for those rows.
 
 Then the OOB prediction for each row is `total / count`, over rows with `count > 0`, and the OOB error is the mean of the squared differences from `y`.
+
+> [!WARNING]
+> With few trees, some rows land in every bootstrap sample and keep `count == 0`. Dividing `total / count` for those rows gives `nan`, so select the rows with `count > 0` before you divide.
 
 ## Random forests: make the trees disagree
 
@@ -132,6 +147,9 @@ $$
 
 which is the **residual**: what the model still gets wrong on row $i$. So under squared error, each round fits a stump to the leftover error. In the first round $F = 0$, so the target is the raw label $y$ itself.
 
+> [!KEY]
+> Under squared error, each boosting round fits a stump to the residuals $y - F$ and adds only a small step, $\eta h$, of it.
+
 ```python
 target = loss_grad(y, F)             # y - F under squared error
 stump = _fit_stump(X, target)
@@ -163,6 +181,13 @@ The residuals are $[0, 2, 3.5, 5.5]$. Their squares sum to $0 + 4 + 12.25 + 30.2
 ### AdaBoost in one paragraph
 
 AdaBoost is boosting with a different loss, the exponential loss $e^{-yF}$ for labels $y$ of $-1$ or $+1$. It keeps a weight on each row. After each round, it scales a correctly classified row's weight down and a misclassified row's weight up, so the next weak learner focuses on the mistakes. That rule falls out of the same "follow the negative gradient" recipe. You do not implement it here.
+
+> [!RECAP]
+> - The average of $B$ models with correlation $\rho$ has variance $\rho\sigma^2 + (1-\rho)\sigma^2 / B$.
+> - A bootstrap sample is `rng.integers(0, n, size=n)`: $n$ draws with replacement.
+> - A row's out-of-bag prediction averages only the stumps that missed it, and the OOB error is the mean squared error over rows with `count > 0`.
+> - Gradient boosting starts from $F = 0$, fits a stump to `loss_grad(y, F)`, and adds `learning_rate` times that stump's predictions.
+> - Under squared error the target is the residual, so the first round's target is $y$ itself.
 
 ## Build it step by step
 

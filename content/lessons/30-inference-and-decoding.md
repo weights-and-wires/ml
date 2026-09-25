@@ -77,6 +77,11 @@ Decode is memory bound at every model size. Prefill has $B$ equal to the
 prompt length, so a long prompt keeps the chip busy. Servers batch many users'
 decode steps together so one weight read serves them all.
 
+> [!KEY]
+> Decode reads every weight to make a single token, so it does about one flop
+> per byte. It's memory bound at every model size, and batching many users is
+> how servers fight back.
+
 ## The KV cache
 
 In attention, every token produces a *key* and a *value*. Each later token
@@ -89,6 +94,10 @@ The cache is a notebook. At each step you compute the key and value for the
 new token only, append them to a per-layer list, and attend against the whole
 list. The work per step stays constant, so the total grows with $T$ instead of
 $T^2$.
+
+> [!KEY]
+> A KV cache computes each token's key and value once and reuses them at every
+> later step. You trade repeated arithmetic for memory.
 
 The price is memory. The cache stores keys and values for $n_{\text{kv}}$
 heads of width $d_{\text{head}}$, in each of $n_{\text{layer}}$ layers, for
@@ -125,6 +134,10 @@ adds a `k` and a `v` of shape `(n_kv, d_head)` for one token. After $T$
 appends, `get` returns `K` and `V` of shape `(T, n_kv, d_head)`, one row per
 token in the order you appended them. `np.stack(list_of_arrays, axis=0)`
 builds exactly that.
+
+> [!WARNING]
+> Use `np.stack`, not `np.concatenate`. Concatenating $T$ arrays of shape
+> `(n_kv, d_head)` gives `(T * n_kv, d_head)`, and the token axis is lost.
 
 ## Share key and value heads
 
@@ -181,6 +194,10 @@ Worked example with logits $[2, 1, 0]$:
 | 2 | $[1, 0.5, 0]$ | $[0.5065, 0.3072, 0.1863]$ |
 | 0.5 | $[4, 2, 0]$ | $[0.8668, 0.1173, 0.0159]$ |
 
+> [!KEY]
+> A temperature below 1 sharpens the distribution toward greedy. A temperature
+> above 1 flattens it toward equal probabilities.
+
 At $\tau = 1$: after subtracting the max you get $[0, -1, -2]$. Exponentials
 are $[1, 0.3679, 0.1353]$, summing to $1.5032$. Dividing gives the first row.
 
@@ -190,6 +207,10 @@ Keep the $k$ most likely tokens, set the rest to zero, and divide by the kept
 total so it sums to one again. With probabilities $[0.4, 0.3, 0.2, 0.1]$ and
 $k = 2$, you keep $0.4$ and $0.3$, whose total is $0.7$. The result is
 $[0.5714, 0.4286, 0, 0]$.
+
+> [!TIP]
+> `np.argsort(-probs)` sorts from largest to smallest, because negating flips
+> the order. Slice `[:k]` to get the top-k indices.
 
 ### Nucleus, or top-p
 
@@ -209,6 +230,10 @@ Worked example with probabilities $[0.1, 0.5, 0.05, 0.2, 0.15]$ and $p = 0.7$:
 The numpy tools are `np.argsort(-probs)` for the order, `np.cumsum` for the
 running totals, and `np.searchsorted(cumulative, p)` for the first position
 that reaches $p$.
+
+> [!WARNING]
+> Keep the token that pushes the running total up to $p$. `np.searchsorted`
+> returns its sorted position, so keep every position up to and including it.
 
 ### Repetition
 
@@ -249,6 +274,11 @@ plus the positive part of their difference equals the first one. So the total
 is exactly $p(x)$. A bad draft model makes you reject more and lose the
 speedup. It never changes the output distribution.
 
+> [!KEY]
+> Accept a drafted token with chance $\min(1, p(x) / q(x))$, and on rejection
+> sample from the residual. The output then follows the target model's
+> distribution exactly, whatever the draft does.
+
 ### Worked example
 
 Take $p = [0.7, 0.2, 0.1]$ and $q = [0.1, 0.1, 0.8]$:
@@ -261,6 +291,19 @@ Take $p = [0.7, 0.2, 0.1]$ and $q = [0.1, 0.1, 0.8]$:
   0]$.
 - Output chance of token 0: $0.1 + 0.7 \times 0.857 = 0.7$. Token 1: $0.1 +
   0.7 \times 0.143 = 0.2$. Token 2: $0.1 + 0 = 0.1$. That's $p$ exactly.
+
+> [!RECAP]
+> - Decode is memory bound: its intensity is $2B / b$, about one flop per byte
+>   when $B = 1$.
+> - The cache holds $2 \cdot n_{\text{layer}} \cdot n_{\text{kv}} \cdot
+>   d_{\text{head}} \cdot T$ numbers, and `get` stacks them to
+>   `(T, n_kv, d_head)`.
+> - Temperature divides the logits by $\tau$, then a stable softmax subtracts
+>   the maximum before `np.exp`.
+> - Top-k and nucleus zero out tokens, then renormalise. Nucleus keeps the
+>   token that reaches $p$.
+> - Speculative decoding accepts with $\min(1, p(x) / q(x))$, else samples the
+>   normalised $\max(0, p - q)$ with the given `rng`.
 
 ## Build it step by step
 

@@ -94,8 +94,17 @@ Take $N = 10^9$ parameters and $D = 2 \times 10^{10}$ tokens:
 The two error terms are almost the same size here. That's a hint of the
 balance you find later in this lesson.
 
+> [!TIP]
+> Check each scaling function against a worked value before you trust it at
+> $10^{24}$. `predict_loss(1e9, 2e10, CHINCHILLA_COEFFS)` should give about
+> 2.3844.
+
 Holding $D$ fixed and letting $N$ grow forever leaves $E + B / D^{\beta}$. An
 unlimited model still can't beat the limit set by its data.
+
+> [!KEY]
+> Loss falls as a power law in both model size and data, down to a floor $E$.
+> Growing only one of them leaves the other error term as a limit.
 
 ## Count a transformer's parameters
 
@@ -129,6 +138,11 @@ matrices, times the number of blocks. With the common choice $d_{\text{ff}} =
 Why leave embeddings out of $N$? An embedding lookup is a table index, not a
 matrix multiply. It costs almost no compute. The scaling law tracks the
 parameters that cost compute.
+
+> [!KEY]
+> The $N$ in the scaling law counts only the non-embedding weights: four
+> attention matrices and two feed-forward matrices per block. Embeddings count
+> once, and they sit outside $N$.
 
 ### Worked example
 
@@ -226,6 +240,11 @@ $D^{*} / N^{*}$ is about 19.6. Because $\alpha = \beta$, this ratio is the same
 at every budget. This is the famous rule of thumb: about 20 tokens per
 parameter.
 
+> [!KEY]
+> For a fixed budget, the best model size grows as $C^{a}$. With
+> $\alpha = \beta$, that means about 20 training tokens per parameter at every
+> budget.
+
 ## From Kaplan to Chinchilla
 
 The same formula was fit twice, a few years apart, with opposite advice. The
@@ -281,6 +300,10 @@ uc = u - u.mean()
 k = np.sum(uc * (v - v.mean())) / np.sum(uc**2)
 ```
 
+> [!WARNING]
+> The line's intercept is $\log c$, not $c$. Take `np.exp` of the intercept
+> before you return it.
+
 Log space also stops one huge run from dominating the fit. Every run counts
 by its relative error.
 
@@ -297,6 +320,21 @@ Take $x = [1, 2, 4]$ and $y = [2, 8, 32]$:
   = 2$
 
 The fit recovers $y = 2x^{2}$ exactly.
+
+> [!TIP]
+> Test your fit on data you made yourself, such as `y = 3 * x**1.7`. It should
+> return $k = 1.7$ and $c = 3$ to many decimal places.
+
+> [!RECAP]
+> - Loss is $E + A / N^{\alpha} + B / D^{\beta}$, unpacked from
+>   `(E, A, B, alpha, beta)` in that order.
+> - $N$ is `layers` times the attention and feed-forward weights per block.
+>   Embeddings count once.
+> - Training compute is $C = 6ND$, computed in floats.
+> - A power law fit is a least-squares line on $(\log x, \log y)$, and
+>   $c = e^{\text{intercept}}$.
+> - The best split is $N^{*} = G \cdot 6^{-a} \cdot C^{a}$ and
+>   $D^{*} = C / (6 N^{*})$.
 
 ## Build it step by step
 

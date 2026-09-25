@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NavLink, useParams } from "react-router-dom";
 
 import type { Part, ProgressMap } from "../lib/api";
+import { partAccent } from "../lib/parts";
 
 type Props = {
   parts: Part[];
@@ -216,6 +217,11 @@ export default function Sidebar({
                     >
                       <path d="M3 1.5 7 5 3 8.5" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
+                    <span
+                      className="size-1.5 shrink-0 rounded-full"
+                      style={{ background: partAccent(part.part) }}
+                      aria-hidden
+                    />
                     <span className="flex-1 truncate">{part.part}</span>
                     <span
                       className={`font-mono text-[10px] tabular-nums ${complete ? "text-good-500" : "text-ink-600"}`}

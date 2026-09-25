@@ -54,6 +54,9 @@ sq = (X1**2).sum(axis=1)[:, None] + (X2**2).sum(axis=1)[None, :] - 2.0 * X1 @ X2
 K = np.exp(-gamma * np.maximum(sq, 0.0))   # clip tiny negatives from rounding
 ```
 
+> [!TIP]
+> Check the result before you move on. `rbf_kernel(X, X, gamma)` must have shape `(n, n)`, be symmetric, and have values within rounding of 1 on its diagonal.
+
 ### The polynomial kernel
 
 The polynomial kernel raises a shifted inner product to a power:
@@ -84,6 +87,9 @@ Not every similarity function is a kernel. For $k$ to be a real inner product in
 
 Why does it matter? A negative eigenvalue means some combination of points has a negative squared length, which no real feature space allows. Methods like kernel ridge regression and SVMs can then fail or return nonsense.
 
+> [!KEY]
+> A function is a valid kernel only if every Gram matrix it builds is positive semidefinite, with no eigenvalue below zero.
+
 In code, check three things: the matrix is square, it equals its own transpose, and its smallest eigenvalue is not below a small negative tolerance:
 
 ```python
@@ -108,6 +114,9 @@ $$
 
 Read it aloud: take the $n \times n$ training Gram matrix, add $\lambda$ to every diagonal entry, and solve for $\alpha$ against the targets $y$. The $\lambda I$ term plays the same role as in ridge regression. It keeps the solution stable and the function smooth. With $\lambda > 0$ and a PSD $K$, the matrix $K + \lambda I$ is always invertible.
 
+> [!KEY]
+> Kernel ridge regression fits one $\alpha_i$ per training point by solving $(K + \lambda I)\alpha = y$. You never compute a weight vector.
+
 Solve it with a Cholesky factor $L$, where $L L^{\top} = K + \lambda I$. Solve $L z = y$, then $L^{\top}\alpha = z$:
 
 ```python
@@ -116,6 +125,9 @@ alpha = np.linalg.solve(L.T, np.linalg.solve(L, y))
 ```
 
 To predict, build `K_test` with shape `(n_test, n_train)`, the kernel between each query point and each training point. Then multiply: `K_test @ alpha`.
+
+> [!WARNING]
+> Keep the argument order straight. `K_test` has one row per query point and one column per training point, so build it as `rbf_kernel(X_test, X_train, gamma)`.
 
 With the linear kernel $k(x, x') = x^{\top}x'$, kernel ridge regression gives exactly the same predictions as ordinary ridge regression without a bias. The exercise checks this.
 
@@ -134,6 +146,9 @@ Its determinant is $2 \cdot 2 - 0.6065^2 = 3.6321$. Solving gives $\alpha = [0.2
 You might wonder whether a better function exists that is not a weighted sum of kernels at the training points. The **representer theorem** says no. For a loss on the training points plus a penalty on the function's size, the best function is always $\sum_i \alpha_i k(\cdot, x_i)$ over the training points only.
 
 The reason, in words: any extra piece of the function that is not built from training points has zero value at every training point. It cannot lower the loss. But it does add to the size penalty. So adding it only makes the objective worse.
+
+> [!KEY]
+> The best function is a weighted sum of kernels at the training points. Anything outside them cannot lower the training loss, and it makes the size penalty bigger.
 
 You can check this with numbers. Describe a candidate function by coefficients over some set of points, possibly more than the training set. The objective is
 
@@ -166,6 +181,9 @@ $$
 
 Read it aloud: project the data onto $D$ random directions, shift each by a random phase, take the cosine, and scale by $\sqrt{2/D}$. The result $Z$ has shape $(n, D)$. On average over the random draws, $Z Z^{\top}$ equals the RBF Gram matrix exactly. With finite $D$, the typical error shrinks like $1/\sqrt{D}$. So four times as many features halve the error.
 
+> [!KEY]
+> Random Fourier features swap the $n \times n$ Gram matrix for an $n \times D$ feature matrix $Z$, with $Z Z^{\top} \approx K$. You buy accuracy with a larger $D$.
+
 ```python
 omega = rng.normal(size=(D, d)) * np.sqrt(2.0 * gamma)
 phase = rng.uniform(0.0, 2.0 * np.pi, size=D)
@@ -173,6 +191,13 @@ Z = np.sqrt(2.0 / D) * np.cos(X @ omega.T + phase[None, :])
 ```
 
 Draw `omega` first and `phase` second, from the `rng` you are given. Use them for every row of `X`.
+
+> [!RECAP]
+> - Both kernels start from one `X1 @ X2.T`. The RBF kernel adds the row sums of squares and exponentiates, and the polynomial kernel adds `coef0` and raises to `degree`.
+> - A valid Gram matrix is square, symmetric, and has no eigenvalue below `-tol`.
+> - Kernel ridge solves $(K + \lambda I)\alpha = y$ with a Cholesky factor and predicts with `K_test @ alpha`.
+> - Random features are $\sqrt{2/D}\cos(X\Omega^{\top} + \phi)$, with entries of $\Omega$ of standard deviation $\sqrt{2\gamma}$, drawn before $\phi$.
+> - The representer objective is the summed squared error on the first $n$ rows of $Kc$, plus $\lambda\, c^{\top}Kc$.
 
 ## Build it step by step
 

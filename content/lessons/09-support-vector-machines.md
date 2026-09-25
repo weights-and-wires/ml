@@ -49,6 +49,9 @@ z = y * (X @ w + b)    # shape (n,)
 
 The SVM asks every point to be correct with room to spare: $z_i \ge 1$. The points with $z_i = 1$ sit exactly on the edge of the road. The road's half-width works out to $1 / \lVert w \rVert$. So making $\lVert w \rVert$ small makes the road wide.
 
+> [!KEY]
+> The road's half-width is $1 / \lVert w \rVert$. To widen the road, you shrink $w$.
+
 Real data is messy, and some points will not fit. So the SVM lets points fall short of 1, and charges a penalty for how far short they fall. The constant $C > 0$ sets how expensive that penalty is.
 
 ## The hinge loss
@@ -61,9 +64,15 @@ $$
 
 Read it aloud: half the squared length of $w$, which rewards a wide road, plus $C$ times the total hinge loss, which punishes points that break the rule. The sum is over all points, not an average. A large $C$ says "fit the training points at almost any cost". A small $C$ says "a wide road matters more than a few mistakes".
 
+> [!KEY]
+> The SVM objective trades a wide road, from a small $\lVert w \rVert$, against a small total hinge loss. $C$ sets the exchange rate between the two.
+
 ```python
 loss = 0.5 * w @ w + C * np.sum(np.maximum(0.0, 1.0 - z))
 ```
+
+> [!WARNING]
+> The objective sums the hinge losses over the points. It does not average them. If you write `np.mean`, the hinge part of your loss and your slope comes out $n$ times too small.
 
 ### Its slope
 
@@ -132,9 +141,15 @@ $$
 f = (alpha * y) @ K + b    # shape (n,), score of every training point
 ```
 
+> [!TIP]
+> When you need the score of one point only, use one row of the Gram matrix: `(alpha * y) @ K[i] + b`. An SMO step needs just two scores, so this saves you from computing all $n$.
+
 ### Why this form matters
 
 Look at $D(\alpha)$ and $f_i$. The data only shows up through $K$, the inner products between points. You never need the points themselves. The next lesson swaps $K$ for other functions, called kernels, that act like inner products in a much richer space. That trick only works in the dual.
+
+> [!KEY]
+> In the dual, the data appears only through the inner products in $K$. Swap $K$ for another kernel, and the same solver fits a nonlinear boundary.
 
 ## Three kinds of point
 
@@ -209,6 +224,16 @@ Take two one-dimensional points, $x_1 = 1$ with $y_1 = +1$ and $x_2 = -1$ with $
 - $\Delta_1 = \Delta_2 = 0.5$, so $b_1 = 0 + 1 - 0.5 \cdot 1 - (-1)(0.5)(-1) = 0$. Since $0 < 0.5 < 10$, the new $b$ is 0.
 
 The result is $\alpha = [0.5, 0.5]$ and $b = 0$. Then $w = 0.5 \cdot 1 \cdot 1 + 0.5 \cdot (-1)(-1) = 1$, and both points have $z = 1$: they sit exactly on the edge. Each SMO step solves its two-variable problem exactly, so the dual objective never goes down.
+
+> [!TIP]
+> After each step, test `np.all((alpha >= 0) & (alpha <= C))` and `abs(alpha @ y) < 1e-9`. If either fails, look at your clipping or your update of $\alpha_i$.
+
+> [!RECAP]
+> - $z_i = y_i(w^{\top}x_i + b)$, and the hinge loss $\max(0, 1 - z_i)$ is zero once $z_i \ge 1$.
+> - Only points with $z_i < 1$ add to the subgradient.
+> - In the dual, `f = (alpha * y) @ K + b`, and $g_i = y_i f_i - 1$ tells you whether point $i$ breaks the rule for its group.
+> - An SMO step moves $\alpha_j$ by $y_j(E_i - E_j)/\eta$, clips it to $[L, H]$, then moves $\alpha_i$ the opposite way.
+> - The new bias is $b_1$, $b_2$, or their average, depending on which new $\alpha$ lies strictly inside $(0, C)$.
 
 ## Build it step by step
 

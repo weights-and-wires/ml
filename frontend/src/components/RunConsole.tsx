@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Link } from "react-router-dom";
 
 import type { RunEvent } from "../lib/api";
 
@@ -16,6 +17,8 @@ type Props = {
   mode: "run" | "check" | null;
   backend: string | null;
   summary: Extract<RunEvent, { type: "done" }> | null;
+  /** The next lesson's slug, offered once every check passes. */
+  next?: string | null;
 };
 
 /**
@@ -30,13 +33,22 @@ export default function RunConsole({
   mode,
   backend,
   summary,
+  next,
 }: Props) {
   const bottom = useRef<HTMLDivElement>(null);
+  const top = useRef<HTMLDivElement>(null);
   const [stuck, setStuck] = useState(true);
+  const solved = mode === "check" && !running && !!summary?.ok;
+
+  // A full pass is news, so it scrolls the banner into view rather than the
+  // end of the list.
+  useEffect(() => {
+    if (solved) top.current?.scrollIntoView({ block: "start" });
+  }, [solved]);
 
   useEffect(() => {
-    if (stuck) bottom.current?.scrollIntoView({ block: "end" });
-  }, [lines.length, checks.length, stuck, summary]);
+    if (stuck && !solved) bottom.current?.scrollIntoView({ block: "end" });
+  }, [lines.length, checks.length, stuck, summary, solved]);
 
   const idle = !running && lines.length === 0 && checks.length === 0;
 
@@ -81,6 +93,17 @@ export default function RunConsole({
           </p>
         )}
 
+        <div ref={top} />
+        {mode === "check" && planned > 0 && (
+          <Scoreboard
+            passed={checks.filter((c) => c.status !== "failed").length}
+            done={checks.length}
+            planned={planned}
+            solved={solved}
+            next={next}
+          />
+        )}
+
         {mode === "check" && planned > 0 && (
           <ol className="mb-2 space-y-1">
             {Array.from({ length: planned }).map((_, index) => {
@@ -100,6 +123,82 @@ export default function RunConsole({
       </div>
     </div>
   );
+}
+
+/**
+ * How many checks pass so far, as a bar that fills in, and a celebration with
+ * a way forward once they all do.
+ */
+function Scoreboard({
+  passed,
+  done,
+  planned,
+  solved,
+  next,
+}: {
+  passed: number;
+  done: number;
+  planned: number;
+  solved: boolean;
+  next?: string | null;
+}) {
+  if (solved) {
+    return (
+      <div className="solved appear mb-2 font-sans">
+        <div className="confetti" aria-hidden>
+          {Array.from({ length: 14 }).map((_, i) => (
+            <span key={i} style={{ "--i": i } as CSSProperties} />
+          ))}
+        </div>
+        <p className="text-[13px] font-semibold text-ink-100">
+          All {planned} checks pass. You built it.
+        </p>
+        <p className="mt-0.5 text-[12px] text-ink-300">
+          The lesson is marked solved.
+          {next ? " The next one builds on what you just wrote." : ""}
+        </p>
+        {next && (
+          <Link to={`/lessons/${next}`} className="solved-next">
+            Next: {sentence(next)}
+            <span aria-hidden className="cta-arrow">
+              →
+            </span>
+          </Link>
+        )}
+      </div>
+    );
+  }
+  const failing = done - passed;
+  return (
+    <div className="mb-2 px-0.5 font-sans">
+      <div className="mb-1 flex items-center justify-between text-[11px]">
+        <span className="text-ink-300">
+          {passed} of {planned} passing
+        </span>
+        {failing > 0 && done === planned && (
+          <span className="text-warm-500">
+            Open a failed check to see what it expected
+          </span>
+        )}
+      </div>
+      <div className="flex h-1.5 gap-0.5 overflow-hidden rounded-full">
+        {Array.from({ length: planned }).map((_, i) => (
+          <span
+            key={i}
+            className={`flex-1 transition-colors duration-300 ${
+              i < passed ? "bg-good-500" : i < done ? "bg-bad-500/70" : "bg-ink-800"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** "02-linear-regression" → "Linear regression". */
+function sentence(slug: string): string {
+  const words = slug.replace(/^\d+-/, "").replace(/-/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 function CheckRow({

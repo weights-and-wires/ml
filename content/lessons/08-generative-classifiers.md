@@ -56,7 +56,13 @@ joint = np.log(priors)[None, :] + log_density        # shape (n, K)
 log_post = joint - logsumexp(joint, axis=1)[:, None]  # each row sums to 1 after exp
 ```
 
+> [!TIP]
+> Check your output with `np.exp(log_post).sum(axis=1)`. Every entry should be 1 up to rounding. If not, check that the log-sum-exp runs along `axis=1`.
+
 A model like this is called **generative** because it describes how to generate $x$ for each class. Logistic regression is **discriminative**: it models $p(y \mid x)$ directly and ignores how $x$ is spread out.
+
+> [!KEY]
+> A generative classifier learns a prior and a density for each class. Bayes' rule then turns them into the probability of each class given $x$.
 
 ## Gaussian discriminant analysis
 
@@ -106,6 +112,9 @@ Read them aloud:
 - The mean is the average of the points in class $k$.
 - The **pooled covariance** subtracts from every point the mean of its own class, then averages the outer products over all $n$ points. It divides by $n$, not by $n - 1$ and not by $n_k$.
 
+> [!KEY]
+> Fitting GDA is counting and averaging, with no gradient descent. Priors are class fractions, means are class averages, and the pooled covariance divides by $n$.
+
 In numpy, for each class:
 
 ```python
@@ -115,6 +124,9 @@ means[k] = X[mask].mean(axis=0)
 diff = X[mask] - means[k]
 cov += diff.T @ diff      # add this class's sum; divide by n once at the end
 ```
+
+> [!WARNING]
+> Subtract each point's own class mean, not the overall mean of `X`. The overall mean mixes the distance between the class centres into the spread, and the covariance comes out too big.
 
 ### A worked example
 
@@ -157,6 +169,9 @@ b = np.log(pi1 / pi0) - 0.5 * mu1 @ P @ mu1 + 0.5 * mu0 @ P @ mu0
 ```
 
 Check it on the worked example. $w = (6 - 2)/1 = 4$ and $b = 0 - 0.5 \cdot 36 + 0.5 \cdot 4 = -16$. At $x = 3$ the score is $4 \cdot 3 - 16 = -4$, and $\sigma(-4) = 0.018$. That matches the class 1 posterior from the table. At $x = 4$, halfway between the centres, the score is 0 and the probability is exactly 0.5.
+
+> [!KEY]
+> With two classes and a shared covariance, GDA's posterior is a sigmoid of a linear score. It draws the same kind of straight boundary as logistic regression.
 
 If each class had its own covariance, the quadratic parts would not cancel. The boundary would then curve, and you would get quadratic discriminant analysis. This lesson only uses the shared version.
 
@@ -203,11 +218,21 @@ log_priors[k] = np.log(mask.sum() / n)
 
 Work a small example with $V = 3$ and $\alpha = 1$. Class 0 has two documents with counts $[2, 0, 1]$ and $[0, 0, 0]$. Summed, that is $[2, 0, 1]$. Add 1 to get $[3, 1, 2]$, which totals 6. So $\theta_0 = [0.5, 0.1667, 0.3333]$. Word 2 never appeared in class 0, yet it still gets probability $1/6$ instead of zero.
 
+> [!KEY]
+> Laplace smoothing adds $\alpha$ to every word count before you normalise. No word ever gets probability zero, so one unseen word can't wipe out all the other evidence.
+
 ## When the generative model wins
 
 GDA uses more information than logistic regression. It also models how $x$ is spread out, not just the boundary. When the data really is Gaussian with a shared covariance, that extra information pays off. GDA reaches a good boundary with fewer training examples.
 
 When the assumption is wrong, the extra information misleads. A few far-away outliers drag the class means and blow up the covariance, because both are plain averages. GDA's boundary then settles in the wrong place, and more data does not fix it. Logistic regression only assumes the log-odds are linear, so it barely moves for a point already far on the correct side. The rule of thumb: with little data, trust the model whose assumptions you believe. With a lot of data, the less assuming model usually wins.
+
+> [!RECAP]
+> - The log posterior is the log prior plus the log density, minus a log-sum-exp across the classes.
+> - GDA fits priors $n_k / n$, one mean per class, and one pooled covariance divided by $n$.
+> - With the Cholesky factor $L$, the Mahalanobis term is $z^{\top} z$ where $L z = x - \mu_k$, and $\log\det\Sigma = 2\sum_i \log L_{ii}$.
+> - For two classes, $w = \Sigma^{-1}(\mu_1 - \mu_0)$, and $b$ adds the log prior ratio to the two centre terms.
+> - Gaussian naive Bayes keeps a floored variance per class and feature. Word-count naive Bayes adds $\alpha$ to each count, then normalises each class.
 
 ## Build it step by step
 

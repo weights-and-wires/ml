@@ -93,6 +93,10 @@ $y = x$ exactly. The block starts as a perfect "do nothing" layer. A plain
 layer $y = F(x)$ has no such easy setting: its weights must learn to copy the
 input, which is hard.
 
+> [!KEY]
+> A residual block learns only a correction to its input. With a zero branch, it
+> passes the input through exactly.
+
 ### Work one example by hand
 
 Take two examples with two features each:
@@ -156,11 +160,24 @@ dh1 = (dY @ W2) * (h1 > 0)
 dx = dY + dh1 @ W1
 ```
 
+> [!WARNING]
+> The forward pass uses `W1.T`, but the backward pass multiplies by `W1` with no
+> transpose. With square weights, the wrong choice still runs and gives wrong
+> numbers.
+
 With $dY$ set to all ones in the example above, you get
 $dW_2 = \begin{bmatrix} 1 & 3 \\ 1 & 3 \end{bmatrix}$,
 $dh_1 = \begin{bmatrix} 2 & 0.5 \\ 0 & 0.5 \end{bmatrix}$, and
 $dx = \begin{bmatrix} 3 & 1.5 \\ 1 & 1.5 \end{bmatrix}$.
 The ones from the shortcut are visible inside $dx$.
+
+> [!KEY]
+> A plus sign copies the incoming gradient into both of its inputs. So $dx$ is
+> always $dY$ from the shortcut plus whatever the branch sends back.
+
+> [!TIP]
+> After a backward pass, check that each gradient has its parameter's shape:
+> `assert grads[k].shape == params[k].shape` for every key.
 
 ## Why gradients survive depth
 
@@ -202,6 +219,11 @@ Starting from a gradient of length one, the numbers come out like this:
 
 The residual stack keeps about half its signal after 50 layers. The plain
 stack keeps none.
+
+> [!KEY]
+> The shortcut adds 1 to each layer's gradient factor. The gradient no longer
+> has to pass through a long product of small numbers, so it reaches the early
+> layers.
 
 Two design choices keep the shortcut clean. First, put batch norm and ReLU
 *inside* the branch, before the layers, rather than after the addition. This
@@ -247,6 +269,21 @@ Two full-width $3\times3$ convolutions cost $196 \times 2 \times 9 \times 256
 \times 256 = 231{,}211{,}008$. The bottleneck is about 17 times cheaper. With
 $C_{\text{mid}} = C/4$ in general, the ratio is $\tfrac{17}{16}$ against $18$,
 so ResNets with 50 or more layers use bottlenecks.
+
+> [!KEY]
+> A bottleneck block does its $3\times3$ work at a quarter of the width. That
+> makes it about 17 times cheaper than two full-width $3\times3$ convolutions.
+
+> [!RECAP]
+> - The block computes `h1 = x @ W1.T + b1`, a ReLU, `h2 = a1 @ W2.T + b2`, and
+>   `y = x + h2`, with no ReLU after the addition.
+> - The cache holds what the backward pass needs: `x`, `W1`, `W2`, `h1`, and
+>   `a1`.
+> - Weight gradients are "upstream, transposed, times the layer's input". Bias
+>   gradients sum over rows. The ReLU mask is `h1 > 0`.
+> - `dx` is `dY + dh1 @ W1`: the shortcut term plus the branch term.
+> - The bottleneck cost is $HW(C_{\text{in}} C_{\text{mid}} + 9 C_{\text{mid}}^2 +
+>   C_{\text{mid}} C_{\text{out}})$.
 
 ## Build it step by step
 

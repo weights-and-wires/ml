@@ -90,6 +90,9 @@ With zero-one loss, predictions `[1, 0, 1]` against targets `[1, 1, 0]` are righ
 
 If the model was chosen without looking at these examples, this average is a fair estimate of the true risk. On average over many samples it lands exactly on the risk, and it gets closer as $n$ grows. The next section shows what goes wrong when the model was chosen by looking at them.
 
+> [!KEY]
+> Empirical risk is the average loss on the examples you have. It stands in for the true risk, which you can never compute.
+
 ## Training error is too optimistic
 
 Training a model means searching for the model with the lowest empirical risk on your training data. This idea is called **empirical risk minimisation**. Least squares, logistic regression, and neural network training all work this way.
@@ -97,6 +100,9 @@ Training a model means searching for the model with the lowest empirical risk on
 Here is the catch. The winning model was picked because it scored well on those exact examples. Some of that good score is real skill. Some of it is luck: the model happens to fit the random quirks of this particular sample. On new data those quirks are different, so the luck does not carry over.
 
 The result, stated in words: on average, a trained model's error on its own training data is lower than its true error. The difference is called the **generalisation gap**. It grows as the model becomes more flexible, because a flexible model has more ways to bend around the quirks. It shrinks as you add more training data.
+
+> [!KEY]
+> Training error flatters the model. The more flexible the model, the wider the gap between its training error and its true error.
 
 Think back to the exam. Grading your memorised answers on last year's paper tells you nothing about the new paper. You need questions you have not seen.
 
@@ -108,6 +114,9 @@ The fix is to set some data aside before training. You split your examples into 
 - A **test set**, also called a held-out set, which you use only to measure error.
 
 The model never saw the test set, so from the test set's point of view the model is fixed. The test error is then a fair, unbiased estimate of the true risk. Unbiased means it is right on average, neither too high nor too low.
+
+> [!KEY]
+> Test error is a fair estimate of true error only because the model never saw the test examples during training.
 
 This costs you two things:
 
@@ -141,6 +150,9 @@ The trick is to build a table of powers first. Each row is one example and colum
 phi = x[:, None] ** np.arange(p + 1)[None, :]   # shape (n, p + 1)
 y_hat = phi @ w                                  # shape (n,)
 ```
+
+> [!TIP]
+> Print `phi.shape` right after you build it. It should be `(n, p + 1)`. A width of `p` means `np.arange(p)` dropped the highest power.
 
 For example, with $x = [2, -1]$ and $p = 2$:
 
@@ -176,6 +188,9 @@ Read it aloud piece by piece:
 
 All three parts are zero or positive. Making the model simpler usually raises bias and lowers variance. Making it more flexible does the reverse. Noise stays the same whatever you do.
 
+> [!KEY]
+> Expected squared error is squared bias plus variance plus noise. A too-simple model has high bias, a too-flexible model has high variance, and no model removes the noise.
+
 You cannot train on infinitely many training sets, but you can simulate many. This is a **Monte Carlo** estimate: repeat a random experiment many times and average. Store one row of predictions per trial, then:
 
 ```python
@@ -184,6 +199,9 @@ bias_sq = (mean_pred - true_function(x_query)) ** 2
 variance = predictions.var(axis=0)              # divides by the number of trials
 noise = np.full_like(x_query, noise_std ** 2)
 ```
+
+> [!WARNING]
+> `predictions` has one row per trial and one column per query point. Reduce with `axis=0`, down the trials. The result should have shape `(q,)`, one entry per query point.
 
 ### Worked example
 
@@ -196,6 +214,13 @@ Say the true value at one point is $f(x) = 1.0$, the noise standard deviation is
 5. Expected error: $0.01 + 0.05 + 0.04 = 0.10$.
 
 The variance here divides by the number of trials, 4, which is what `np.var` does by default.
+
+> [!RECAP]
+> - Empirical risk is `np.mean` of the per-example losses, returned as a `float`.
+> - Training error is optimistic, so you measure honest error on a held-out test set.
+> - A fair split shuffles positions once with a seeded generator and indexes `x` and `y` with the same positions.
+> - The design matrix has column $j$ equal to $x^j$, shape `(n, p + 1)`, and least squares finds the weights.
+> - Bias-variance: one row of predictions per trial, then squared bias and variance down `axis=0`, plus noise $\sigma^2$.
 
 ## Build it step by step
 

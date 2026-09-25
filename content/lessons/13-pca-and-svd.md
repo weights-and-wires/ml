@@ -53,6 +53,9 @@ Picture a line through the origin. Project every centred point onto it, so each 
 
 There is a second, equivalent way to say this. Replace each point by its shadow on the line. The best line is the one that makes these shadows closest to the original points. The two definitions agree, because by Pythagoras, each point's squared length equals its squared shadow length plus its squared distance to the line. The total is fixed, so making the shadows long is the same as making the distances short.
 
+> [!KEY]
+> The first principal component is the direction along which the centred data spreads the most. That same direction also keeps the points closest to their shadows on it.
+
 ### Reading PCA off the SVD
 
 Take the SVD of the centred data, $X_c = U S V^{\top}$. Then:
@@ -67,6 +70,9 @@ $$
 
 Read it aloud: square the $i$-th singular value and divide by $n - 1$. These $\lambda_i$ are also the eigenvalues of the sample covariance matrix $X_c^{\top} X_c / (n-1)$, and the components are its eigenvectors. The SVD gets them without ever forming that matrix, which is more accurate numerically.
 
+> [!KEY]
+> Run the SVD on the centred data. The top $k$ columns of $V$ are the components, and $s_i^2 / (n - 1)$ is the variance each one explains.
+
 ```python
 U, s, Vt = np.linalg.svd(Xc, full_matrices=False)
 components = Vt[:k].T                  # shape (d, k), note the transpose
@@ -74,7 +80,8 @@ scores = Xc @ components               # shape (n, k)
 explained_variance = s[:k] ** 2 / (n - 1)
 ```
 
-`np.linalg.svd` returns $V^{\top}$, not $V$, and it sorts the singular values from largest to smallest.
+> [!WARNING]
+> `np.linalg.svd` returns $V^{\top}$, not $V$, and it sorts the singular values from largest to smallest. The components are the rows of `Vt`, so take `Vt[:k].T`, not `Vt[:, :k]`.
 
 ## Step 3: reconstruct and measure the error
 
@@ -97,6 +104,9 @@ $$
 $$
 
 Read it aloud: the total squared reconstruction error equals the sum of the squares of the singular values you threw away. You can predict the error before you reconstruct anything.
+
+> [!KEY]
+> No rank-$k$ approximation beats the top $k$ SVD terms, and its error is the sum of the dropped $s_i^2$.
 
 ### Explained variance ratio
 
@@ -127,6 +137,9 @@ Take three points in 2D: $(2, 0)$, $(0, 2)$, and $(4, 4)$.
 
 The SVD may flip the sign of a component. Then the scores flip too, and the reconstruction is unchanged.
 
+> [!TIP]
+> To compare two unit-length components that may differ in sign, test `abs(u @ v)` against 1 instead of comparing `u` and `v` entry by entry.
+
 ## Step 4: power iteration
 
 Sometimes you only need the top eigenvector of a symmetric matrix $A$, such as the covariance. **Power iteration** finds it with nothing but matrix-vector products. Start with any vector, multiply by $A$, rescale to length one, and repeat:
@@ -148,6 +161,9 @@ eigenvalue = v @ A @ v          # the Rayleigh quotient
 The estimate of the eigenvalue is the **Rayleigh quotient** $v^{\top} A v$, which equals $\lambda_1$ when $v$ is the top eigenvector.
 
 How fast does it converge? Each step shrinks the leftover error by about $|\lambda_2 / \lambda_1|$, the **eigenvalue gap** ratio. A ratio of 0.5 halves the error each step. A ratio of 0.99 crawls.
+
+> [!KEY]
+> Power iteration turns any starting vector toward the top eigenvector, and the ratio $|\lambda_2 / \lambda_1|$ sets how fast it gets there.
 
 Worked example: let $A$ have rows $(2, 0)$ and $(0, 1)$, so $\lambda_1 = 2$, $\lambda_2 = 1$, and the top eigenvector is $(1, 0)$. Start from $(0.7071, 0.7071)$.
 
@@ -206,6 +222,13 @@ $$
 $$
 
 Read it aloud: a constant, plus a penalty for a large covariance ($\log\det C$), plus a penalty for data that does not fit it ($\operatorname{tr}(C^{-1}S)$), all scaled by $-n/2$. Compute $\log\det C$ with `np.linalg.slogdet` and $C^{-1} S$ with `np.linalg.solve(C, S)`. Record $\ell$ after every iteration. It should never go down.
+
+> [!RECAP]
+> - Centre with `X.mean(axis=0)` before the SVD, and add the mean back when you reconstruct.
+> - Components are `Vt[:k].T`, scores are `Xc @ components`, and explained variances are `s[:k] ** 2 / (n - 1)`.
+> - Explained variance ratios use every singular value, so they sum to one.
+> - Power iteration multiplies by $A$ and rescales to length one every step. The Rayleigh quotient $v^{\top} A v$ gives the eigenvalue.
+> - PPCA EM computes $E_z$ and $E_{zz}$, then $W_{\text{new}}$, then $\sigma^2$ from $W_{\text{new}}$. Its log-likelihood never goes down.
 
 ## Build it step by step
 

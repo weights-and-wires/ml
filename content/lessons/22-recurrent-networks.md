@@ -72,6 +72,10 @@ To run a whole sequence, start from an initial state $h_0$ and apply the cell
 once per step, storing each new state. The output has shape `(T, n, d_h)`.
 Row 0 holds $h_1$, the state after the first input; $h_0$ itself isn't stored.
 
+> [!KEY]
+> An RNN applies one cell, with the same weights, at every step. The hidden state
+> carries a summary of everything the network has read so far.
+
 ### Work a forward pass by hand
 
 Use one example, one input feature, and one hidden unit, so every quantity is
@@ -128,6 +132,15 @@ dW_hh += dz.T @ h_prev
 carry = dz @ W_hh
 ```
 
+> [!WARNING]
+> Row `t` of the stored states holds $h_{t+1}$. So the previous state for step
+> `t` is `h_seq[t - 1]`, or `h0` when `t` is 0.
+
+> [!KEY]
+> BPTT is ordinary backpropagation on the unrolled chain. The carry passes the
+> gradient back one step at a time, and each weight's gradient is a sum over all
+> steps.
+
 ### Work the backward pass by hand
 
 Continue the example. Put a loss gradient of 1 on $h_2$ and 0 on $h_1$.
@@ -144,6 +157,11 @@ The sums give:
 - $db = 0.6965 + 0.4382 = 1.1347$.
 - $dx_1 = 0.4382 \times 0.5 = 0.2191$ and $dx_2 = 0.6965 \times 0.5 = 0.3482$.
 - $dh_0 = 0.3506$.
+
+> [!TIP]
+> Test your `bptt` on this example first. Give `x` and `dH` the shape
+> `(2, 1, 1)`, `h0` and both weights the shape `(1, 1)`, and `b` the shape
+> `(1,)`. Then compare each output with the numbers above.
 
 ## Why gradients vanish or explode
 
@@ -178,6 +196,10 @@ example, with $W = \operatorname{diag}(0.5, 0.9)$, the eigenvalues are 0.5 and
 $0.9^{10} = 0.349$. Over 100 steps, $0.9^{100} \approx 2.7 \times 10^{-5}$,
 while $1.05^{100} \approx 131.5$. Small changes in $\rho$ make huge
 differences.
+
+> [!KEY]
+> Each step back multiplies the gradient by about $\kappa \, \rho(W_{hh})$.
+> Below one, the gradient vanishes over many steps. Above one, it can explode.
 
 Because $\kappa \le 1$ for $\tanh$, a spectral radius below one always leads
 to vanishing. A spectral radius above one can explode, but $\tanh$ saturates
@@ -232,6 +254,18 @@ in training. This mismatch is called **exposure bias**.
 An RNN also can't compute step $t$ until step $t-1$ is done. A sequence of
 length $T$ takes $T$ steps in a row, however many processor cores you have.
 Later lessons on attention remove that limit.
+
+> [!RECAP]
+> - The cell is `np.tanh(x_t @ W_xh.T + h_prev @ W_hh.T + b)`. The forward pass
+>   stores $h_1$ to $h_T$ in a `(T, n, d_h)` array.
+> - BPTT loops backward. At each step, add `dH[t]` to the carry, multiply by
+>   $1 - h_t^2$, add to the weight sums, then send `dz @ W_hh` back.
+> - Truncated BPTT runs `bptt` on chunks of `k` steps, starting each chunk from
+>   the true state just before it.
+> - Global-norm clipping multiplies every array by one shared factor,
+>   $\min(1, \text{max\_norm} / G)$.
+> - The predicted gradient scale is $(\kappa \rho)^T$, with $\rho$ the largest
+>   absolute eigenvalue.
 
 ## Build it step by step
 

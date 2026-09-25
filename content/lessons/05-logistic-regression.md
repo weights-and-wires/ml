@@ -129,11 +129,17 @@ softplus = np.maximum(z, 0) + np.log1p(np.exp(-np.abs(z)))
 
 `np.log1p(a)` computes $\log(1 + a)$ accurately when $a$ is tiny.
 
+> [!KEY]
+> Only raise $e$ to a number that is zero or negative. The result then lies between 0 and 1, so the loss stays finite even for scores like $\pm 800$.
+
 The sigmoid needs the same care. For $z \ge 0$, use $1 / (1 + e^{-z})$. For
 $z < 0$, use the equal expression $e^{z} / (1 + e^{z})$. Each branch only
 exponentiates a number that is zero or negative. In numpy, you build a
 boolean mask such as `pos = z >= 0` and fill the two parts of the output
 separately.
+
+> [!WARNING]
+> `np.where(z >= 0, a, b)` still computes both `a` and `b` on every entry, so it overflows before it picks. Index with the mask, and compute each formula only on its own part of `z`.
 
 ## The gradient and the Hessian
 
@@ -154,6 +160,9 @@ entry per weight, so its shape is `(d,)`.
 p = sigmoid(X @ w)
 grad = X.T @ (p - y) + ridge * w
 ```
+
+> [!KEY]
+> The logistic gradient is $X^{\top}(p - y)$, probability minus label, plus the penalty term. It has the same shape as the least squares gradient, with $\sigma(Xw)$ in place of $Xw$.
 
 The *Hessian* is the matrix of second derivatives. It says how the gradient
 itself changes, so it measures how curved the loss is in each direction:
@@ -177,10 +186,15 @@ s = p * (1 - p)
 H = (X * s[:, None]).T @ X + ridge * np.eye(X.shape[1])
 ```
 
+> [!TIP]
+> `X * s[:, None]` multiplies row $i$ of `X` by `s[i]`, which is the same as `np.diag(s) @ X` without the $n \times n$ matrix. Compare the two once on a tiny `X` to convince yourself.
+
 Every weight $p_i(1 - p_i)$ is zero or positive, so the Hessian is
 *positive semidefinite*. In plain words, the loss curves upward or stays flat
-in every direction, never downward. That makes the loss a bowl with no false
-bottoms: any point where the gradient is zero is the lowest point.
+in every direction, never downward.
+
+> [!KEY]
+> The log loss is a bowl with no false bottoms. Any point where the gradient is zero is the lowest point.
 
 ## Newton's method
 
@@ -267,6 +281,16 @@ grows as $w$ grows, so at some length the penalty outweighs the tiny gain
 from more confidence. The weights settle at a finite size. The penalty also
 adds $\lambda$ to the Hessian's diagonal, which keeps the Newton solve well
 posed. That is why `fit_newton` uses a tiny default ridge of `1e-8`.
+
+> [!KEY]
+> On perfectly separable data, the unpenalised weights grow forever. A ridge penalty gives them a finite best size.
+
+> [!RECAP]
+> - The score is $z = Xw$ and the probability is $\sigma(z)$. The loss sums $\operatorname{softplus}(z_i) - y_i z_i$ and adds $\frac{\lambda}{2} \lVert w \rVert^2$.
+> - Compute softplus and the sigmoid so that every exponent is zero or negative.
+> - The gradient is $X^{\top}(p - y) + \lambda w$, shape `(d,)`. The Hessian is $X^{\top} D X + \lambda I$, shape `(d, d)`, with weights $p_i(1 - p_i)$.
+> - A Newton step solves $H \delta = g$ and subtracts $\delta$.
+> - Both fitting loops record the loss before each step, so `history[0]` is the loss at $w = 0$.
 
 ## Build it step by step
 

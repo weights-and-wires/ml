@@ -36,6 +36,9 @@ A tree is made of nodes. An internal node holds two things: a feature index $j$ 
 
 What number should a leaf predict? Use the mean of the training labels that reached it. For squared error, the mean is the best possible constant. For a 0/1 classification label, the mean of $y$ is the fraction of class-1 rows, which is also the best probability estimate. So one rule, "leaf value is the mean", serves both regression and classification.
 
+> [!KEY]
+> A leaf predicts the mean of the training labels that reach it. For a 0/1 label, that mean is the fraction of class-1 rows.
+
 In numpy, a leaf's value is one line:
 
 ```python
@@ -70,6 +73,9 @@ Read it aloud: square each class fraction, add the squares, and subtract the tot
 p = np.bincount(y) / y.size
 g = 1.0 - np.sum(p ** 2)
 ```
+
+> [!WARNING]
+> `np.bincount` accepts only non-negative integers. If your labels are stored as floats, convert them with `y.astype(int)` first, or numpy raises a `TypeError`.
 
 ### Entropy
 
@@ -122,6 +128,9 @@ $$
 
 Read it aloud: start with the parent's impurity. Subtract the left child's impurity weighted by the share of rows that went left, $n_L / n$. Subtract the right child's impurity weighted by its share, $n_R / n$. The weights matter. Without them, a split that peels off one lucky row would look as good as a split that cleanly halves the data.
 
+> [!KEY]
+> The best split has the largest gain: the parent's impurity minus the children's impurities, each weighted by its share of the rows.
+
 ```python
 gain = parent_imp - (n_left * left_imp + n_right * right_imp) / n
 ```
@@ -150,7 +159,13 @@ cum_sq = np.cumsum(ys ** 2)
 left_sum, left_sq = cum_sum[:-1], cum_sq[:-1]
 ```
 
+> [!WARNING]
+> Entry `i` of `cum_sum[:-1]` covers `i + 1` rows, so the left counts are `np.arange(1, n)`, not `np.arange(n - 1)`. An off-by-one here shifts every variance.
+
 For a 0/1 label under Gini or entropy, the running count of 1s on the left is enough. Divide it by $n_L$ to get $p_L$, and apply the binary formula.
+
+> [!KEY]
+> Sort a feature once, and running sums give you the impurity of every candidate split in a single pass.
 
 ### A worked split
 
@@ -165,6 +180,9 @@ The running sums are `cumsum(y) = [1, 4, 12, 22]` and `cumsum(y**2) = [1, 10, 74
 | 3.5 | 3 | 12 | 74 | 8.667 | 0 | 6.75 |
 
 At threshold 2.5, the left variance is $10/2 - (4/2)^2 = 5 - 4 = 1$. The right side has $S_R = 18$ and $Q_R = 164$, so $V_R = 164/2 - 9^2 = 1$. The gain is $13.25 - (2 \cdot 1 + 2 \cdot 1)/4 = 12.25$. That is the best split.
+
+> [!TIP]
+> Test your fast sweep against a slow loop that splits at each midpoint and calls your impurity function on both sides. On a few random rows, the two gains must agree up to rounding.
 
 ## Growing the tree
 
@@ -191,6 +209,9 @@ $$
 
 Read it aloud: for each leaf, multiply its row count $n_\ell$ by its impurity $I_\ell$, and add them up. That is the total training error. Then add $\alpha$ for every leaf. With $\alpha = 0$, pruning keeps every useful split. With a huge $\alpha$, one leaf is cheapest, so the tree collapses to its root.
 
+> [!KEY]
+> Each leaf costs $\alpha$. A split survives pruning only when it lowers the total error $\sum n_\ell I_\ell$ by more than $\alpha$ for each leaf it adds.
+
 You find the cheapest tree bottom-up. At each internal node, first prune both children. Then compare two costs:
 
 - Collapse to a leaf: `n_samples * impurity + alpha`.
@@ -199,6 +220,13 @@ You find the cheapest tree bottom-up. At each internal node, first prune both ch
 Keep whichever is cheaper. Because each subtree's cost only grows faster than a single leaf's cost as $\alpha$ rises, a larger $\alpha$ never gives you more leaves. The pruned trees form a nested sequence: each is a cut-down version of the one before.
 
 Using the worked split: the parent has 4 rows and impurity 13.25, so collapsing costs $53 + \alpha$. The two children each have 2 rows and impurity 1, so keeping costs $2 + 2 + 2\alpha = 4 + 2\alpha$. Keeping wins while $\alpha < 49$.
+
+> [!RECAP]
+> - A row goes left when $x_j \le t$, and a leaf predicts the mean of its training labels.
+> - Gini is $1 - \sum_k p_k^2$, entropy is $-\sum_k p_k \log p_k$ over the nonzero $p_k$, and regression impurity is the variance.
+> - Gain is the parent's impurity minus the children's impurities, weighted by $n_L / n$ and $n_R / n$.
+> - Candidate thresholds are midpoints between consecutive, different sorted values, and running sums score them all at once.
+> - Pruning works bottom-up: a node collapses when `n_samples * impurity + alpha` is no more than the total cost of its pruned children.
 
 ## Build it step by step
 

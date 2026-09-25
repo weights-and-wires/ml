@@ -95,13 +95,32 @@ The body is Markdown with these conventions:
 
 - One `#` heading, matching `title`, as the first line after the front matter.
 - `##` for sections, `###` for subsections. Never skip a level.
-- Math in KaTeX: `$inline$` and `$$display$$`. The renderer loads
+- Math in KaTeX: `$inline$` and `$$display$$`. Put each `$$` on its own line
+  above and below the equation. A one-line `$$...$$` parses as inline math and
+  renders at text size, so `scripts/check_content.py` rejects it. The renderer loads
   `remark-math` and `rehype-katex`, so use KaTeX-supported commands only.
   `\operatorname`, `\mathbb`, `\mathcal`, `\begin{bmatrix}`, `\begin{aligned}`,
   `\top`, `\lVert`, and `\argmin` via `\operatorname*{arg\,min}` all work.
 - Fenced code blocks tagged with a language. Python blocks show the shape of an
   implementation, not a full solution to the exercise.
 - Tables for genuinely two-dimensional data.
+- Callouts, written as a blockquote whose first line is a type marker. The
+  reader renders each type as a coloured box with its own label:
+
+  ```markdown
+  > [!KEY]
+  > A trained model's error on its own training data is lower than its true
+  > error, on average.
+  ```
+
+  | Marker | Label | Use it for |
+  |---|---|---|
+  | `[!KEY]` | Key idea | The one sentence to remember from a section. Two to four per lesson. |
+  | `[!TIP]` | Tip | A practical shortcut or habit. At most two per lesson. |
+  | `[!WARNING]` | Watch out | A trap the reader is about to fall into. At most two per lesson. |
+  | `[!RECAP]` | Before you build | Three to five bullets, placed right before `## Build it step by step`. One per lesson. |
+
+  `scripts/check_content.py` rejects any other marker, and a second recap.
 
 Every lesson body includes, in this order:
 

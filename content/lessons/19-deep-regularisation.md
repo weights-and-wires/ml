@@ -62,11 +62,19 @@ mask = (rng.random(x.shape) < 1 - p).astype(x.dtype)
 out = x * mask / (1 - p)
 ```
 
+> [!WARNING]
+> Here $p$ is the chance of dropping a unit, not keeping it. A unit survives when
+> its random number is below $1 - p$.
+
 Why divide? Each entry survives with probability $1 - p$, so on average
 $x \cdot \text{mask}$ is $(1 - p)\, x$. Dividing by $1 - p$ brings the average
 back to $x$. Because the average output already matches the input during
 training, you don't need to change anything at test time. At test time, dropout
 returns $x$ as it is, with a mask of all ones.
+
+> [!KEY]
+> Inverted dropout scales the kept units up by $1 / (1 - p)$ during training. The
+> average output then matches the input, so test time needs no change.
 
 ### Worked example: dropout
 
@@ -78,6 +86,10 @@ $[1, 0, 1, 1]$:
 
 The input averages 5 and this output averages 8, because this mask kept three
 of four. Over many masks, the output averages 5.
+
+> [!TIP]
+> Test your dropout on `np.ones(100_000)`. The mean of the mask should be close
+> to $1 - p$, and the mean of the output should be close to 1.
 
 ### The backward pass
 
@@ -125,6 +137,11 @@ So weight decay can't make the model "simpler" there. What it does instead is
 keep the weights small, and smaller weights mean a given gradient step turns
 them by a larger angle. In that setting, weight decay acts like a larger
 learning rate, not like a penalty on complexity.
+
+> [!KEY]
+> When weights feed a normalisation layer, their size doesn't change the output.
+> Weight decay on them works like a larger learning rate, not a complexity
+> penalty.
 
 ## Early stopping
 
@@ -184,6 +201,10 @@ Take $\lambda = 2$, $\eta = 0.1$, and $w^* = 1$. Then $1 - \eta\lambda = 0.8$.
 
 The last two columns agree, which is the whole point.
 
+> [!KEY]
+> Stopping gradient descent after $k$ steps gives the same weights as ridge with
+> penalty $\gamma$. Fewer steps mean a larger $\gamma$.
+
 ## Label smoothing
 
 A classifier trained with cross-entropy is rewarded for pushing the right
@@ -239,6 +260,10 @@ This gradient is zero when $p$ equals $y^{\text{smooth}}$. So the best
 prediction is no longer one-hot. A near-certain prediction scores worse than
 one that matches the smoothed target.
 
+> [!KEY]
+> Label smoothing moves the best prediction from one-hot to the smoothed target.
+> The model no longer gains by pushing its scores ever higher.
+
 ### Worked example: label smoothing
 
 Take one row with scores $z = [2, 0, 0]$, right class 0, $K = 3$, and
@@ -250,6 +275,19 @@ $\epsilon = 0.1$:
 4. Gradient with $N = 1$: $p - y^{\text{smooth}} = [-0.1463, 0.0732, 0.0732]$.
 
 Without smoothing, the loss would be $-\log 0.7870 = 0.2395$.
+
+> [!RECAP]
+> - Dropout zeros each entry with probability $p$ and divides the rest by
+>   $1 - p$. At test time it returns $x$ and a mask of ones.
+> - Dropout's backward pass multiplies `dout` by the same mask and the same
+>   $1 / (1 - p)$.
+> - A weight-decay step subtracts `lr * weight_decay * w` on top of the gradient
+>   step.
+> - The label-smoothed target is $(1 - \epsilon)\,\text{onehot} + \epsilon / K$.
+>   The loss is a mean over rows, and its gradient is
+>   $(p - y^{\text{smooth}}) / N$.
+> - The early-stopping penalty is $\lambda b / (1 - b)$ with
+>   $b = (1 - \eta\lambda)^k$. It is infinite at $k = 0$.
 
 ## Build it step by step
 

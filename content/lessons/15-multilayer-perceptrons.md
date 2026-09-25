@@ -66,6 +66,9 @@ for layer in params:
 Writing `h @ W.T` instead of `W @ h` gives the same answer for a vector, and it
 also works when `h` is a batch of rows.
 
+> [!TIP]
+> Print `z.shape` inside the loop while you test. On the worked example that follows, you must see `(3,)` and then `(1,)`. An error or any other shape means `W` is the wrong way round.
+
 ### Worked example by hand
 
 A first layer with `W = [[1, 0], [0, 1], [1, 1]]`, `b = [0, 0, -1]`, and ReLU.
@@ -97,7 +100,8 @@ the smallest width in the stack.
 W, b = W2 @ W1, W2 @ b1 + b2      # the whole network in one layer
 ```
 
-The activation between layers is what breaks this collapse.
+> [!KEY]
+> Without an activation between them, any stack of affine layers is one affine layer. The activation is what breaks this collapse.
 
 ## ReLU
 
@@ -145,6 +149,9 @@ $$
 \operatorname{gelu}'(x) = \tfrac{1}{2}(1 + t) + \tfrac{1}{2}\, x\, (1 - t^2)\, \sqrt{2/\pi}\,\left(1 + 3 \cdot 0.044715\, x^2\right)
 $$
 
+> [!TIP]
+> Test any derivative you write against a central difference, `(f(x + h) - f(x - h)) / (2 * h)` with `h = 1e-5`. The two agree to about `1e-6` or better when your formula is right.
+
 Read it aloud: the first term is the derivative of the $x$ factor times the
 bracket. The second term is $x$ times the derivative of the bracket, which is
 $\frac{1}{2}$ times $\tanh$'s slope $1 - t^2$ times the slope of $u$.
@@ -175,6 +182,9 @@ training will find those weights. For a function whose slope never exceeds $L$
 on $[0, 1]$, about $L / \epsilon$ ReLU units are enough to stay within error
 $\epsilon$, because each unit adds one kink to a piecewise-linear fit.
 
+> [!KEY]
+> One hidden layer can approximate any continuous function on a bounded region, but the width it needs can be enormous.
+
 ## Depth: the sawtooth
 
 Depth can buy far more than width. The **tent map** folds the interval
@@ -194,6 +204,9 @@ straight pieces. Each fold doubles the number of teeth. A network with $k$
 layers of width 2 computes it with about $6k$ parameters. A one-hidden-layer
 network needs roughly $2^k$ units to make that many kinks, because each unit
 adds at most one kink.
+
+> [!KEY]
+> Depth multiplies kinks, and width only adds them. With $k$ layers of width 2 you get $2^k$ straight pieces, which one hidden layer matches only with about $2^k$ units.
 
 Depth 2 by hand, $T(T(x))$ at a few points:
 
@@ -227,6 +240,16 @@ For a 4-8-8-3 network with ReLU, ReLU, identity:
 sum(layer["W"].size + layer["b"].size for layer in params)
 ```
 
+> [!WARNING]
+> `W` has shape `(out, in)`, so read it as `out_dim, in_dim = W.shape`, in that order. You can't name a variable `in`, because it's a Python keyword.
+
+> [!RECAP]
+> - A layer computes `h @ W.T + b`, with `W` of shape `(out, in)`, then applies its named activation. `"identity"` leaves the values alone.
+> - ReLU is `np.maximum(x, 0.0)` with slope `(x > 0).astype(float)`. The GELU slope has two terms, both built from $t = \tanh(u)$.
+> - One tent probes $x$ and $x - \tfrac{1}{2}$. Each later layer fuses $2h_1 - 4h_2$ into weights `[[2, -4], [2, -4]]` and bias `[0, -0.5]`.
+> - To count regions, track every unit as a slope and an intercept on each interval, split where a pre-activation crosses 0, and merge equal neighbours at the end.
+> - A layer has `out * in + out` parameters and costs $2 \cdot \text{in} \cdot \text{out} + \text{out}$ flops, plus 1 per output for ReLU or 9 for GELU.
+
 ## Build it step by step
 
 Build the functions in the order the checks test them.
@@ -237,7 +260,7 @@ Build the functions in the order the checks test them.
 4. **`sawtooth_network(depth)`.** Returns `depth + 1` layers. The first layer has `W` of shape `(2, 1)` with both rows `[1]` and bias `[0, -0.5]`. Each of the `depth - 1` middle layers has `W = [[2, -4], [2, -4]]` and bias `[0, -0.5]`. The output layer has `W = [[2, -4]]`, bias `[0]`, and `"identity"`. Common mistake: adding a separate combine layer with no activation, which breaks the `depth + 1` layer count.
 5. **`count_linear_regions_1d(params, x_min, x_max)`.** Keep a list of intervals. On each interval, every unit is an exact straight line in $x$, stored as a slope and an intercept, both arrays. For each layer, compute pre-activation slopes `W @ slopes` and intercepts `W @ intercepts + b`. Split the interval where any pre-activation is 0, at $x = -\text{intercept} / \text{slope}$, only if that point lies strictly inside the interval. On each piece, test the midpoint: a ReLU unit that is off gets slope and intercept 0. At the end, merge neighbouring pieces whose output formula is the same, and return the count. Common mistake: counting a kink that does not change the output, so you skip the final merge.
 6. **`parameter_count(params)`.** Sum `W.size + b.size`. Common mistake: forgetting the biases.
-7. **`flop_count(params)`.** Read `out, in = W.shape` and add the three charges above for each layer. Return an `int`. Common mistake: swapping `in` and `out` when you read the shape, or charging an activation cost for `"identity"`.
+7. **`flop_count(params)`.** Read `out_dim, in_dim = W.shape` and add the three charges above for each layer. Return an `int`. Common mistake: swapping `in` and `out` when you read the shape, or charging an activation cost for `"identity"`.
 
 ## Cost and scaling
 

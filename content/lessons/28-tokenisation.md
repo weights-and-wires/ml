@@ -72,6 +72,10 @@ nothing is ever unknown. For example, "hé" is the bytes $[104, 195, 169]$:
 ids = list("hé".encode("utf-8"))   # [104, 195, 169]
 ```
 
+> [!KEY]
+> A byte-level tokeniser starts from 256 base tokens, one per byte, so it can
+> encode any text. Merges only make the sequence shorter.
+
 ## Byte-pair encoding
 
 Here's the idea in one sentence: find the two neighbouring tokens that appear
@@ -131,8 +135,16 @@ and "d" is 100.
 4. Count again. $(256, 257)$ appears twice and wins. It becomes ID 258,
    "aaab". The text is now 258 d 258 a c.
 
+> [!TIP]
+> `min(counts, key=lambda p: (-counts[p], p))` does both jobs in one call. It
+> picks the highest count, and among equal counts it picks the smaller pair.
+
 The merge list is $[(97, 97), (97, 98), (256, 257)]$, and the vocabulary has
 $256 + 3 = 259$ tokens. The original 11 bytes became 5 tokens.
+
+> [!KEY]
+> Each training round counts pairs, glues the most common one into a new
+> token, and gives it the next free ID, $256 + i$.
 
 The vocabulary maps each ID to its bytes. A merged token's bytes are its two
 parts joined together:
@@ -158,6 +170,10 @@ $(256, 257)$ fires first, when there is nothing to glue. Encoding
 "aaabdaaabac" with the list reversed gives 7 tokens instead of 5. It's still
 a valid tokenisation, but a worse one.
 
+> [!KEY]
+> To encode, run the merges in the order you learned them. Later merges glue
+> tokens that only exist once the earlier merges have run.
+
 For the same reason, encoding isn't "find the longest vocabulary entry that
 matches". Some tokens only appear after specific shorter ones join first.
 
@@ -169,6 +185,10 @@ text:
 ```python
 text = b"".join(vocab[i] for i in ids).decode("utf-8")
 ```
+
+> [!WARNING]
+> Join all the bytes first, then decode once. One token can hold half of a
+> two-byte character, so decoding tokens one at a time can fail.
 
 Because every token stands for exact bytes, decoding always reproduces the
 original text, spaces and all.
@@ -215,6 +235,16 @@ f = len(encode(text, merges)) / len(text.split())
 With no merges, "the quick fox" is 13 bytes and 3 words, so its fertility is
 $13 / 3 = 4.33$. As you train more merges, common words shrink to one or two
 tokens, and fertility falls.
+
+> [!RECAP]
+> - Start each word from `list(piece.encode("utf-8"))`, so nothing is ever
+>   unknown.
+> - Count pairs inside each word only, never across word boundaries.
+> - Merge from the left and jump two after each merge, so `[5, 5, 5]` becomes
+>   `[20, 5]`.
+> - Merge $i$ makes ID $256 + i$, and ties go to the smaller pair.
+> - Encode by running every merge in order. Decode by joining all the bytes
+>   before one `.decode("utf-8")`.
 
 ## Build it step by step
 

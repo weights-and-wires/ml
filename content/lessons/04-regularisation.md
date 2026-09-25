@@ -36,13 +36,17 @@ You build two penalties. Ridge charges for the squared size of the weights and s
 
 Think of each weight as held near zero by a spring. The data pulls the weight toward the value that fits best. The spring pulls it back. A stiffer spring keeps weights smaller. Ridge adds that spring to the loss:
 
-$$L(w) = \tfrac{1}{2}\lVert Xw - y\rVert^2 + \tfrac{\lambda}{2}\lVert w\rVert^2$$
+$$
+L(w) = \tfrac{1}{2}\lVert Xw - y\rVert^2 + \tfrac{\lambda}{2}\lVert w\rVert^2
+$$
 
 Read it aloud: the first term is the usual squared error. The second is the penalty. $\lVert w\rVert^2$ is the sum of the squared weights, and $\lambda$ (lambda) is a number you choose, at least 0, that sets how stiff the spring is. $\lambda = 0$ gives back plain least squares.
 
 Setting the gradient to zero gives a linear system, like the normal equations with one extra term:
 
-$$(X^\top X + \lambda I)\, w = X^\top y$$
+$$
+(X^\top X + \lambda I)\, w = X^\top y
+$$
 
 Read it aloud: add $\lambda$ to every diagonal entry of $X^\top X$, then solve. $I$ is the $d \times d$ identity matrix. Adding $\lambda$ to the diagonal also makes the system solvable even when features repeat.
 
@@ -54,11 +58,16 @@ w = np.linalg.solve(X.T @ X + lam * np.eye(d), X.T @ y)
 
 You rarely know the right $\lambda$, so you try many. Re-solving each time is wasteful. The SVD gives every answer cheaply. With $X = U \Sigma V^\top$, the ridge weights are
 
-$$w = V \, \operatorname{diag}\!\left(\frac{s_i}{s_i^2 + \lambda}\right) U^\top y$$
+$$
+w = V \, \operatorname{diag}\!\left(\frac{s_i}{s_i^2 + \lambda}\right) U^\top y
+$$
 
 Read it aloud from right to left: rotate $y$ into the $U$ coordinates, which you do once. Multiply coordinate $i$ by $s_i/(s_i^2 + \lambda)$. Rotate back with $V$. Only the middle step depends on $\lambda$.
 
-Compare this with plain least squares, which multiplies by $1/s_i$. When $s_i$ is large, $\lambda$ barely matters. When $s_i$ is small, the factor shrinks toward zero instead of exploding. Ridge shrinks most in the directions the data pins down least.
+Compare this with plain least squares, which multiplies by $1/s_i$. When $s_i$ is large, $\lambda$ barely matters. When $s_i$ is small, the factor shrinks toward zero instead of exploding.
+
+> [!KEY]
+> Ridge shrinks most in the directions the data pins down least. A small $s_i$ gets a factor near zero instead of the huge $1/s_i$.
 
 ```python
 u_dot_y = U.T @ y                                   # shape (r,), once
@@ -72,7 +81,9 @@ The `[None, :]` and `[:, None]` add an axis so numpy broadcasts: each row of `sh
 
 How flexible is a ridge model? Plain least squares with $r$ independent features has $r$ degrees of freedom, one per weight. Ridge has fewer, because the spring holds the weights back. The effective degrees of freedom counts this:
 
-$$\text{df}(\lambda) = \sum_i \frac{s_i^2}{s_i^2 + \lambda}$$
+$$
+\text{df}(\lambda) = \sum_i \frac{s_i^2}{s_i^2 + \lambda}
+$$
 
 Read it aloud: each singular direction contributes a number between 0 and 1. It is close to 1 when $s_i^2$ is much bigger than $\lambda$, and close to 0 when it is much smaller. At $\lambda = 0$, df equals the number of nonzero singular values. As $\lambda$ grows huge, df falls to 0.
 
@@ -84,7 +95,9 @@ dof = np.sum(s ** 2 / (s ** 2 + lam))
 
 The lasso swaps the squared penalty for the sum of absolute values:
 
-$$L(w) = \tfrac{1}{2}\lVert Xw - y\rVert^2 + \lambda \lVert w\rVert_1$$
+$$
+L(w) = \tfrac{1}{2}\lVert Xw - y\rVert^2 + \lambda \lVert w\rVert_1
+$$
 
 Read it aloud: squared error, plus $\lambda$ times $\lVert w\rVert_1$, the sum of the absolute values of the weights. This is called the $\ell_1$ norm.
 
@@ -93,6 +106,9 @@ objective = 0.5 * np.sum((X @ w - y) ** 2) + lam * np.sum(np.abs(w))
 ```
 
 Why does this zero out weights? Look at the cost of moving one weight away from zero. With ridge, the penalty $\tfrac{\lambda}{2}w^2$ is almost flat near zero, so a tiny weight costs almost nothing, and weights rarely land at exactly zero. With the lasso, the penalty $\lambda|w|$ has a sharp corner at zero. Moving off zero costs $\lambda$ per unit right away. If the data can't pay that price, the weight stays at exactly zero.
+
+> [!KEY]
+> The lasso penalty has a sharp corner at zero. A weight stays at exactly zero unless the data pulls on it harder than $\lambda$.
 
 That corner is also the trouble. $|w|$ has no derivative at zero, so plain gradient descent doesn't apply.
 
@@ -109,7 +125,9 @@ These are called the KKT conditions. You can test any lasso solver against them.
 
 Soft thresholding is the one-number version of the lasso. Given a value $x$ and a threshold $t \geq 0$, it finds the $z$ that minimises $\tfrac{1}{2}(z - x)^2 + t|z|$. In words: stay close to $x$, but pay $t$ per unit of size. The answer is
 
-$$S_t(x) = \text{sign}(x) \, \max(|x| - t, \, 0)$$
+$$
+S_t(x) = \text{sign}(x) \, \max(|x| - t, \, 0)
+$$
 
 Read it aloud: move $x$ toward zero by $t$. If that would cross zero, stop at zero. Values with $|x| \leq t$ become exactly zero. This operation is called the proximal operator of $t|\cdot|$.
 
@@ -119,11 +137,16 @@ z = np.sign(x) * np.maximum(np.abs(x) - t, 0.0)
 
 With $t = 1$: $3 \to 2$, $-3 \to -2$, $0.5 \to 0$, $-0.5 \to 0$, $0 \to 0$, and $2 \to 1$.
 
+> [!TIP]
+> Run your `soft_threshold` on these six values before you use it inside ISTA. A sign slip here breaks every later step, and it is much harder to spot there.
+
 ## ISTA: gradient step, then threshold
 
 ISTA handles the two parts of the lasso one at a time. It takes an ordinary gradient step on the squared error, then applies soft thresholding for the penalty:
 
-$$w_{k+1} = S_{\alpha\lambda}\!\left(w_k - \alpha \, X^\top(Xw_k - y)\right)$$
+$$
+w_{k+1} = S_{\alpha\lambda}\!\left(w_k - \alpha \, X^\top(Xw_k - y)\right)
+$$
 
 Read it aloud: compute the gradient of the squared error, step downhill by $\alpha$ times it, then soft threshold every entry with threshold $\alpha\lambda$. Use step $\alpha = 1/L$, with $L$ the largest eigenvalue of $X^\top X$. With that step, the lasso loss never goes up.
 
@@ -132,13 +155,18 @@ grad = X.T @ (X @ w - y)
 w = soft_threshold(w - step * grad, step * lam)
 ```
 
+> [!KEY]
+> ISTA is a plain gradient step on the squared error, followed by soft thresholding with threshold $\alpha\lambda$. The threshold is what makes weights exactly zero.
+
 ISTA stands for iterative shrinkage-thresholding algorithm.
 
 ## FISTA: ISTA with momentum
 
 FISTA adds Nesterov's look-ahead from lesson 3. It keeps a look-ahead point $z$, takes the ISTA step from $z$, and updates a momentum counter $t$ that starts at $t_0 = 1$:
 
-$$t_{k+1} = \frac{1 + \sqrt{1 + 4t_k^2}}{2}, \qquad z_{k+1} = w_{k+1} + \frac{t_k - 1}{t_{k+1}}\,(w_{k+1} - w_k)$$
+$$
+t_{k+1} = \frac{1 + \sqrt{1 + 4t_k^2}}{2}, \qquad z_{k+1} = w_{k+1} + \frac{t_k - 1}{t_{k+1}}\,(w_{k+1} - w_k)
+$$
 
 Read it aloud: $t$ grows by about one half each step. The fraction $(t_k - 1)/t_{k+1}$ is the momentum. It starts at 0 and creeps toward 1. The look-ahead point $z$ is the new point plus that fraction of the last move. The ISTA step at each iteration uses the gradient at $z$, not at $w$. Start with $z_0 = w_0$.
 
@@ -147,6 +175,9 @@ w_new = soft_threshold(z - step * X.T @ (X @ z - y), step * lam)
 t_new = (1 + np.sqrt(1 + 4 * t ** 2)) / 2
 z = w_new + ((t - 1) / t_new) * (w_new - w)
 ```
+
+> [!WARNING]
+> Set `w = w_new` and `t = t_new` only after you compute `z`. The momentum term needs the old `w` and the old `t`.
 
 After $k$ steps, ISTA's gap to the best loss shrinks like $1/k$. FISTA's shrinks like $1/k^2$, which is much faster. Unlike ISTA, FISTA's loss can tick up now and then.
 
@@ -165,6 +196,13 @@ Use one feature and two examples: $X = \begin{bmatrix} 1 \\ 2 \end{bmatrix}$ and
 5. The residuals are $(0.8 - 1, 1.6 - 2) = (-0.2, -0.4)$, so the loss is $\tfrac{1}{2}(0.04 + 0.16) + 0.8 = 0.9$.
 
 Check the KKT rule: the gradient at $0.8$ is $1(-0.2) + 2(-0.4) = -1$, and $-1 + 1 \cdot \text{sign}(0.8) = 0$. So $0.8$ is the exact lasso answer. For FISTA's first step, $t_1 = (1 + \sqrt{5})/2 \approx 1.618$ and the momentum is $(1 - 1)/1.618 = 0$, so it matches ISTA.
+
+> [!RECAP]
+> - Ridge solves $(X^\top X + \lambda I)\, w = X^\top y$. The SVD path multiplies coordinate $i$ by $s_i/(s_i^2 + \lambda)$ for every $\lambda$ at once.
+> - The effective degrees of freedom sums $s_i^2/(s_i^2 + \lambda)$. It equals the rank at $\lambda = 0$ and falls toward 0.
+> - Soft thresholding moves each value toward zero by $t$ and stops at zero.
+> - ISTA takes a gradient step of size $1/L$, then thresholds at `step * lam`.
+> - FISTA takes the same step from the look-ahead point $z$, starts with $t_0 = 1$, and records the loss at $w$.
 
 ## Build it step by step
 

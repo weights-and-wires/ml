@@ -103,6 +103,10 @@ pixel to the right moves the output one pixel to the right. Nothing else
 changes. This property is called translation equivariance. It is why a
 convolution finds a cat wherever the cat is.
 
+> [!KEY]
+> A convolution slides one small set of weights over every position. Shifting
+> the input shifts the output by the same amount.
+
 Pooling takes this a step further. Max pooling slides a window over each
 channel and keeps only the largest value in each window. Small shifts inside a
 window then often leave the output unchanged. That is only approximate: a
@@ -168,6 +172,10 @@ r = r + (kernel_size - 1) * jump
 jump *= stride
 ```
 
+> [!WARNING]
+> Grow $r$ first, then update the jump. A layer's own stride affects only the
+> layers above it.
+
 ### Worked example: receptive field
 
 Take three layers with $(k, s)$ equal to $(3, 2)$, $(3, 2)$, and $(3, 1)$:
@@ -180,6 +188,10 @@ Take three layers with $(k, s)$ equal to $(3, 2)$, $(3, 2)$, and $(3, 1)$:
 | 3 | 3 | 1 | 4 | $7 + 2 \times 4 = 15$ | 4 |
 
 Each unit at the top sees a 15-by-15 patch of the input.
+
+> [!KEY]
+> Each layer widens the receptive field by $k - 1$ times the product of all
+> earlier strides. Strides early in the stack make the field grow fastest.
 
 ## Convolution as one matrix multiply
 
@@ -206,6 +218,11 @@ patch at once. Add each output channel's bias to its whole row. The result
 has shape $(C_{\text{out}}, L)$, which you reshape to
 $(C_{\text{out}}, H_{\text{out}}, W_{\text{out}})$.
 
+> [!KEY]
+> im2col turns a convolution into one matrix multiply. Each row of
+> $W_{\text{mat}}$ is a kernel, each column of $\text{col}$ is a patch, and
+> their product applies every kernel to every patch.
+
 ```python
 w_mat = w.reshape(C_out, -1)
 out = np.einsum("oc,ncl->nol", w_mat, col) + b[None, :, None]
@@ -213,6 +230,10 @@ out = np.einsum("oc,ncl->nol", w_mat, col) + b[None, :, None]
 
 Here `np.einsum` does the matrix multiply for every image `n` in the batch.
 You can also loop over the batch and use `@`.
+
+> [!TIP]
+> To read an `einsum` string, find the letters on the left that are missing on
+> the right. Those axes get summed. In `"oc,ncl->nol"`, that is `c`.
 
 ### Building the columns
 
@@ -255,6 +276,17 @@ $d\text{col}$ back into the same strided positions of a zero array the size of
 the padded input. Use `+=`, not `=`, because patches overlap and one input
 pixel feeds several patches. Its gradient is the sum of all of them. Finally,
 cut off the padding.
+
+> [!RECAP]
+> - The output length is
+>   $\lfloor (\text{size} + 2p - (d(k - 1) + 1)) / s \rfloor + 1$.
+> - im2col gives `(N, C * k * k, H_out * W_out)`, built with one strided slice
+>   per kernel offset.
+> - The forward pass is `w.reshape(C_out, -1)` times the columns, plus
+>   `b[None, :, None]`.
+> - The backward pass reuses the rules for $Y = WX$. `db` and `dw` sum over the
+>   batch, and `col2im` adds overlapping patches back with `+=`.
+> - The receptive field starts at 1 and grows by `(k - 1) * jump` per layer.
 
 ## Build it step by step
 

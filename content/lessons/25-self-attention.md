@@ -86,6 +86,10 @@ weights = softmax(scores, axis=-1)        # each row sums to 1
 output = weights @ V                      # (T, d_v)
 ```
 
+> [!TIP]
+> After the softmax, check `np.allclose(weights.sum(axis=-1), 1)`. If it fails,
+> your softmax ran along the wrong axis.
+
 ### Why divide by the square root of d_k
 
 A dot product adds up $d_k$ products. If each query and key entry is a random
@@ -98,6 +102,10 @@ goes to almost 1, and every other weight goes to almost 0. At that point the
 softmax is flat: nudging a score barely changes the output, so the gradient is
 close to zero and learning stalls. Dividing by $\sqrt{d_k}$ brings the typical
 score back to size 1, whatever the width.
+
+> [!KEY]
+> Without the $\sqrt{d_k}$ scale, scores grow with the key width. The softmax
+> then puts almost all its weight on one position, and its gradient vanishes.
 
 ### The softmax, safely
 
@@ -164,6 +172,10 @@ with `heads=1` equals single-head attention followed by $W_O$.
 Splitting into heads costs nothing extra. You do the same projections, and the
 $h$ narrow score tables together take the same work as one wide one.
 
+> [!KEY]
+> Each head runs ordinary attention on its own $d / h$ columns. You get several
+> ideas of similarity for the same number of flops as one wide head.
+
 ## Causal masking
 
 A language model predicts the next word. When it writes word 3, words 4 and
@@ -189,6 +201,10 @@ mask = np.zeros((T, T))
 mask[np.triu_indices(T, k=1)] = -np.inf   # strictly above the diagonal
 ```
 
+> [!WARNING]
+> Use `k=1`, not `k=0`. With `k=0` the diagonal is masked too, so position 0
+> has nothing left to look at and its softmax returns NaN.
+
 For $T = 3$, the mask is
 
 $$
@@ -203,6 +219,10 @@ Why before the softmax and not after? If you zeroed the weights after the
 softmax, the denominator would still include the future positions. The weights
 left behind would sum to less than 1, and the future would still have leaked
 into them through that sum.
+
+> [!KEY]
+> Add the mask to the scores before the softmax. Future positions then get
+> weight exactly 0, and the allowed weights still sum to one.
 
 ## Order doesn't exist yet
 
@@ -228,6 +248,17 @@ backwards through each forward line, one at a time:
 
 The mask has no gradient of its own. Masked positions have weight 0, so their
 `dscores` is 0 too.
+
+> [!RECAP]
+> - Scores are $Q K^{\top} / \sqrt{d_k}$, a $(T_q, T_k)$ table, and the softmax
+>   runs along each row.
+> - Subtract each row's maximum before `np.exp`, so large scores never overflow.
+> - The causal mask is 0 on and below the diagonal and $-\infty$ above it, added
+>   before the softmax.
+> - Multi-head attention slices columns into heads of width $d / h$, attends on
+>   each, concatenates, and multiplies by $W_O$.
+> - The backward pass undoes `weights @ V`, then the softmax, then the scaled
+>   product, keeping the $1 / \sqrt{d_k}$ factor.
 
 ## Build it step by step
 
