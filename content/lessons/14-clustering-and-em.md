@@ -2,14 +2,15 @@
 title: Clustering and expectation maximisation
 slug: 14-clustering-and-em
 part: "Part 2 — Classical machine learning"
-summary: k-means as alternating minimisation, k-means++'s guarantee, and EM derived from the likelihood bound it tightens and loosens.
-minutes: 50
+summary: Group unlabelled points with k-means and k-means++, then fit a Gaussian mixture with EM and see k-means inside it.
+minutes: 60
 gpu: false
 objectives:
-  - State why Lloyd's algorithm never increases the k-means objective and always terminates.
-  - State the k-means++ approximation guarantee and explain why the seeding distribution earns it.
-  - State the ELBO decomposition and use it to explain why EM never decreases the incomplete-data likelihood.
-  - Recover k-means as the zero-variance limit of EM for an isotropic Gaussian mixture.
+  - Compute the k-means objective and run Lloyd's assign-then-update loop.
+  - Build k-means++ seeding and explain why it beats picking centers at random.
+  - Compute E-step responsibilities and the log-likelihood without overflow, using log-sum-exp.
+  - Build the M-step updates for a Gaussian mixture's weights, means, and covariances.
+  - Explain why EM with tiny, equal covariances gives the same groups as k-means.
 prereqs:
   - 13-pca-and-svd
 exercise: 14-clustering-and-em
@@ -17,315 +18,337 @@ exercise: 14-clustering-and-em
 
 # Clustering and expectation maximisation
 
-Every method so far has assumed labels. Clustering asks what the data
-organises itself into when there are none: a partition into $k$ groups,
-chosen to make each group look like a single object. That objective is
-NP-hard to optimise exactly, so every practical algorithm for it is a local
-search with a story about why the local optimum it finds is good enough.
+Every method so far came with labels: for each example, somebody told you the
+right answer. Clustering works without labels. You hand it a pile of points
+and a number $k$, and it splits the points into $k$ groups so that points in
+the same group sit close together.
 
-k-means is the sharpest version of that story: its local search is provably
-monotone, and its seeding rule comes with a provable guarantee. It is also
-a special case of something more general: fitting a Gaussian mixture by
-maximum likelihood. There, group membership is a latent variable, and
-expectation maximisation maximises a likelihood you cannot see all of.
-This lesson derives both, and shows they are the same algorithm at two
-different values of a variance you can send to zero.
+Think of sorting a bag of mixed coins by feel. You do not know the coin names,
+but you can make piles of coins that are alike. k-means does exactly that with
+distances. Expectation maximisation (EM) does a softer version: instead of
+putting each coin in one pile, it says "70% this pile, 30% that pile".
+
+You build both in this lesson. You also see that k-means is a special case of
+EM, so the two ideas are really one idea.
 
 ## What you already know
 
-- The multivariate Gaussian density, and that its log is a negative
-  quadratic form plus a normalising constant depending on the
-  log-determinant of the covariance.
-- Maximum likelihood estimation, and that the sample mean and the sample
-  covariance are the maximum likelihood estimates of a single Gaussian's
-  parameters.
-- Jensen's inequality: for a concave function $\phi$ and a random variable
-  $Z$, $\phi(\mathbb{E}[Z]) \geq \mathbb{E}[\phi(Z)]$.
-- The Kullback-Leibler divergence $\mathrm{KL}(q \Vert p) = \mathbb{E}_q[\log
-  (q/p)]$ is nonnegative, and zero exactly when $q = p$ almost everywhere.
-- A nonconvex optimisation problem can have many local minima with no
-  ordering between them.
+- A data matrix `X` has shape `(n, d)`: $n$ examples, one per row, each with $d$ features.
+- The squared distance between two points is the sum of squared differences of their coordinates.
+- A mean of a group of rows is `X[mask].mean(axis=0)`.
+- A Gaussian (normal) distribution has a mean and a variance, and its density is highest at the mean.
+- Working with logs of probabilities avoids numbers that are too small for a computer to store.
 
 ## The k-means objective
 
-Given points $x_1, \dots, x_n \in \mathbb{R}^d$ and a number of clusters
-$k$, k-means chooses centers $\mu_1, \dots, \mu_k \in \mathbb{R}^d$ and an
-assignment $z_i \in \{1, \dots, k\}$ for each point to minimise
+k-means describes each group by one point, its **center**. A good set of
+centers is one where every point lies close to the center of its group. You
+measure "close" with squared distance and add it up over all points.
+
+Write $c_1, \dots, c_k$ for the centers. Each point $x_i$ has an
+**assignment** $a_i$, the index of its group. The objective is:
 
 $$
-J(\{\mu_j\}, \{z_i\}) = \sum_{i=1}^{n} \lVert x_i - \mu_{z_i} \rVert_2^2 .
+J = \sum_{i=1}^{n} \lVert x_i - c_{a_i} \rVert^2
 $$
 
-This is a joint optimisation over a continuous variable, the centers, and a
-combinatorial one, the assignment. The combinatorial part is what makes it
-hard: finding the partition that minimises $J$ is NP-hard, even for $k=2$
-once the dimension is part of the input. No algorithm is known that solves
-it exactly in polynomial time.
+Read it aloud: for each point $x_i$, look up its center $c_{a_i}$, take the
+difference, square each coordinate, and add. Then add those numbers over all
+$n$ points. $\lVert v \rVert^2$ means the squared length of a vector $v$, the
+sum of its squared entries. Smaller $J$ means tighter groups.
 
-Every practical algorithm settles for a local minimum: an assignment and a
-set of centers that no move it is willing to make can improve. Lloyd's
-algorithm is the standard one.
+In numpy, `centers[assignments]` picks the right center for every row at once:
 
-## Lloyd's algorithm as alternating minimisation
+```python
+diffs = X - centers[assignments]      # (n, d)
+J = np.sum(diffs * diffs)             # a single number
+```
 
-Lloyd's algorithm fixes one of the two variables in $J$ and minimises over
-the other, alternately.
+## Lloyd's algorithm
 
-1. **Assignment step.** With centers $\{\mu_j\}$ fixed, assign each point to
-   its nearest center: $z_i \leftarrow \operatorname{arg\,min}_j \lVert x_i -
-   \mu_j \rVert^2$.
-2. **Update step.** With the assignment fixed, move each center to the mean
-   of its assigned points: $\mu_j \leftarrow \frac{1}{|\{i : z_i = j\}|}
-   \sum_{i : z_i = j} x_i$.
+Finding the very best centers is too hard to do exactly. Lloyd's algorithm
+finds a good answer by repeating two easy steps:
 
-Both steps are exact minimisations of $J$ over the variable they touch, so
-neither can increase $J$. The assignment step sets each point's label to
-minimise that point's own term in the sum. The update step sets each
-center to the unique minimiser of a strictly convex quadratic, the mean.
-The objective sequence is therefore nonincreasing and bounded below by
-zero. It is also a sequence of values of $J$ at one of only finitely many
-possible partitions of $n$ points into $k$ groups, so it must eventually
-repeat a value. At that point, the algorithm has reached a fixed point and
-terminates. Breaking ties in the assignment step by a fixed
-rule rules out oscillating between two equally good assignments. Nothing
-about this argument says the point reached is the global minimum, and in
-practice it usually is not.
+1. **Assign.** Put every point in the group of its nearest center.
+2. **Update.** Move every center to the mean of the points in its group.
+
+Each step can only lower $J$ or leave it the same. The assign step picks the
+closest center for each point, which is the best choice for fixed centers. The
+update step picks the mean, which is the point with the smallest total squared
+distance to a group. So $J$ never goes up, and because there are finitely
+many ways to split the points, the loop eventually stops changing.
+
+To find the nearest center fast, expand the squared distance:
+
+$$
+\lVert x - c \rVert^2 = \lVert x \rVert^2 - 2\, x \cdot c + \lVert c \rVert^2
+$$
+
+Read it aloud: the squared distance is the point's squared length, minus twice
+the dot product of point and center, plus the center's squared length. The
+first term is the same for every center, so it cannot change which center
+wins. You can drop it and compare only the other two terms:
+
+```python
+scores = np.sum(centers**2, axis=1)[None, :] - 2 * X @ centers.T   # (n, k)
+assignments = np.argmin(scores, axis=1)                             # (n,)
+```
+
+### Worked example by hand
+
+Take four points on a line, $x = 0, 1, 4, 5$, with $k = 2$ and starting
+centers $c_1 = 0$ and $c_2 = 1$. Groups are numbered 0 and 1, as in code.
+
+| Step | Centers | Assignments | $J$ |
+|---|---|---|---|
+| Start | 0, 1 | 0, 1, 1, 1 | $0 + 0 + 9 + 16 = 25$ |
+| Iteration 1 | 0, 3.333 | 0, 0, 1, 1 | $0 + 1 + 0.444 + 2.778 = 4.222$ |
+| Iteration 2 | 0.5, 4.5 | 0, 0, 1, 1 | $0.25 \times 4 = 1.0$ |
+| Iteration 3 | 0.5, 4.5 | 0, 0, 1, 1 | $1.0$, unchanged, so stop |
+
+In iteration 1, the second center moves to $(1 + 4 + 5)/3 = 3.333$. Point 1
+is then closer to 0 than to 3.333, so it switches groups. The history your
+code returns for this example is `[25.0, 4.222, 1.0, 1.0]`.
 
 ## k-means++ seeding
 
-Local search is only as good as where it starts. Uniform random seeding, or
-choosing $k$ data points as the initial centers, can lock Lloyd's algorithm
-into a bad partition before it runs a single iteration. Two centers can
-land in the same true cluster, leaving another with none, and alternating
-minimisation only ever refines that mistake.
+Lloyd's algorithm only finds a local answer, and where it ends up depends on
+where the centers start. If you pick starting centers at random, two of them
+often land in the same true cluster, and one real cluster gets no center.
 
-k-means++ fixes the seeding distribution instead of the algorithm. It
-chooses the first center uniformly at random from the data, then chooses
-each subsequent center from the remaining points with probability
-proportional to its squared distance to the nearest center already chosen:
+k-means++ fixes this by spreading the starting centers out. It picks the first
+center as a random data point. Then, for each point, it measures $D(x)$, the
+distance to the nearest center chosen so far. It picks the next center with
+probability:
 
 $$
-\Pr[\text{choose } x_i \text{ next}] = \frac{D(x_i)^2}{\sum_{i'} D(x_{i'})^2},
-\qquad D(x_i) = \min_{j \text{ chosen}} \lVert x_i - \mu_j \rVert .
+p(x_i) = \frac{D(x_i)^2}{\sum_{j=1}^{n} D(x_j)^2}
 $$
 
-Points far from every existing center are likelier to be chosen, which
-spreads the initial centers across the clusters. This change comes with a
-guarantee uniform seeding has none of: if $J^\star$ is the global minimum of
-the k-means objective, the expected objective after k-means++ seeding alone,
-before any Lloyd iteration, satisfies
+Read it aloud: a point's chance of being picked is its squared distance to the
+nearest chosen center, divided by the total of those squared distances. Far
+away points are much more likely to be picked. Points that are already centers
+have $D = 0$, so they are never picked again.
+
+This rule comes with a guarantee: on average, the objective after seeding is
+within a factor of about $8(\ln k + 2)$ of the best possible objective. Random
+seeding has no such promise.
+
+In numpy, keep a running array of squared distances and shrink it with
+`np.minimum` each time you add a center:
+
+```python
+probs = sq_dist / sq_dist.sum()
+idx = rng.choice(n, p=probs)
+sq_dist = np.minimum(sq_dist, np.sum((X - X[idx])**2, axis=1))
+```
+
+## Gaussian mixtures: soft clusters
+
+k-means gives every point exactly one group. A **Gaussian mixture model**
+(GMM) says instead that each group is a Gaussian "blob" with its own center,
+shape, and size, and every point came from one blob that you did not see.
+
+A mixture with $k$ components has three sets of parameters:
+
+- **Weights** $\pi_j$: the fraction of points that come from blob $j$. They add up to 1.
+- **Means** $\mu_j$: the center of blob $j$, shape `(d,)`.
+- **Covariances** $\Sigma_j$: a `(d, d)` matrix that sets the blob's spread and tilt.
+
+The density of one Gaussian at a point $x$, written in log form, is:
 
 $$
-\mathbb{E}[J] \leq 8(\ln k + 2)\, J^\star .
+\log \mathrm{N}(x; \mu, \Sigma) = -\tfrac{1}{2}\left( d \log(2\pi) + \log\det\Sigma + (x-\mu)^\top \Sigma^{-1} (x-\mu) \right)
 $$
 
-The bound grows only logarithmically in $k$; uniform seeding has no such
-bound, and an adversarial cluster configuration can make it arbitrarily bad
-relative to $J^\star$. Running Lloyd's algorithm to convergence afterward
-only decreases $J$ further, so the bound carries over to the local minimum
-the full algorithm reaches. The result is due to Arthur and Vassilvitskii;
-its proof is a counting argument this lesson does not reproduce.
+Read it aloud: start from a constant that depends on the dimension $d$, add the
+log of the determinant of $\Sigma$ (a bigger blob has a bigger determinant and
+a lower peak), and add the squared distance from $x$ to $\mu$, measured in the
+blob's own units. Multiply the total by $-\frac{1}{2}$. The `solution.py` file
+computes it with `np.linalg.slogdet` and `np.linalg.inv`.
 
-## Gaussian mixtures and the likelihood you cannot see
+```python
+sign, logdet = np.linalg.slogdet(cov)
+maha = np.einsum("ij,jk,ik->i", X - mean, np.linalg.inv(cov), X - mean)
+log_pdf = -0.5 * (d * np.log(2 * np.pi) + logdet + maha)       # (n,)
+```
 
-k-means commits to a hard assignment: every point belongs to exactly one
-cluster. A Gaussian mixture model softens that commitment into a
-probability distribution and asks for the maximum likelihood parameters
-instead of the minimum-distortion partition.
+## The E-step: who owns each point
 
-Introduce a latent variable $z_i \in \{1, \dots, k\}$ for each point, with
-$\Pr[z_i = j] = \pi_j$, $\sum_j \pi_j = 1$, and $x_i \mid z_i = j \sim
-\mathcal{N}(\mu_j, \Sigma_j)$. Marginalising $z_i$ out gives the mixture
-density $p(x_i \mid \theta) = \sum_{j=1}^{k} \pi_j\, \mathcal{N}(x_i;
-\mu_j, \Sigma_j)$, with $\theta = \{\pi_j, \mu_j, \Sigma_j\}_{j=1}^{k}$. The
-**incomplete-data log-likelihood**, incomplete because $z$ is never
-observed, is
+EM repeats two steps, like Lloyd's algorithm. The **E-step** (expectation)
+works out, for every point, how likely it is that each blob produced it. These
+numbers are the **responsibilities** $r_{ij}$. Each row adds up to 1.
 
 $$
-\ell(\theta) = \sum_{i=1}^{n} \log \sum_{j=1}^{k} \pi_j\, \mathcal{N}(x_i;
-\mu_j, \Sigma_j) .
+r_{ij} = \frac{\pi_j \, \mathrm{N}(x_i; \mu_j, \Sigma_j)}{\sum_{l=1}^{k} \pi_l \, \mathrm{N}(x_i; \mu_l, \Sigma_l)}
 $$
 
-The sum sits inside the log, which is exactly the structure that makes
-maximum likelihood easy for a single Gaussian and hard for a mixture.
-There is no closed form for the $\theta$ that maximises $\ell$, and $\ell$
-is not concave in $\theta$. Had $z$ been observed, the **complete-data
-log-likelihood** $\log p(x, z \mid \theta) = \sum_i (\log \pi_{z_i} + \log
-\mathcal{N}(x_i; \mu_{z_i}, \Sigma_{z_i}))$ would separate over components
-and reduce to $k$ independent weighted Gaussian fits, each with a closed
-form. EM gets the benefit of that closed form without observing $z$.
+Read it aloud: take blob $j$'s weight times its density at $x_i$. Divide by the
+same quantity added up over all blobs. The top is "how well blob $j$ explains
+this point", and the bottom makes the row sum to 1.
 
-## The EM derivation
-
-Fix a distribution $q_i(z_i)$ over each point's latent label, write $q$ for
-the collection, and define the **evidence lower bound**, or ELBO,
+The bottom of that fraction is also the mixture's density at $x_i$. The
+**log-likelihood** is the sum of its log over all points:
 
 $$
-\mathcal{L}(q, \theta) = \sum_{i=1}^{n} \sum_{z_i} q_i(z_i) \log
-\frac{p(x_i, z_i \mid \theta)}{q_i(z_i)} .
+\log L = \sum_{i=1}^{n} \log \sum_{j=1}^{k} \pi_j \, \mathrm{N}(x_i; \mu_j, \Sigma_j)
 $$
 
-An algebraic identity connects it to the log-likelihood exactly:
-$\log p(x \mid \theta) = \mathcal{L}(q, \theta) + \mathrm{KL}\big(q(z)
-\,\Vert\, p(z \mid x, \theta)\big)$, for **every** $q$, not only a
-well-chosen one. Since $\mathrm{KL} \geq 0$ always, $\mathcal{L}(q, \theta)
-\leq \log p(x \mid \theta)$: the ELBO lower-bounds the log-likelihood, with
-a gap equal to a KL divergence.
+Read it aloud: for each point, add up weight times density over all blobs,
+take the log, and add over points. Higher means the mixture fits the data
+better.
 
-**The E-step closes the gap.** Fixing $\theta$, maximising
-$\mathcal{L}(q,\theta)$ over $q$ minimises that KL divergence, because
-$\log p(x\mid\theta)$ does not depend on $q$, and the divergence is zero
-exactly when $q_i(z_i)$ equals the posterior $p(z_i \mid x_i, \theta)$. The
-optimal $q$ is the **responsibility**
+### Stay in log space with log-sum-exp
+
+Densities can be astronomically small, such as $e^{-1000}$, which a computer
+rounds to 0. Then you divide 0 by 0. The fix is the **log-sum-exp** trick.
+Store $s_{ij} = \log \pi_j + \log \mathrm{N}(x_i; \mu_j, \Sigma_j)$. For each
+row, subtract its largest value $m_i$ before exponentiating:
 
 $$
-q_i^\star(j) = \gamma_{ij} = p(z_i = j \mid x_i, \theta) = \frac{\pi_j\,
-\mathcal{N}(x_i; \mu_j, \Sigma_j)}{\sum_{j'} \pi_{j'}\, \mathcal{N}(x_i;
-\mu_{j'}, \Sigma_{j'})} ,
+\log \sum_j e^{s_{ij}} = m_i + \log \sum_j e^{s_{ij} - m_i}
 $$
 
-and at $q^\star$ the bound is tight: $\mathcal{L}(q^\star, \theta) = \log
-p(x \mid \theta)$ exactly.
+Read it aloud: pull the biggest term out front, then every shifted exponent is
+at most 0, so the largest shifted term is exactly 1 and nothing overflows or
+vanishes.
 
-**The M-step cannot decrease the likelihood.** With $q = q^\star$ fixed at
-$\theta^{\text{old}}$, the M-step maximises $\mathcal{L}(q^\star, \theta)$
-to get $\theta^{\text{new}}$, giving the chain
+```python
+m = s.max(axis=1, keepdims=True)          # (n, 1)
+shifted = np.exp(s - m)                   # (n, k)
+row_sums = shifted.sum(axis=1, keepdims=True)
+resp = shifted / row_sums                 # rows sum to 1
+log_lik = np.sum(m[:, 0] + np.log(row_sums[:, 0]))
+```
 
-$$
-\log p(x \mid \theta^{\text{old}}) \;=\; \mathcal{L}(q^\star,
-\theta^{\text{old}}) \;\leq\; \mathcal{L}(q^\star, \theta^{\text{new}})
-\;\leq\; \log p(x \mid \theta^{\text{new}}) .
-$$
+### Worked example by hand
 
-The first equality is the E-step closing the gap, the middle inequality is
-the M-step's maximisation, and the last is the general ELBO bound applied
-where the gap is no longer zero. The conclusion holds regardless of how
-tight the middle inequality is: EM never decreases the incomplete-data
-likelihood, for any model where both steps are exact. Nothing here depends
-on the mixture being Gaussian; only the M-step's closed form does.
+One point $x = 1$ in one dimension. Two blobs with means 0 and 4, variance 1,
+and weights 0.5 each. Here $\log(2\pi) = 1.8379$ and $\log 0.5 = -0.6931$.
 
-## The M-step in closed form
+- Blob 0: $\log\mathrm{N} = -0.5(1.8379 + 0 + 1^2) = -1.4189$, so $s_0 = -2.1121$.
+- Blob 1: $\log\mathrm{N} = -0.5(1.8379 + 0 + 3^2) = -5.4189$, so $s_1 = -6.1121$.
+- The row maximum is $m = -2.1121$. Shifted exponentials: $e^{0} = 1$ and $e^{-4} = 0.01832$. Their sum is $1.01832$.
+- Responsibilities: $1/1.01832 = 0.9820$ and $0.01832/1.01832 = 0.0180$.
+- Log-likelihood: $-2.1121 + \log 1.01832 = -2.1121 + 0.0182 = -2.0939$.
 
-Maximising $\mathcal{L}(q^\star, \theta) = \sum_i \sum_j \gamma_{ij} \big(
-\log \pi_j + \log \mathcal{N}(x_i; \mu_j, \Sigma_j) \big)$ over $\theta$,
-subject to $\sum_j \pi_j = 1$, separates into three independent problems,
-each solved by setting a gradient (or a Lagrangian's gradient, for the
-weights) to zero:
+## The M-step: refit each blob
+
+The **M-step** (maximisation) treats the responsibilities as fixed and refits
+each blob. It is a weighted version of "average the points in the group".
+Point $i$ counts as $r_{ij}$ of a point in blob $j$.
+
+First count how many points each blob owns, in soft terms:
+$N_j = \sum_i r_{ij}$. Then:
 
 $$
 \pi_j = \frac{N_j}{n}, \qquad
-\mu_j = \frac{1}{N_j} \sum_{i=1}^{n} \gamma_{ij}\, x_i, \qquad
-\Sigma_j = \frac{1}{N_j} \sum_{i=1}^{n} \gamma_{ij} (x_i - \mu_j)(x_i -
-\mu_j)^\top ,
+\mu_j = \frac{1}{N_j} \sum_{i=1}^{n} r_{ij}\, x_i, \qquad
+\Sigma_j = \frac{1}{N_j} \sum_{i=1}^{n} r_{ij}\, (x_i - \mu_j)(x_i - \mu_j)^\top + \epsilon I
 $$
 
-where $N_j = \sum_i \gamma_{ij}$. Every update is a responsibility-weighted
-version of the ordinary Gaussian maximum likelihood estimate: the same mean
-and covariance formulas, weighted by how much of each point's probability
-mass the E-step assigned to that component. This is the closed form the
-complete-data likelihood would give if $z$ had been observed, with the
-indicator $\mathbb{1}[z_i = j]$ replaced by its expectation $\gamma_{ij}$.
+Read it aloud, one piece at a time:
 
-## k-means as the zero-variance limit of EM
+- The weight is the blob's share of the $n$ points.
+- The mean is the responsibility-weighted average of the points.
+- The covariance is the weighted average of each point's outer product with itself, after subtracting the blob's updated mean. $(v)(v)^\top$ is a `(d, d)` matrix, the **outer product**.
+- $\epsilon I$ adds a small number `reg_covar` to the diagonal. It stops a blob from collapsing onto one point and becoming impossible to invert.
 
-Restrict the mixture to a shared isotropic covariance, $\Sigma_j = \sigma^2
-I$ for every $j$, and inspect the responsibility as $\sigma \to 0$.
-Comparing components $j$ and $j'$ for a fixed point $x_i$, the log-ratio of
-their responsibilities is a constant (from the mixing weights) minus a term
-proportional to $\big(\lVert x_i - \mu_j \rVert^2 - \lVert x_i - \mu_{j'}
-\rVert^2\big) / \sigma^2$. If component $j$ is strictly closer to $x_i$,
-that term diverges to $+\infty$ as $\sigma \to 0$. As a result, $\gamma_{ij}
-\to 1$ for the nearest component and $\gamma_{ij'} \to 0$ for every other.
-The E-step hardens into exactly the k-means assignment rule,
-$z_i = \operatorname{arg\,min}_j \lVert x_i - \mu_j \rVert^2$.
+```python
+n_k = resp.sum(axis=0)                            # (k,)
+weights = n_k / n
+means = (resp.T @ X) / n_k[:, None]               # (k, d)
+diff = X - means[j]                               # (n, d)
+cov_j = (resp[:, j][:, None] * diff).T @ diff / n_k[j] + reg_covar * np.eye(d)
+```
 
-With hardened responsibilities, $N_j \to |\{i : z_i = j\}|$ and the M-step
-mean update converges to $\frac{1}{|\{i:z_i=j\}|} \sum_{i:z_i=j} x_i$ —
-exactly Lloyd's update step. The covariance update degenerates to zero
-within each hardened cluster, consistent with having sent $\sigma \to 0$
-rather than something the data determines. k-means is not an approximation
-to this limit. It is the limit, with the variance held at zero throughout
-rather than annealed there.
+### Worked example by hand
+
+Three points $x = 0, 1, 4$ and blob 0 with responsibilities $r = 1, 0.5, 0$.
+Set $\epsilon = 0$ for the example.
+
+- $N_0 = 1 + 0.5 + 0 = 1.5$, so $\pi_0 = 1.5 / 3 = 0.5$.
+- $\mu_0 = (1 \cdot 0 + 0.5 \cdot 1 + 0 \cdot 4) / 1.5 = 0.3333$.
+- $\Sigma_0 = (1 \cdot 0.3333^2 + 0.5 \cdot 0.6667^2) / 1.5 = (0.1111 + 0.2222) / 1.5 = 0.2222$.
+
+### Why EM keeps improving
+
+Each full round of E-step then M-step never lowers the log-likelihood. In words:
+the E-step builds a lower bound on the log-likelihood that touches it exactly
+at the current parameters. The M-step pushes that bound up. Since the true
+curve sits above the bound, it rises at least as much. Your `fit_gmm` history
+should never decrease.
+
+## k-means is EM with tiny blobs
+
+Give every blob the same weight and the same covariance $\sigma^2 I$, a round
+blob of variance $\sigma^2$. Then the responsibility of blob $j$ depends only
+on the squared distance to $\mu_j$, divided by $2\sigma^2$. As $\sigma^2$
+shrinks toward 0, the nearest blob's term dominates everything else, and its
+responsibility goes to 1. Every point then belongs fully to its nearest
+center, which is the k-means assign step. The M-step with 0-or-1
+responsibilities is the k-means update step. One of the checks runs your
+E-step with $\sigma^2 = 10^{-6}$ and compares the `argmax` of each row to
+Lloyd's assignments.
+
+## Build it step by step
+
+Build the functions in this order, which matches the checks.
+
+1. **`kmeans_objective(X, centers, assignments)`.** Takes `X` `(n, d)`, `centers` `(k, d)`, and integer `assignments` `(n,)`. Returns a Python float. Index with `centers[assignments]`, subtract, square, and `np.sum`. Common mistake: returning the mean instead of the sum, or returning a numpy scalar instead of `float(...)`.
+2. **`lloyd(X, k, init, iters)`.** Copy `init` so you do not change the caller's array. Assign once and record the objective. Then loop up to `iters` times: update each center to `X[assignments == j].mean(axis=0)`, reassign, append the objective, and `break` when the last two history values are equal. Return `(centers, assignments, history)`. Common mistake: averaging an empty group, which gives `NaN`. Skip the update when a group has no points, so it keeps its old center.
+3. **`kmeans_plusplus_init(X, k, rng)`.** Pick the first index with `rng.integers(n)`. Keep `sq_dist` `(n,)` for the distance to the nearest chosen center. For each later center, normalise to `probs`, call `rng.choice(n, p=probs)`, and update `sq_dist` with `np.minimum`. Returns `(k, d)`. Common mistake: using plain distance instead of squared distance, or recomputing distances to all centers every time. If `sq_dist.sum()` is 0, fall back to uniform probabilities.
+4. **`gmm_e_step(X, means, covs, weights)`.** Build `s` of shape `(n, k)` with one column per blob: `np.log(weights[j])` plus the log density. Apply log-sum-exp row by row. Return `(responsibilities, log_likelihood)`, with the log-likelihood as a float. Common mistake: exponentiating before subtracting the row maximum, which turns far-away blobs into `0 / 0`.
+5. **`gmm_m_step(X, responsibilities, reg_covar)`.** Compute `n_k`, then weights `(k,)`, means `(k, d)`, and covariances `(k, d, d)` with a loop over `j`. Common mistake: subtracting the old mean instead of the updated one, or forgetting `reg_covar * np.eye(d)`.
+6. **`fit_gmm(X, k, iters, rng, reg_covar)`.** Start the means with `kmeans_plusplus_init`. Start every covariance as `np.var(X, axis=0).mean() * np.eye(d)` and the weights as `np.full(k, 1/k)`. Run one E-step and record its log-likelihood. Then run `iters` rounds of M-step then E-step, recording each. The history has length `iters + 1`. Common mistake: running the M-step first on responsibilities that do not exist yet.
 
 ## Cost and scaling
 
-Let $n$ be the number of points, $d$ the dimension, and $k$ the number of
-clusters or components.
+Each iteration touches every point once for every cluster. The table shows
+the cost of one iteration.
 
-| Step | Flops per iteration | Notes |
+| Step | Time | Memory |
 |---|---|---|
-| k-means assignment | $O(nkd)$ | A distance to every center for every point. |
-| k-means update | $O(nd)$ | One pass to accumulate sums per cluster. |
-| k-means++ seeding | $O(nkd)$ | One distance-update pass per center chosen. |
-| GMM E-step | $O(nkd^2)$ | The Mahalanobis form costs $O(d^2)$ per point per component with $\Sigma_j^{-1}$ precomputed, plus $O(kd^3)$ once per iteration to invert every $\Sigma_j$. |
-| GMM M-step | $O(nkd^2)$ | The covariance update is an outer product accumulated for every point and component. |
+| k-means assign | about $n \cdot k \cdot d$ | the `(n, k)` score matrix |
+| k-means update | about $n \cdot d$ | the `(k, d)` centers |
+| k-means++ seeding (all $k$ centers) | about $n \cdot k \cdot d$ | one `(n,)` distance array |
+| GMM E-step | about $n \cdot k \cdot d^2$, plus $k \cdot d^3$ to invert | the `(n, k)` responsibilities |
+| GMM M-step | about $n \cdot k \cdot d^2$ | `k` covariance matrices, $k \cdot d^2$ numbers |
 
-k-means is cheaper than EM for a full-covariance mixture by a factor of
-$d$, because it never forms a $d \times d$ matrix. That gap is why k-means
-remains the default first pass even when the eventual model is a mixture:
-its output, or the zero-variance limit's assignment directly, seeds
-$\{\mu_j\}$ before turning the covariance back on. Both algorithms are
-linear in $n$ per iteration, so the number of iterations to convergence,
-not the per-iteration cost, dominates at scale.
+Doubling $n$ doubles the work. The GMM's full covariances get expensive as $d$
+grows, because each one has $d^2$ entries. With many features, people use
+diagonal covariances, which cost only $d$ numbers each.
 
 ## Where this breaks
 
-**The likelihood surface is unbounded above.** Let one component's mean
-coincide with a single data point, and let its covariance shrink toward
-zero along any path that keeps it positive definite. The density diverges,
-because the normalising constant carries a factor of
-$\det(\Sigma_j)^{-1/2}$. As a result, the incomplete-data likelihood has no
-finite maximiser. EM rarely walks into this from a reasonable start, but it
-happens whenever a component's effective sample size drifts toward one
-during iteration. The standard defenses are a floor on the eigenvalues of
-$\Sigma_j$ and a check that discards any run where a component's weight
-falls below a minimum count. Another option is a Bayesian prior over
-$\Sigma_j$ that removes the incentive to collapse onto a point.
+**You must choose $k$.** Neither method tells you how many groups exist. Try
+several values and compare, for example with the log-likelihood on held-out
+data, or look for the value of $k$ where the k-means objective stops dropping
+quickly.
 
-**Non-convex clusters.** Both algorithms fit each component with a single
-mean, assuming clusters are convex and, for k-means, roughly spherical.
-Two clusters shaped like nested rings are not separable by
-nearest-centroid assignment no matter how it is initialised. Spectral
-clustering, which runs k-means on the eigenvectors of a graph Laplacian
-rather than on the raw coordinates, is the standard response.
+**Local optima.** Both methods can get stuck in a poor answer. Run them from
+several random seeds and keep the best result.
 
-**Choosing $k$.** Neither algorithm says how many clusters there are. $J$
-and $\ell$ both improve, weakly, as $k$ grows, per the unbounded-likelihood
-point above. Practitioners use a penalised criterion such as the Bayesian
-information criterion, the elbow of $J$ against $k$, or a nonparametric
-alternative such as a Dirichlet process mixture that treats $k$ as a random
-variable.
+**k-means likes round, equal-sized groups.** It uses plain distance, so long,
+thin, or very unequal clusters get cut in the wrong places. A GMM with full
+covariances handles stretched blobs better.
 
-**Sensitivity to scale.** k-means minimises Euclidean distance, so a
-feature measured in different units dominates the objective for reasons
-unrelated to cluster structure. Standardise features first, as in linear
-regression, or use a Mahalanobis distance, which for a shared covariance is
-what a GMM with tied $\Sigma_j = \Sigma$ effectively does.
+**A GMM blob can collapse.** If one blob shrinks onto a single point, its
+density there grows without limit and the log-likelihood shoots to infinity.
+The `reg_covar` term on the diagonal prevents this.
 
-**Local minima in high dimension.** The number of distinct local minima of
-$J$ grows quickly with $d$ and $k$. Lloyd's algorithm gives no guarantee
-about which one it lands in beyond k-means++'s bound on the starting
-point. Running the pipeline from several independent k-means++
-seeds and keeping the lowest-$J$ run is standard practice, not a
-workaround.
+**Features on different scales.** A feature measured in thousands dominates
+one measured in fractions. Standardise each feature before clustering.
 
 ## The exercise
 
-You implement `kmeans_objective`, `lloyd(X, k, init, iters)`, and
-`kmeans_plusplus_init(X, k, rng)`, then `gmm_e_step`, `gmm_m_step`, and
-`fit_gmm` for a Gaussian mixture with full covariance per component.
-`lloyd` returns the history of the objective at every iteration, and
-`fit_gmm` returns the history of the log-likelihood. Both monotone
-properties derived above are therefore things the checks can see directly.
+You implement `kmeans_objective`, `lloyd`, `kmeans_plusplus_init`,
+`gmm_e_step`, `gmm_m_step`, and `fit_gmm` in `starter.py`.
 
-The checks verify the objective on a hand-computed example, and that
-Lloyd's objective never increases across iterations on a synthetic
-dataset. They verify that k-means++ seeding beats uniform seeding on
-average over several seeds on a planted five-cluster problem, and that the
-E-step's responsibilities sum to one per point and its log-likelihood
-matches a direct log-sum-exp computation. They also verify that the M-step
-recovers the ordinary sample mean and covariance when the responsibilities
-are hardened onto a single component, and that EM's log-likelihood never
-decreases and improves substantially over its iterations. Finally, they
-verify that hardening the E-step with a shared, near-zero isotropic
-covariance reproduces Lloyd's own assignment exactly.
+The checks confirm that the objective sums squared distances, that Lloyd's
+history never increases, and that k-means++ seeding beats uniform seeding on
+planted clusters. They check that responsibilities sum to one per point, that
+your log-likelihood matches a direct log-sum-exp, and that the M-step recovers
+the mean and covariance. Finally, they confirm that EM's log-likelihood never
+decreases and that EM with tiny, equal covariances assigns every point exactly
+as Lloyd's algorithm does.

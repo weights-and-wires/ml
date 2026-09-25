@@ -2,14 +2,14 @@
 title: Initialisation and normalisation
 slug: 18-initialisation-and-norm
 part: "Part 3 — Neural networks"
-summary: The scale that keeps a deep network's signal from vanishing or exploding, and the normalisation layers that stop relying on getting it right.
-minutes: 50
+summary: Pick starting weights that keep a deep network's signal steady, then build batch norm and layer norm to keep it that way.
+minutes: 65
 gpu: false
 objectives:
-  - Derive Xavier and He initialisation from the variance a deep linear stack needs to stay flat.
-  - Quantify what a wrong initialisation scale does to signal magnitude after fifty layers.
-  - Implement the forward and backward pass of batch normalisation and layer normalisation.
-  - Explain why layer normalisation removes the batch-size dependence batch norm has, and why residual connections give gradients a path that bypasses depth entirely.
+  - Compute the Xavier and He weight scales, and explain which activation each suits.
+  - Build a simulation that measures how signal size changes through fifty layers.
+  - Build the forward and backward passes of batch normalisation and layer normalisation.
+  - Explain why layer norm does not depend on the batch and batch norm does.
 prereqs:
   - 15-multilayer-perceptrons
   - 16-backpropagation
@@ -18,234 +18,314 @@ exercise: 18-initialisation-and-norm
 
 # Initialisation and normalisation
 
-A network's weights start at random values before a single gradient step
-runs. A forward pass through fifty or a hundred layers is then a product of
-fifty or a hundred random matrices. Lesson 15 built that forward pass and
-lesson 16 the gradient that trains it, but neither says what happens to a
-signal repeatedly multiplied by matrices whose scale you chose. Get that
-scale wrong, and depth stops being an asset: activations vanish or blow up
-before training starts, and the gradient that would fix them vanishes or
-blows up right along with them.
+Before training starts, every weight in a network needs a value. You pick them
+at random. How large those random numbers are turns out to matter a great
+deal. Too small, and the signal shrinks a little at every layer until nothing
+reaches the end. Too large, and it grows until the numbers overflow.
 
-This lesson derives the initialisation scale that keeps a signal's variance
-flat across depth, first for a linear layer and then for a network with
-ReLU. That scale is fragile: it depends on assumptions that training breaks
-within a few steps. Batch normalisation and layer normalisation respond by
-renormalising the signal at every layer instead, so survival no longer
-depends on choosing the right scale at all. The lesson ends with residual
-connections, which solve the same problem for the gradient directly, by
-giving it a path through the network that skips every layer's Jacobian.
+In a shallow network you barely notice. In a network with fifty layers, a
+shrink of 30% per layer leaves almost nothing: $0.7^{50}$ is about one in
+fifty million. The gradients shrink the same way on the way back, so the early
+layers never learn.
+
+This lesson has two halves. First you work out the right starting scale, and
+you confirm it with a simulation. Then you build normalisation layers, which
+rescale the signal inside the network so that a slightly wrong starting scale
+stops mattering.
 
 ## What you already know
 
-- A linear layer computes $h = Wx$, and backpropagation needs
-  $\partial h/\partial W$ and $\partial h/\partial x$ (lesson 16).
-- For independent, zero-mean random variables, the variance of a sum is the
-  sum of the variances.
-- ReLU is $\max(0, z)$, and for $z$ symmetric about zero, half its mass sits
-  on each side.
-- A Jacobian composes multiplicatively along a computation path: the
-  gradient at an early layer is a product of every later layer's Jacobian.
-- A multilayer perceptron stacks affine layers and pointwise nonlinearities
-  (lesson 15).
+- A linear layer computes $h \, W$, where each output is a weighted sum of the inputs.
+- ReLU sets negative values to zero and keeps positive ones.
+- The variance of a set of numbers is the average squared distance from their mean.
+- Backpropagation passes gradients from the output back through every layer.
+- A gradient can be checked against a finite difference.
 
-## The variance a deep stack needs
+## Why the scale of the weights matters
 
-Consider a stack of layers $h^{(l)} = W^{(l)} h^{(l-1)}$, where each
-$W^{(l)}$ has entries drawn independently from a zero-mean distribution, and
-$h^{(l-1)}$'s components are independent of each other and of $W^{(l)}$. Each
-output unit sums $n_{l-1}$ independent products, so its variance scales with
-the number of inputs it sums over:
+Think of a line of people passing a message by whispering. If each person
+whispers a little quieter than they heard, the message fades out by the end of
+the line. If each speaks a little louder, it turns into shouting. You want each
+person to pass it on at the same volume.
 
-$$
-\operatorname{Var}\big(h^{(l)}\big) = n_{l-1}\,\operatorname{Var}(W)\,\operatorname{Var}\big(h^{(l-1)}\big) .
-$$
-
-The signal's variance stays flat across depth exactly when
-$n_{l-1}\operatorname{Var}(W) = 1$; any other value compounds it
-geometrically, layer after layer. The gradient obeys a mirror recursion
-running backward, which wants $n_l\operatorname{Var}(W) = 1$ instead. The two
-targets agree only when every layer has the same width. **Xavier
-initialisation** (Glorot and Bengio) accepts that both cannot hold exactly
-and compromises:
+In a network, "volume" is the variance of the activations. Take one layer with
+$n_{\text{in}}$ inputs. Each output is a sum of $n_{\text{in}}$ terms, each an
+input times a weight. Suppose the inputs have variance 1 and the weights are
+drawn with mean 0 and standard deviation $s$. Then each output has variance
 
 $$
-\operatorname{Var}(W) = \frac{2}{n_{\text{in}} + n_{\text{out}}} .
+\text{Var}(\text{output}) = n_{\text{in}} \, s^2 \cdot \text{Var}(\text{input})
 $$
+
+Read it aloud: the output variance is the number of inputs, times the weight
+variance $s^2$, times the input variance. A sum of $n_{\text{in}}$ independent
+terms has $n_{\text{in}}$ times the variance of one term, and each term has
+variance $s^2 \cdot \text{Var}(\text{input})$.
+
+To keep the variance the same from layer to layer, you need
+$n_{\text{in}} \, s^2 = 1$. Any other value multiplies the variance by that
+factor at every layer, and fifty layers raise it to the fiftieth power.
+
+```python
+h = rng.normal(size=(num_trials, n_in))        # variance 1
+W = rng.normal(scale=s, size=(n_in, n_out))
+print(np.mean((h @ W) ** 2), n_in * s**2)       # these agree
+```
+
+### Xavier initialisation
+
+Xavier (also called Glorot) initialisation balances the forward and backward
+pass. The forward pass wants $n_{\text{in}} s^2 = 1$, and the backward pass
+wants $n_{\text{out}} s^2 = 1$. Xavier takes the compromise:
+
+$$
+s_{\text{Xavier}} = \sqrt{\frac{2}{n_{\text{in}} + n_{\text{out}}}}
+$$
+
+Read it aloud: the standard deviation is the square root of 2 over the sum of
+the number of inputs and outputs. When the two are equal, this is
+$\sqrt{1 / n_{\text{in}}}$, exactly what the forward pass needs. It suits
+activations that are close to linear near zero, such as tanh.
+
+```python
+s = np.sqrt(2.0 / (n_in + n_out))
+```
 
 ### He initialisation
 
-Xavier's derivation assumes a linear layer. A ReLU changes the recursion,
-because it zeroes roughly half of every pre-activation: for a pre-activation
-symmetric about zero, $\mathbb E[\max(0,z)^2] = \tfrac12\mathbb E[z^2]$, so a
-ReLU layer's mean-square activation is half of what the linear recursion
-above predicts. Preserving variance forward through a ReLU network needs
-double the weight variance a linear network would use:
+ReLU throws away the negative half of its input. That halves the average
+squared value, so each ReLU layer multiplies the signal's size by
+$n_{\text{in}} s^2 / 2$. He initialisation doubles the weight variance to
+make up for it:
 
 $$
-\operatorname{Var}(W) = \frac{2}{n_{\text{in}}} .
+s_{\text{He}} = \sqrt{\frac{2}{n_{\text{in}}}}
 $$
 
-This is **He initialisation**. Using Xavier's scale with a ReLU network
-leaves every layer's variance at half the previous one's.
+Read it aloud: the standard deviation is the square root of 2 over the number
+of inputs. Then $n_{\text{in}} s^2 / 2 = 1$, and the signal keeps the same
+size through any number of ReLU layers.
 
-### What the wrong scale costs
+```python
+s = np.sqrt(2.0 / n_in)
+```
 
-Write the per-layer variance factor as $c$. After $L$ layers, the signal's
-standard deviation has scaled by $c^{L/2}$. At $L=50$, a $10\%$ error in $c$
-compounds badly: $c=1.1$ leaves activations roughly ten times too large, and
-$c=0.9$ leaves less than a tenth of the signal standing. The same factor
-multiplies the backward pass, so a poorly scaled network starts training
-with both an unusable forward signal and a gradient that has vanished or
-exploded in the same direction. Errors like this do not average out across
-layers — they compound.
+### Worked example: fifty layers
 
-## Batch normalisation
+Take a width of 100 at every layer:
 
-Batch normalisation sidesteps the whole scale problem by renormalising
-activations directly, rather than hoping the weight scale keeps them in
-range. Given a batch of $N$ activations for one feature,
+- Xavier gives $s = \sqrt{2 / 200} = 0.1$, so $n_{\text{in}} s^2 = 1$. With
+  ReLU, each layer multiplies the size by $1/2$. After 50 layers, that is
+  $0.5^{50} \approx 9 \times 10^{-16}$. The signal is gone.
+- He gives $s = \sqrt{2 / 100} \approx 0.1414$, so
+  $n_{\text{in}} s^2 = 2$. With ReLU, each layer multiplies by
+  $2 / 2 = 1$. After 50 layers, the size is still about 1.
+
+Your `forward_variance` function runs this experiment for real.
+
+### Measuring signal size
+
+After a ReLU, the activations are no longer centred on zero, because they are
+all zero or positive. What the next layer's variance depends on is the average
+squared value, $\text{mean}(h^2)$, not the variance around the mean. For the
+input and for any linear layer's output, the mean is zero, so the two are
+equal. The simulation records $\text{mean}(h^2)$ at every layer and calls it
+the variance.
+
+```python
+variances.append(float(np.mean(h**2)))
+```
+
+## Normalisation layers
+
+Getting the starting scale right only helps at the start. As training changes
+the weights, the signal can drift again. A normalisation layer rescales the
+activations inside the network, at every step, so they always have mean 0 and
+variance 1.
+
+Think of the volume leveller on a music app. However loud or quiet a song was
+recorded, the leveller brings it to the same volume. Then the layer lets the
+network choose its own volume with two learned numbers per feature: a scale
+$\gamma$ (gamma) and a shift $\beta$ (beta).
+
+For a group of $M$ numbers $x_1, \dots, x_M$, the layer computes
 
 $$
-\mu = \frac1N\sum_{i=1}^N x_i, \qquad
-\sigma^2 = \frac1N\sum_{i=1}^N (x_i-\mu)^2, \qquad
-\hat x_i = \frac{x_i-\mu}{\sqrt{\sigma^2+\epsilon}}, \qquad
-y_i = \gamma\hat x_i + \beta ,
+\mu = \frac{1}{M}\sum_{i=1}^{M} x_i, \qquad
+\sigma^2 = \frac{1}{M}\sum_{i=1}^{M} (x_i - \mu)^2, \qquad
+\hat{x}_i = \frac{x_i - \mu}{\sqrt{\sigma^2 + \epsilon}}, \qquad
+y_i = \gamma \, \hat{x}_i + \beta
 $$
 
-with $\gamma$ and $\beta$ learned per feature. By construction, $\hat x$ has
-zero mean and unit variance across the batch, whatever scale the layer's
-input arrived at, and $\gamma$, $\beta$ let the network undo that
-normalisation when it helps.
+Read it aloud, left to right:
 
-The backward pass is harder than it looks, because $\hat x_i$ depends on
-every $x_j$ in the batch through $\mu$ and $\sigma^2$, not only through
-$x_i$. Writing $\text{istd} = (\sigma^2+\epsilon)^{-1/2}$ and
-$d\hat x_i = \partial L/\partial y_i \cdot \gamma$, the gradient with respect
-to one input is
+- $\mu$ (mu) is the mean of the group.
+- $\sigma^2$ (sigma squared) is the variance of the group. It divides by $M$,
+  not $M - 1$, which is what `np.var` does by default.
+- $\hat{x}_i$ ("x hat") is each value minus the mean, divided by the standard
+  deviation. The small $\epsilon$, such as $10^{-5}$, prevents division by zero.
+- $y_i$ is the output: the normalised value times $\gamma$, plus $\beta$.
+
+The only question is which numbers form a group.
+
+### Batch norm and layer norm
+
+Your activations are a matrix `x` of shape `(N, D)`: $N$ examples in the
+batch, $D$ features each.
+
+- **Batch normalisation** groups each feature across the batch. It normalises
+  each column, so it reduces over `axis=0`, and $M = N$.
+- **Layer normalisation** groups each example across its features. It
+  normalises each row, so it reduces over `axis=1`, and $M = D$.
+
+In both, $\gamma$ and $\beta$ have shape `(D,)`, one per feature.
+
+```python
+mean = x.mean(axis=axis, keepdims=True)
+var = x.var(axis=axis, keepdims=True)
+istd = 1.0 / np.sqrt(var + eps)
+xhat = (x - mean) * istd
+out = gamma * xhat + beta
+```
+
+The `keepdims=True` keeps the reduced axis with length 1, so broadcasting
+lines up the mean with the right rows or columns.
+
+### Worked example: layer norm on one row
+
+Take one example with features $[1, 2, 3]$, $\gamma = 1$, and $\beta = 0$:
+
+1. Mean: $\mu = (1 + 2 + 3) / 3 = 2$.
+2. Differences from the mean: $[-1, 0, 1]$.
+3. Variance: $\sigma^2 = (1 + 0 + 1) / 3 = 0.6667$.
+4. Standard deviation: $\sqrt{0.6667 + 0.00001} \approx 0.8165$.
+5. Normalised: $[-1, 0, 1] / 0.8165 \approx [-1.2247, 0, 1.2247]$.
+
+Add 37.5 to every feature of that row and you get the same output, because the
+mean shifts by 37.5 too. Layer norm doesn't care about a constant shift of a
+whole example. Batch norm does, because shifting one example changes the
+column means that every example shares.
+
+### Why layer norm doesn't depend on the batch
+
+Batch norm's output for one example depends on every other example in the
+batch. With a batch of two, its statistics are very noisy. With a batch of
+one, the variance of each column is zero and the layer outputs nothing useful.
+At test time you often predict for one example at a time, so batch norm keeps
+running averages of $\mu$ and $\sigma^2$ from training to use instead.
+
+Layer norm uses only the features of the example itself. It behaves the same
+for any batch size, in training and at test time. That is why transformers and
+recurrent networks use it.
+
+## The backward pass
+
+To train through a normalisation layer, you need the gradient of the loss with
+respect to its input $x$ and to $\gamma$ and $\beta$. Call the incoming
+gradient `dout`, the same shape as the output.
+
+The gradients for $\gamma$ and $\beta$ follow from $y = \gamma \hat{x} + \beta$.
+Each feature's $\gamma$ and $\beta$ touch every row, so you sum over the batch
+axis. This is `axis=0` for both batch norm and layer norm:
+
+```python
+dbeta = dout.sum(axis=0)
+dgamma = (dout * xhat).sum(axis=0)
+```
+
+The gradient for $x$ is harder, because each $x_i$ affects the output three
+ways: directly, through the mean, and through the variance. Let
+$d\hat{x} = \text{dout} \cdot \gamma$, and let "sum" mean a sum over the
+normalised group, the same axis the forward pass reduced over. Then
 
 $$
-\frac{\partial L}{\partial x_j} = \frac{\text{istd}}{N}\left(
-N\,d\hat x_j \;-\; \sum_{i} d\hat x_i \;-\; \hat x_j\sum_i d\hat x_i\hat x_i
-\right) .
+dx = \frac{1}{M\sqrt{\sigma^2 + \epsilon}}\Big(M\, d\hat{x} - \textstyle\sum d\hat{x} - \hat{x} \sum \big(d\hat{x} \cdot \hat{x}\big)\Big)
 $$
 
-The two correction terms beyond a naive $\text{istd}\cdot d\hat x_j$ account
-for $\mu$ and $\sigma^2$ both depending on $x_j$: the middle term corrects
-for every output shifting when the mean shifts, and the last term corrects
-for every output rescaling when the variance shifts. Drop either one, and the
-gradient is wrong for every input, not only the one you differentiated.
+Read it aloud: start from $M$ times the gradient at $\hat{x}$. Subtract its
+sum over the group, which undoes the effect of the mean. Subtract $\hat{x}$
+times the sum of $d\hat{x} \cdot \hat{x}$, which undoes the effect of the
+variance. Scale the result by one over $M$ times the standard deviation.
 
-At training time, $\mu$ and $\sigma^2$ come from the current minibatch, so a
-single example's normalised value depends on which other examples share its
-batch — noise that acts as a mild regulariser but makes the layer compute a
-slightly different function on every batch. At test time, batch normalisation
-uses a running average of $\mu$ and $\sigma^2$ collected during training
-instead, because a batch of size one has no variance to normalise by. That
-makes training and inference genuinely different computations, and the gap
-between them widens whenever the running average came from too few or too
-unrepresentative batches.
+```python
+dxhat = dout * gamma
+dx = (istd / M) * (M * dxhat
+                   - dxhat.sum(axis=axis, keepdims=True)
+                   - xhat * (dxhat * xhat).sum(axis=axis, keepdims=True))
+```
 
-## Layer normalisation
+Batch norm and layer norm share this formula. Only `axis` and $M$ change.
 
-Layer normalisation applies the same transform, but computes $\mu$ and
-$\sigma^2$ across one example's features instead of across the batch. Its
-backward pass is the batch-norm formula above with the batch size $N$
-replaced by the feature count and the sums taken over features. Normalising
-one example never touches any other example, so there is no batch statistic
-to estimate, no running average, and no gap between training and test — the
-function computed is identical either way, even at a batch size of one.
-That is why sequence models almost always use layer normalisation: a batch
-of sequences padded to different lengths gives batch normalisation no clean
-per-position statistic, while layer normalisation, working within a single
-token's own features, is unaffected by anything else in the batch.
+## Build it step by step
 
-**RMSNorm** drops the mean subtraction and normalises only by the root mean
-square, $y = \gamma\, x / \sqrt{\tfrac1D\sum_d x_d^2 + \epsilon}$. It saves a
-reduction and a subtraction, and at transformer scale it matches layer
-normalisation's effect on training stability, since re-centring turns out to
-matter less than rescaling does.
+The checks test the functions in this order.
 
-## Residual connections
-
-A residual block computes $y = x + F(x)$ instead of $y = F(x)$, so its
-Jacobian is $I + \partial F/\partial x$ and the upstream gradient splits into
-two paths: one that passes through $F$'s Jacobian, and one, the identity
-term, that does not. Stack $L$ residual blocks, and that identity term
-survives every one of them, so the gradient reaching the input is never
-smaller than the gradient leaving the last block — the guarantee a plain
-deep stack does not have, since every layer's Jacobian there can shrink the
-gradient further.
-
-**Post-norm**, $y = \operatorname{LayerNorm}(x+F(x))$, renormalises the sum
-at every block, which routes the identity path through the normalisation
-layer's Jacobian too and brings back the depth-dependent attenuation
-residual connections were meant to remove. **Pre-norm**,
-$y = x + F(\operatorname{LayerNorm}(x))$, normalises only the input to $F$,
-leaving the running sum untouched, so the identity path stays exact. The
-trade-off shows up going forward instead: each block's contribution adds to
-the running variance, so later blocks see a much larger signal than earlier
-ones do.
+1. **`xavier_scale(n_in, n_out)`.** Returns a float. One line with `np.sqrt`.
+   The common mistake is returning the variance $2 / (n_{\text{in}} +
+   n_{\text{out}})$ instead of its square root.
+2. **`he_scale(n_in)`.** Same pattern, with `2 / n_in`.
+3. **`forward_variance(depth, widths, scale, activation, num_trials, seed)`.**
+   Make `rng = np.random.default_rng(seed)`. Draw the input `h` with shape
+   `(num_trials, widths[0])`, and record `np.mean(h**2)`. For each of `depth`
+   layers, draw a weight matrix of shape `(widths[l], widths[l + 1])` with
+   `rng.normal(scale=scale, ...)`, compute `h @ W`, apply `np.maximum(..., 0)`
+   if the activation is `"relu"`, and record `np.mean(h**2)`. Return an array
+   of length `depth + 1`. The common mistake is applying ReLU to the input
+   before the first layer.
+4. **`batchnorm_forward(x, gamma, beta, eps)`.** Takes `x` of shape `(N, D)`.
+   Returns `(out, cache)`. Reduce over `axis=0`. Put `xhat`, the inverse
+   standard deviation, `gamma`, and the axis in the cache. A shared helper that
+   takes `axis` saves you writing this twice.
+5. **`layernorm_forward(x, gamma, beta, eps)`.** The same, over `axis=1`. The
+   common mistake is forgetting `keepdims=True`, which breaks broadcasting.
+6. **`batchnorm_backward(dout, cache)`.** Returns `(dx, dgamma, dbeta)` with
+   shapes `(N, D)`, `(D,)`, and `(D,)`. Use the formula above with `axis=0`.
+7. **`layernorm_backward(dout, cache)`.** The same formula with `axis=1` and
+   $M = D$. The common mistake is summing `dgamma` and `dbeta` over `axis=1`.
+   They are per-feature, so they always sum over `axis=0`.
 
 ## Cost and scaling
 
-| Layer | Extra parameters | Reductions per call | Batch dependence |
-|---|---|---|---|
-| Batch norm | $2D$ ($\gamma$, $\beta$) | 2, over the batch | Needs $N>1$, and a running estimate at test time |
-| Layer norm | $2D$ | 2, over the features | None |
-| RMSNorm | $D$ ($\gamma$ only) | 1, over the features | None |
+Initialisation costs nothing during training: you pick the scale once.
+Normalisation layers add a small cost to every forward and backward pass.
 
-All three cost $O(ND)$ flops for a batch of $N$ examples and $D$ features,
-dominated by the reductions; the difference between them is which axis they
-reduce over.
+| Operation | Time | Extra memory |
+|---|---|---|
+| Choose Xavier or He scale | once, no cost | none |
+| Normalisation forward pass | a few passes over the `(N, D)` activations | the cache, about one more `(N, D)` array |
+| Normalisation backward pass | a few more passes over `(N, D)` | none beyond the cache |
+| `forward_variance` simulation | one matrix multiply per layer | one `(num_trials, width)` array at a time |
+
+The time for normalisation grows in a straight line with the number of
+activations. It is small next to the matrix multiplies of the linear layers.
 
 ## Where this breaks
 
-**No normalisation layer, and the wrong scale.** A plain deep network with no
-norm layer is exactly as fragile as the "what the wrong scale costs"
-calculation above predicts — the practical reason normalisation layers
-became the default rather than a backup to careful initialisation.
-
-**Batch norm with small or correlated batches.** A batch drawn with
-correlation, such as every example from one class, gives $\mu$ and
-$\sigma^2$ that reflect the batch's makeup rather than the data
-distribution, and the running average carries that bias into every later
-prediction.
-
-**Normalising across the wrong axis in a sequence model.** Batch statistics
-computed across variable-length, padded sequences mix real tokens with
-padding unless the code masks it out. Layer normalisation cannot have this
-bug, because it never looks outside one token's own features.
-
-**Residual streams with no variance control.** Pre-norm's variance growth,
-left unmanaged across enough layers, pushes the final layers' input far
-outside the range earlier layers were tuned for, which is why several large
-model recipes rescale residual branches by a depth-dependent factor.
+- **Wrong scale for the activation.** Xavier with ReLU shrinks the signal by
+  half per layer. Use He for ReLU and its relatives.
+- **Very small batches with batch norm.** The batch statistics are too noisy.
+  Use layer norm or group norm instead.
+- **Forgetting test mode.** Batch norm must use its stored running averages at
+  test time, or one prediction depends on which other examples happen to share
+  its batch.
+- **Constant features.** When every value in a group is equal, $\sigma^2 = 0$
+  and only $\epsilon$ keeps the division finite.
+- **Very deep networks.** Good initialisation and normalisation still aren't
+  always enough past a hundred layers or so. Residual connections, which add
+  each block's input back to its output, give gradients a shortcut. Lesson 21
+  covers them.
 
 ## The exercise
 
-You implement the two initialisation scales and confirm what they do to a
-signal over depth, then the forward and backward passes of both
-normalisation layers.
+You implement `xavier_scale`, `he_scale`, `forward_variance`,
+`batchnorm_forward`, `batchnorm_backward`, `layernorm_forward`, and
+`layernorm_backward`. Each forward function returns `(out, cache)`, and its
+backward function takes that cache back.
 
-Write `xavier_scale(n_in, n_out)` and `he_scale(n_in)`, returning the
-standard deviation to draw weights from. Write `forward_variance(depth,
-widths, scale, activation)`, which simulates a random stack of the given
-widths and activation (`"linear"` or `"relu"`) using weights of that scale,
-and returns the empirical variance of the activation at every layer,
-including the input. Then write `batchnorm_forward`, `batchnorm_backward`,
-`layernorm_forward`, and `layernorm_backward`, following the derivations
-above; each forward function returns the normalised output together with
-whatever cache its backward needs.
-
-The checks confirm the forward passes first, that batch norm's output has
-zero mean and unit variance per feature and that layer norm's has zero mean
-and unit variance per example, then verify both backward passes against
-`mlcheck.finite_difference`, with respect to the input, $\gamma$, and $\beta$
-separately, since a correct forward pass and a wrong backward pass are a
-common way to fail silently. A further check shifts one whole example by a
-constant and confirms layer norm's output for that example does not move
-while batch norm's does. The last check is the point of the lesson:
-`forward_variance` run for fifty ReLU layers shows He's scale holding the
-activation variance flat, while Xavier's decays it by almost exactly the
-one-half per layer the derivation predicts.
+The checks verify both scale formulas, that one linear layer multiplies the
+variance by $n \, s^2$, that each normalisation gives mean 0 and variance 1
+along the right axis, and that both backward passes match finite differences
+for $x$, $\gamma$, and $\beta$. They check that layer norm ignores a constant
+shift of one example while batch norm does not. The last check runs a
+fifty-layer ReLU network and expects He to keep the signal flat and Xavier to
+halve it at every layer.

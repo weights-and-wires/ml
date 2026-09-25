@@ -1,10 +1,12 @@
 {
   "id": "12-ensembles",
-  "title": "Bagging variance, out-of-bag error, and gradient boosting",
-  "brief": "Implement the bagging variance identity, a bagged-stump ensemble scored out-of-bag, and gradient boosting as functional gradient descent.",
+  "title": "Bagging, out-of-bag error, and gradient boosting",
+  "brief": "Average bootstrapped stumps, score them on the rows they never saw, and build gradient boosting from residuals.",
   "needs_gpu": false,
   "timeout": 60,
-  "packages": ["numpy"],
+  "packages": [
+    "numpy"
+  ],
   "hints": [
     "bootstrap_indices is one call to rng.integers(0, n, size=n): n draws with replacement from {0, ..., n-1}.",
     "bagging_variance is a one-line evaluation of rho * sigma2 + (1 - rho) * sigma2 / B.",

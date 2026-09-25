@@ -2,15 +2,15 @@
 title: Kernels and the representer theorem
 slug: 10-kernels
 part: "Part 2 — Classical machine learning"
-summary: What a valid kernel is, why its optimum always lives in the span of the training data, and how to scale past it.
-minutes: 45
+summary: Build kernels, check they are valid, fit kernel ridge regression in closed form, and approximate it with random features.
+minutes: 60
 gpu: false
 objectives:
-  - State Mercer's condition, that a kernel is valid exactly when its Gram matrix is always positive semidefinite.
-  - State the reproducing property of the RKHS a kernel induces.
-  - State the representer theorem and see why it follows from an orthogonal decomposition.
-  - Derive kernel ridge regression's closed-form solution, and see that it recovers primal ridge regression under a linear kernel.
-  - Compute random Fourier features and state their O(1/sqrt(D)) concentration rate.
+  - Compute RBF and polynomial kernel matrices between two sets of points without a loop.
+  - Check whether a matrix is a valid kernel matrix using its eigenvalues.
+  - Build kernel ridge regression by solving one linear system, and use it to predict.
+  - Build random Fourier features and watch their error shrink as you add more.
+  - Explain the representer theorem and check it numerically.
 prereqs:
   - 09-support-vector-machines
   - 04-regularisation
@@ -19,131 +19,196 @@ exercise: 10-kernels
 
 # Kernels and the representer theorem
 
-The SVM's dual depends on the training data only through inner products: $x_i^{\top}x_j$ for training pairs, $x^{\top}x_i$ at prediction time. Nothing in that derivation needed a literal Euclidean inner product, only a symmetric, positive measure of similarity between two points. Replace it with a richer similarity measure, and you gain access to feature spaces too large to write down, for free.
+A linear model can only draw straight boundaries and fit straight lines. One fix is to invent new features, such as squares and products of the originals, and fit a linear model on those. That works, but the number of new features explodes fast.
 
-This lesson makes that idea precise in two steps. First, what counts as a valid similarity measure, a **kernel**, and what space of functions it defines. Second, why an enormous class of learning problems, not just the SVM, always has a solution built from finitely many training points, no matter how large or infinite-dimensional that space is. That second fact is the **representer theorem**, and it is the reason the kernel trick is a general method rather than a coincidence specific to margins.
+The last lesson showed that an SVM only ever needs inner products between points. A **kernel** is a function that gives you the inner product of two points in some richer feature space, without ever building those features. Swap every inner product for a kernel, and a linear method learns curved patterns at almost no extra cost.
+
+This lesson builds two common kernels, a test for whether a function is a valid kernel, and kernel ridge regression. It then shows why the best kernel model always has a simple form, and how to approximate a kernel with a fixed number of random features when your data gets large.
 
 ## What you already know
 
-- The SVM dual and its prediction rule depend on the data only through $x^{\top}x'$.
-- Ridge regression's closed form $\hat w = (X^{\top}X + \lambda I)^{-1}X^{\top}y$.
-- A symmetric matrix is positive semidefinite exactly when $c^{\top}Mc \ge 0$ for every vector $c$.
-- Orthogonal decomposition: for a subspace $V$, every $f$ splits uniquely as $f = f_\parallel + f_\perp$ with $f_\parallel \in V$ and $f_\perp \perp V$, and $\lVert f\rVert^2 = \lVert f_\parallel\rVert^2 + \lVert f_\perp\rVert^2$.
-- A concentration inequality, Hoeffding's for instance, bounds how far the average of $D$ bounded i.i.d. random variables strays from its mean, shrinking as $O(1/\sqrt D)$.
+- An inner product $x^{\top}x'$ measures how much two vectors point the same way.
+- Ridge regression adds $\lambda\lVert w\rVert^2$ to the squared error to keep weights small.
+- A symmetric matrix has real eigenvalues, and `np.linalg.eigvalsh` computes them.
+- Solving $A v = y$ with a Cholesky factor is faster and more accurate than forming $A^{-1}$.
+- The SVM's dual and its predictions use the data only through the Gram matrix $K$.
 
-## What makes a kernel valid
+## What a kernel is
 
-A **kernel** is a symmetric function $k : \mathcal X \times \mathcal X \to \mathbb R$. Call it **positive semidefinite (PSD)** when, for every finite set of points $x_1,\ldots,x_n$, the Gram matrix $K_{ij}=k(x_i,x_j)$ is PSD as a matrix.
+A kernel $k(x, x')$ takes two points and returns a number that says how similar they are. The **Gram matrix**, or kernel matrix, holds that number for every pair: $K_{ij} = k(x_i, x_j)$. For two different point sets, of sizes $n_1$ and $n_2$, the matrix is $n_1 \times n_2$.
 
-PSD-ness is exactly the property of being an inner product somewhere. If $k(x,x')=\langle\phi(x),\phi(x')\rangle$ for some map $\phi$, then for any $c$,
+### The RBF kernel
 
-$$
-c^{\top}Kc = \Big\lVert \sum_i c_i \phi(x_i) \Big\rVert^2 \ge 0 ,
-$$
-
-so PSD is necessary. **Mercer's theorem** gives the converse: a continuous PSD kernel on a compact domain admits an eigenexpansion $k(x,x')=\sum_m \lambda_m \psi_m(x)\psi_m(x')$ with every $\lambda_m \ge 0$, so $\phi(x) = (\sqrt{\lambda_1}\psi_1(x), \ldots)$ is an explicit, if generally infinite-dimensional, feature map that reproduces $k$. PSD-ness is the whole test: it tells you which similarity functions correspond to some inner product, without pinning down what that inner product's space looks like.
-
-## The RKHS and its reproducing property
-
-A PSD kernel generates a Hilbert space of functions built directly from $k$. Start with finite sums $f(\cdot)=\sum_i c_i\,k(\cdot,x_i)$, and define an inner product between two such sums by $\langle f,g\rangle_{\mathcal H} = \sum_{i,j}c_id_j\,k(x_i,z_j)$. Completing this space gives the **reproducing kernel Hilbert space (RKHS)** $\mathcal H_k$, and it is positive definite precisely because $k$ is PSD.
-
-Its defining feature is the **reproducing property**: for any $f\in\mathcal H_k$ and any point $x$,
+The radial basis function (RBF) kernel, also called the Gaussian kernel, says two points are similar when they are close:
 
 $$
-\langle f, k(\cdot,x)\rangle_{\mathcal H} = f(x) .
+k(x, x') = \exp\left(-\gamma\,\lVert x - x'\rVert^2\right) .
 $$
 
-Evaluating $f$ at $x$ is the same operation as taking an inner product against the single function $k(\cdot,x)$. That one identity is what the representer theorem's proof runs on.
+Read it aloud: take the squared distance between the points, multiply by $-\gamma$, and exponentiate. Identical points give 1. Far-apart points give almost 0. The width setting $\gamma > 0$ controls how quickly similarity fades with distance.
 
-## The representer theorem
+Looping over every pair is slow. Instead, expand the squared distance: $\lVert x - x'\rVert^2 = \lVert x\rVert^2 + \lVert x'\rVert^2 - 2x^{\top}x'$. The last term for all pairs is one matrix product:
 
-Consider fitting a function $f\in\mathcal H_k$, not a parameter vector but a function that may live in an infinite-dimensional space, by minimising
+```python
+sq = (X1**2).sum(axis=1)[:, None] + (X2**2).sum(axis=1)[None, :] - 2.0 * X1 @ X2.T
+K = np.exp(-gamma * np.maximum(sq, 0.0))   # clip tiny negatives from rounding
+```
+
+### The polynomial kernel
+
+The polynomial kernel raises a shifted inner product to a power:
 
 $$
-J(f) = L\big(y_1,f(x_1),\ldots,y_n,f(x_n)\big) + \Omega\big(\lVert f\rVert_{\mathcal H}\big) ,
+k(x, x') = (x^{\top}x' + c)^{p} .
 $$
 
-where $L$ depends on $f$ only through its values at the $n$ training points, and $\Omega$ is strictly increasing. Every loss and regulariser in this course fits that shape.
+Read it aloud: take the inner product, add a constant $c$ (`coef0`), and raise the result to the power $p$ (`degree`). It acts like a linear model on all products of up to $p$ features.
 
-**Claim.** Any minimiser $f^*$ can be written $f^*(\cdot)=\sum_{i=1}^n \alpha_i\,k(\cdot,x_i)$, a combination of the $n$ training kernel sections, whatever the dimension of $\mathcal H_k$.
+```python
+K = (X1 @ X2.T + coef0) ** degree
+```
 
-The proof decomposes any candidate $f$ against $V=\operatorname{span}\{k(\cdot,x_1),\ldots,k(\cdot,x_n)\}$: $f = f_\parallel + f_\perp$. The reproducing property gives $f_\perp(x_i) = \langle f_\perp, k(\cdot,x_i)\rangle_{\mathcal H}=0$ for every training point, so $L$ cannot distinguish $f$ from $f_\parallel$, since it only ever sees $f$ through those $n$ values. Meanwhile $\lVert f\rVert_{\mathcal H}^2 = \lVert f_\parallel\rVert^2 + \lVert f_\perp\rVert^2 \ge \lVert f_\parallel\rVert^2$, with equality only when $f_\perp=0$, and $\Omega$ being strictly increasing carries that inequality through to $J$. So $J(f)\ge J(f_\parallel)$, and every minimiser has $f_\perp = 0$.
+### A worked example
 
-The exercise's `representer_check` verifies exactly this inequality: it builds a nonzero $f_\perp$ from kernel sections outside the training set, engineered to vanish at every training point, and confirms that adding any multiple of it to the optimal $f_\parallel$ increases $J$ by precisely $\Omega$'s contribution to $\lVert f_\perp\rVert_{\mathcal H}^2$. Nothing else changes, because the loss term cannot see it.
+Take the points $x_1 = [0, 0]$ and $x_2 = [1, 0]$ with $\gamma = 0.5$. The squared distances are 0 on the diagonal and 1 off it. So
+
+$$
+K = \begin{bmatrix} 1 & e^{-0.5} \\ e^{-0.5} & 1 \end{bmatrix} = \begin{bmatrix} 1 & 0.6065 \\ 0.6065 & 1 \end{bmatrix} .
+$$
+
+For the polynomial kernel with $x = [1, 2]$, $x' = [3, 1]$, $c = 1$, and $p = 2$: the inner product is $3 + 2 = 5$, plus 1 gives 6, and $6^2 = 36$.
+
+## When a function is a valid kernel
+
+Not every similarity function is a kernel. For $k$ to be a real inner product in some feature space, every Gram matrix it builds must be **positive semidefinite (PSD)**. A symmetric matrix is PSD when all of its eigenvalues are zero or positive. This result is called Mercer's condition.
+
+Why does it matter? A negative eigenvalue means some combination of points has a negative squared length, which no real feature space allows. Methods like kernel ridge regression and SVMs can then fail or return nonsense.
+
+In code, check three things: the matrix is square, it equals its own transpose, and its smallest eigenvalue is not below a small negative tolerance:
+
+```python
+np.allclose(K, K.T, atol=tol) and np.linalg.eigvalsh(K).min() >= -tol
+```
+
+For example, $\begin{bmatrix} 1 & 2 \\ 2 & 1 \end{bmatrix}$ is symmetric but has eigenvalues $-1$ and $3$. It is not PSD, so no kernel can produce it. The RBF and polynomial kernels always produce PSD matrices.
 
 ## Kernel ridge regression
 
-Apply the theorem to ridge regression in $\mathcal H_k$:
+Ridge regression fits weights $w$. Its kernel version fits one coefficient $\alpha_i$ per training point instead. The prediction at a new point $x$ is a weighted sum of its similarity to every training point:
 
 $$
-\min_{f\in\mathcal H_k}\ \sum_{i=1}^n (y_i-f(x_i))^2 + \lambda\lVert f\rVert_{\mathcal H}^2 .
+\hat{y}(x) = \sum_{i=1}^{n}\alpha_i\,k(x, x_i) .
 $$
 
-The optimum is $f^*=\sum_i\alpha_i k(\cdot,x_i)$, so predictions are $f(x_j)=(K\alpha)_j$ and $\lVert f\rVert_{\mathcal H}^2 = \alpha^{\top}K\alpha$, where $K_{ij}=k(x_i,x_j)$. The problem becomes a finite quadratic in $\alpha$, and setting its gradient to zero gives the closed form
+Think of each training point as a lamp. Its brightness at $x$ is $k(x, x_i)$, and $\alpha_i$ is how much you trust that lamp. The coefficients come from one linear system:
 
 $$
-\alpha = (K + \lambda I)^{-1} y .
+(K + \lambda I)\,\alpha = y .
 $$
 
-$K+\lambda I$ is always invertible for $\lambda>0$: $K$'s eigenvalues are non-negative, and adding $\lambda I$ shifts every one of them up.
+Read it aloud: take the $n \times n$ training Gram matrix, add $\lambda$ to every diagonal entry, and solve for $\alpha$ against the targets $y$. The $\lambda I$ term plays the same role as in ridge regression. It keeps the solution stable and the function smooth. With $\lambda > 0$ and a PSD $K$, the matrix $K + \lambda I$ is always invertible.
 
-Take $k(x,x')=x^{\top}x'$, so $K=XX^{\top}$. The kernel solution predicts through $w=X^{\top}\alpha=X^{\top}(XX^{\top}+\lambda I)^{-1}y$, and a short matrix identity shows this equals primal ridge regression's $\hat w=(X^{\top}X+\lambda I)^{-1}X^{\top}y$ exactly. Kernel and primal ridge are the same computation, solved as an $n\times n$ system in one case and a $d\times d$ system in the other.
+Solve it with a Cholesky factor $L$, where $L L^{\top} = K + \lambda I$. Solve $L z = y$, then $L^{\top}\alpha = z$:
 
-## Kernels in practice
+```python
+L = np.linalg.cholesky(K + lam * np.eye(n))
+alpha = np.linalg.solve(L.T, np.linalg.solve(L, y))
+```
 
-**Linear**, $k(x,x')=x^{\top}x'$, is ordinary ridge or SVM in the original features. **Polynomial**, $k(x,x')=(x^{\top}x'+c)^p$, has an explicit finite-dimensional feature map: every monomial in $x$'s coordinates up to degree $p$. **RBF (Gaussian)**, $k(x,x')=\exp(-\gamma\lVert x-x'\rVert^2)$, is infinite-dimensional. Expanding it gives a non-negatively weighted sum of every polynomial kernel's monomials, so it is PSD, and no finite set of explicit features reproduces it exactly.
+To predict, build `K_test` with shape `(n_test, n_train)`, the kernel between each query point and each training point. Then multiply: `K_test @ alpha`.
 
-## The $O(n^3)$ and $O(n^2)$ walls
+With the linear kernel $k(x, x') = x^{\top}x'$, kernel ridge regression gives exactly the same predictions as ordinary ridge regression without a bias. The exercise checks this.
 
-Kernel ridge regression needs $(K+\lambda I)^{-1}y$: a Cholesky factorisation of an $n\times n$ matrix costs $O(n^3)$ time, and $K$ itself costs $O(n^2)$ memory regardless of how the solve is done. Both walls are the ones the SVM's dual meets, for the same reason: any method whose representer-theorem solution needs every training point's kernel value pays this cost to store and solve it.
+### A worked example
+
+Use the RBF Gram matrix from before, with targets $y = [1, 2]$ and $\lambda = 1$. Then
+
+$$
+K + \lambda I = \begin{bmatrix} 2 & 0.6065 \\ 0.6065 & 2 \end{bmatrix} .
+$$
+
+Its determinant is $2 \cdot 2 - 0.6065^2 = 3.6321$. Solving gives $\alpha = [0.2167, 0.9343]$. The training predictions are $K\alpha = [0.7833, 1.0657]$. They are pulled toward zero from the targets, which is the ridge penalty at work.
+
+## Why the answer always has this form
+
+You might wonder whether a better function exists that is not a weighted sum of kernels at the training points. The **representer theorem** says no. For a loss on the training points plus a penalty on the function's size, the best function is always $\sum_i \alpha_i k(\cdot, x_i)$ over the training points only.
+
+The reason, in words: any extra piece of the function that is not built from training points has zero value at every training point. It cannot lower the loss. But it does add to the size penalty. So adding it only makes the objective worse.
+
+You can check this with numbers. Describe a candidate function by coefficients over some set of points, possibly more than the training set. The objective is
+
+$$
+J = \sum_{i=1}^{n}\left(y_i - (Kc)_i\right)^2 + \lambda\, c^{\top}Kc .
+$$
+
+Read it aloud: $c$ is the vector of coefficients over all the points in $K$. The first term is the squared error, using only the first $n$ rows of $Kc$, which are the training points. The second term is $\lambda$ times the function's squared size, $c^{\top}Kc$. The error is a sum, not a mean.
+
+```python
+pred = (K @ coeffs)[:n]
+J = np.sum((y - pred) ** 2) + lam * coeffs @ K @ coeffs
+```
+
+Adding a component that lives outside the training points leaves the first term alone and makes the second one bigger. The last check in the exercise does exactly that.
 
 ## Random Fourier features
 
-**Bochner's theorem** says a shift-invariant kernel $k(x,x')=\kappa(x-x')$ is PSD exactly when $\kappa$ is the Fourier transform of a probability distribution $p(\omega)$ over frequencies. For the RBF kernel with bandwidth $\gamma$, matching characteristic functions gives $p(\omega)=\mathcal N(0,2\gamma I)$.
+Kernel ridge regression needs the full $n \times n$ Gram matrix and a solve that grows with $n^3$. For a million points, that is out of reach. **Random Fourier features** swap the kernel for an explicit list of $D$ features, where you choose $D$. A plain linear model on those features then acts almost like the RBF kernel.
 
-A single random frequency does not give an inner product, but a phase-shifted pair does: averaging over $\omega\sim p$ and an independent phase $b\sim\text{Uniform}(0,2\pi)$,
+The recipe:
 
-$$
-\mathbb E_{\omega,b}\big[z_\omega(x)z_\omega(x')\big] = k(x,x'), \qquad z_\omega(x) = \sqrt2\cos(\omega^{\top}x+b) .
-$$
-
-**Random Fourier features** replace that expectation with an average over $D$ independent draws:
+1. Draw a $D \times d$ matrix $\Omega$ of random frequencies. Each entry is normal with mean 0 and variance $2\gamma$.
+2. Draw $D$ random phase shifts $\phi$, each uniform between 0 and $2\pi$.
+3. Build the features for every row of $X$:
 
 $$
-z(x) = \sqrt{\frac2D}\big(\cos(\omega_1^{\top}x+b_1),\ldots,\cos(\omega_D^{\top}x+b_D)\big), \qquad
-z(x)^{\top}z(x') \approx k(x,x') .
+Z = \sqrt{\frac{2}{D}}\,\cos\left(X\Omega^{\top} + \phi\right) .
 $$
 
-Each of the $D$ terms is bounded, so Hoeffding's inequality bounds the approximation error by $O(1/\sqrt D)$: doubling $D$ shrinks the typical error by a factor of $\sqrt2$, not by half. Once $z$ is fixed, downstream ridge regression runs on $D$-dimensional explicit features, costing $O(nD^2+D^3)$ instead of $O(n^3)$, a win whenever $D\ll n$.
+Read it aloud: project the data onto $D$ random directions, shift each by a random phase, take the cosine, and scale by $\sqrt{2/D}$. The result $Z$ has shape $(n, D)$. On average over the random draws, $Z Z^{\top}$ equals the RBF Gram matrix exactly. With finite $D$, the typical error shrinks like $1/\sqrt{D}$. So four times as many features halve the error.
 
-## Nyström approximation
+```python
+omega = rng.normal(size=(D, d)) * np.sqrt(2.0 * gamma)
+phase = rng.uniform(0.0, 2.0 * np.pi, size=D)
+Z = np.sqrt(2.0 / D) * np.cos(X @ omega.T + phase[None, :])
+```
 
-Random features approximate the kernel function itself, independent of the data. The **Nyström method** instead approximates the Gram matrix directly: sample $m\ll n$ landmark points and use $K\approx K_{n,m}K_{m,m}^{+}K_{m,n}$, costing $O(nm^2+m^3)$. Because the landmarks come from the data, Nyström adapts to $K$'s actual spectrum and can beat random features sharply when $K$'s effective rank is low, at the cost of needing the data up front.
+Draw `omega` first and `phase` second, from the `rng` you are given. Use them for every row of `X`.
+
+## Build it step by step
+
+Work through the functions in the order the checks test them.
+
+1. **`rbf_kernel(X1, X2, gamma)`.** Takes `(n1, d)` and `(n2, d)` arrays. Returns `(n1, n2)`. Use row sums of squares with `[:, None]` and `[None, :]`, one `X1 @ X2.T`, then `np.maximum` and `np.exp`. The common mistake is getting the broadcasting wrong, so you add two vectors of the same length instead of making a matrix.
+2. **`polynomial_kernel(X1, X2, degree, coef0)`.** Returns `(n1, n2)`. One line with `@`, `+`, and `**`. The common mistake is raising element-wise powers of `X1` before the product.
+3. **`is_psd(K, tol)`.** Returns a Python `bool`. Return `False` if the matrix is not square or not symmetric within `tol`. Otherwise compare `np.linalg.eigvalsh(K).min()` against `-tol`. The common mistake is using `np.linalg.eig`, which can return complex numbers, or demanding eigenvalues strictly above zero.
+4. **`kernel_ridge_fit(K, y, lam)`.** Returns `alpha` of shape `(n,)`. Factor `K + lam * np.eye(n)` with `np.linalg.cholesky`, then two solves. The common mistake is adding `lam` to every entry instead of only the diagonal.
+5. **`kernel_ridge_predict(K_test, alpha)`.** Returns `(n_test,)`. One matrix-vector product. The common mistake is passing the transpose, of shape `(n_train, n_test)`.
+6. **`random_fourier_features(X, D, gamma, rng)`.** Returns `(n, D)`. Draw `omega`, then `phase`, then apply the formula. The common mistake is scaling `omega` by `2 * gamma` instead of `np.sqrt(2 * gamma)`. The variance is $2\gamma$, so the standard deviation is its square root.
+7. **`representer_check(K, y, lam, coeffs)`.** Returns a float. `K` is `(N, N)` with `N >= len(y)`. Keep the first `len(y)` entries of `K @ coeffs`, sum the squared errors, and add `lam * coeffs @ K @ coeffs`. The common mistake is using the mean squared error or slicing `coeffs` instead of the predictions.
 
 ## Cost and scaling
 
-| Method | Time | Memory |
-|---|---|---|
-| Exact kernel ridge | $O(n^3)$ | $O(n^2)$ |
-| Random Fourier features, then ridge | $O(nD^2 + D^3)$ | $O(nD)$ |
-| Nyström, then ridge | $O(nm^2 + m^3)$ | $O(nm)$ |
+Everything exact about kernels runs through the $n \times n$ Gram matrix. The table uses $n$ training points, $d$ features, and $D$ random features.
 
-Both approximations turn the wall from cubic or quadratic in $n$ into linear in $n$, at the cost of an approximation dimension, $D$ or $m$, that must grow with the accuracy you want.
+| Method | Fit time | Memory | Predict one point |
+|---|---|---|---|
+| Exact kernel ridge | $n^2 d$ to build $K$, plus $n^3$ to solve | $n^2$ | grows with $n d$ |
+| Random Fourier features plus ridge | grows with $n D d + n D^2$ | $n D$ | grows with $D d$ |
+
+Doubling $n$ makes the exact solve eight times slower and the Gram matrix four times bigger. At $n = 100{,}000$, $K$ alone needs about 80 GB. Random features grow only linearly in $n$. You pick $D$ to trade accuracy for speed.
 
 ## Where this breaks
 
-**Bandwidth and kernel choice.** $\gamma$, the polynomial degree, and the kernel family are hyperparameters tuned by cross-validation, with no default that transfers across problems.
+**A bad width $\gamma$.** A very large $\gamma$ makes every point similar only to itself, so the model memorises the training set. A very small $\gamma$ makes all points look alike, so the model is almost constant. Choose $\gamma$ and $\lambda$ together with cross-validation.
 
-**A regulariser that is not a function of $\lVert f\rVert_{\mathcal H}$.** The representer theorem's proof used only that $\Omega$ is strictly increasing in the RKHS norm. A different smoothness penalty breaks the orthogonality argument, and the optimal $f$ need not live in any finite span at all.
+**Unscaled features.** The RBF kernel uses distances. A feature measured in thousands swamps one measured in fractions. Standardise every feature first.
 
-**Near-singular $K+\lambda I$.** A small $\lambda$, needed to approach interpolation, combined with near-duplicate training points, reproduces the conditioning collapse of the normal equations from lesson 2.
+**Too much data.** The exact method stops fitting in memory at around $10^5$ points. Use random Fourier features, or Nyström approximation, which builds features from a random subset of the training points.
 
-**Random features in high dimensions.** A uniform accuracy guarantee across every pair $(x,x')$ needs $D$ to grow with the input dimension, a real cost rather than a looser constant.
-
-**The wall returns at deployment.** Both approximations move the cost rather than remove it: a kernel method with $D$ or $m$ in the thousands still does thousands of multiplications per prediction, which is why practitioners increasingly prefer methods that learn a finite feature map directly from data once $n$ is large, the subject of Part 3.
+**Invalid kernels.** A home-made similarity score that fails `is_psd` can make the Cholesky step fail or give meaningless answers. Test it before you use it.
 
 ## The exercise
 
-You build the machinery of kernel methods and then verify the representer theorem numerically. Implement `rbf_kernel` and `polynomial_kernel`; `is_psd`, checking that a candidate Gram matrix is symmetric with no meaningfully negative eigenvalue; `kernel_ridge_fit` and `kernel_ridge_predict`, solving the closed form above through a Cholesky factorisation; `random_fourier_features`, built from Bochner's theorem; and `representer_check`, which evaluates the regularised objective for a candidate function given by its coefficients over an arbitrary set of kernel sections.
+You build a small kernel toolkit. Implement `rbf_kernel` and `polynomial_kernel` to return Gram matrices, and `is_psd` to test validity. Implement `kernel_ridge_fit` and `kernel_ridge_predict` to fit and use kernel ridge regression. Implement `random_fourier_features` to approximate the RBF kernel with explicit features, and `representer_check` to evaluate the regularised objective for any set of coefficients.
 
-The checks confirm both kernels produce PSD Gram matrices, that kernel ridge regression with a linear kernel reproduces primal ridge regression's weights exactly, and that random Fourier features approximate the exact RBF Gram matrix with error that shrinks as $D$ grows. The last check makes the representer theorem numerical: it builds a function supported on kernel sections outside the training set, engineered to vanish at every training point, then confirms that adding any multiple of it to the fitted solution increases the objective by exactly the amount the orthogonal-decomposition proof predicts.
+The checks compare both kernels with hand-built examples and confirm that their Gram matrices are PSD, while `is_psd` rejects a matrix that is not. They confirm that `kernel_ridge_fit` solves $(K + \lambda I)\alpha = y$ and that a linear kernel reproduces ordinary ridge regression. They check that random features approximate the RBF Gram matrix with error that shrinks as $D$ grows. The last check adds a component from outside the training points and confirms that `representer_check` reports a strictly larger objective every time.

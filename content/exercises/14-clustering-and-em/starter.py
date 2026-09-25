@@ -27,8 +27,13 @@ def lloyd(X: np.ndarray, k: int, init: np.ndarray, iters: int):
     """Run Lloyd's algorithm from a fixed initialisation.
 
     Alternate the two half-steps: assign every point to its nearest center,
-    then move every center to the mean of the points assigned to it. Stop
-    early if an iteration leaves the assignment unchanged.
+    then move every center to the mean of the points assigned to it.
+
+    Steps:
+        1. Copy init, assign every point, and record the objective.
+        2. Repeat up to iters times: move each center to the mean of its
+           points, reassign, and append the objective to history.
+        3. Stop early when the objective is the same as the previous one.
 
     Args:
         X: Data points, shape (n, d).

@@ -1,16 +1,22 @@
 """Fit a logistic regression two ways.
 
-Implement six functions: a numerically stable `sigmoid`, a numerically stable
-`log_loss`, the `gradient` and `hessian` of that loss, and two fitting
-routines, `fit_gradient_descent` and `fit_newton`, both of which accept a
-ridge penalty.
+You write six functions, in this order:
 
-Every loss below is the sum over samples, not the mean:
+1. `sigmoid`: turn scores into probabilities without overflow.
+2. `log_loss`: the loss the model minimises.
+3. `gradient`: first derivatives of the loss, shape (d,).
+4. `hessian`: second derivatives of the loss, shape (d, d).
+5. `fit_gradient_descent`: fit by small fixed steps.
+6. `fit_newton`: fit by Newton steps.
 
-    L(w) = sum_i [log(1 + exp(x_i^T w)) - y_i x_i^T w] + (ridge / 2) ||w||^2
+Shapes used everywhere: X is (n, d), one row per example; y is (n,) with
+labels 0 or 1; w is (d,). The loss is a sum over examples, not a mean:
 
-Build `log_loss` through log-sum-exp rather than calling `log(1 + exp(z))`
-directly, or the checks at large `z` will catch you.
+    L(w) = sum_i [softplus(z_i) - y_i * z_i] + (ridge / 2) * ||w||^2,
+    where z = X @ w and softplus(z) = log(1 + exp(z)).
+
+Compute softplus with the stable rewrite from the lesson, or the checks at
+scores of +-800 fail.
 """
 
 import numpy as np
@@ -26,6 +32,12 @@ def sigmoid(z: np.ndarray) -> np.ndarray:
         An array of the same shape holding 1 / (1 + exp(-z)), with no overflow
         or invalid-value warning even when `z` holds entries as large in
         magnitude as 800.
+
+    Steps:
+        1. Convert `z` to a float array and make an empty output array.
+        2. Build a mask for the entries where z >= 0.
+        3. Fill each part with the formula that only exponentiates a number
+           that is zero or negative.
     """
     raise NotImplementedError("sigmoid")
 
@@ -43,6 +55,12 @@ def log_loss(w: np.ndarray, X: np.ndarray, y: np.ndarray, ridge: float = 0.0) ->
         The scalar loss, computed through log-sum-exp so it stays finite for
         any `w` and `X` whose product `X @ w` has entries as large in
         magnitude as 800.
+
+    Steps:
+        1. Compute the scores z = X @ w.
+        2. Compute softplus(z) with the stable rewrite.
+        3. Sum softplus(z) - y * z over all examples.
+        4. Add the ridge penalty.
     """
     raise NotImplementedError("log_loss")
 
@@ -58,6 +76,10 @@ def gradient(w: np.ndarray, X: np.ndarray, y: np.ndarray, ridge: float = 0.0) ->
 
     Returns:
         The gradient, shape (d,): X^T (sigmoid(X w) - y) + ridge * w.
+
+    Steps:
+        1. Compute the probabilities p from the scores.
+        2. Multiply the errors by X transposed, then add the ridge term.
     """
     raise NotImplementedError("gradient")
 
@@ -74,6 +96,12 @@ def hessian(w: np.ndarray, X: np.ndarray, y: np.ndarray, ridge: float = 0.0) -> 
     Returns:
         The Hessian, shape (d, d): X^T diag(p (1 - p)) X + ridge * I, where
         p = sigmoid(X w).
+
+    Steps:
+        1. Compute p, then the curvature weights p * (1 - p), shape (n,).
+        2. Scale each row of X by its weight without building an (n, n)
+           matrix, then multiply by X transposed.
+        3. Add ridge to the diagonal.
     """
     raise NotImplementedError("hessian")
 

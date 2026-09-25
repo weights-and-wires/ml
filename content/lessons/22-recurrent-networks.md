@@ -2,14 +2,14 @@
 title: Recurrent networks and BPTT
 slug: 22-recurrent-networks
 part: "Part 4 — Vision and sequences"
-summary: "Backpropagation through time as a chain of repeated Jacobians, the spectral radius that predicts vanishing or exploding, and its parallelism ceiling."
-minutes: 45
+summary: "Build an RNN that reads a sequence one step at a time, train it with backpropagation through time, and see why gradients fade."
+minutes: 70
 gpu: false
 objectives:
-  - Derive backpropagation through time as a sum over time steps of the chain rule.
-  - State, using the spectral radius of the recurrent weight matrix, when the resulting product vanishes and when it explodes.
-  - Explain the bias truncated BPTT introduces, and why clipping by global norm preserves the update's direction.
-  - Explain why the recurrent state equation caps parallelism in a way convolutions and dense layers don't.
+  - Build a vanilla RNN cell and run it over a whole sequence in numpy.
+  - Compute backpropagation through time with one backward loop over the steps.
+  - Explain how the largest eigenvalue size of the recurrent weights predicts vanishing or exploding gradients.
+  - Build truncated backpropagation and gradient clipping, and explain what each one trades away.
 prereqs:
   - 16-backpropagation
 exercise: 22-recurrent-networks
@@ -17,246 +17,298 @@ exercise: 22-recurrent-networks
 
 # Recurrent networks and BPTT
 
-A convolution shares one small set of weights across every spatial position,
-betting that the same local pattern can appear anywhere in an image. A
-recurrent network makes the same bet about time: the weights that turn
-$h_{t-1}$ into $h_t$ should turn $h_t$ into $h_{t+1}$, because a sentence, a
-time series, or an audio waveform is assumed to follow the same dynamics at
-every step. That single assumption turns a sequence of any length into a
-fixed number of parameters, and it turns training into reverse-mode automatic
-differentiation applied to a computation graph shaped like a long, thin
-chain.
+A sentence, a stock price, and an audio clip are all sequences. Their length
+changes from one example to the next, and the order matters. A normal
+feed-forward network wants a fixed-size input, so it has no clean way to read
+them.
 
-The result this lesson builds toward: a gradient that has to cross $T$
-identical steps to reach an early input is a product of $T$ near-identical
-Jacobians, and unlike the additive identity term a residual connection
-supplies, a plain recurrence has no floor under that product. It either
-shrinks geometrically, grows geometrically, or, on a knife's edge, does
-neither, and one number — the spectral radius of the recurrent weight
-matrix — tells you which. This lesson derives that result, then covers what
-practitioners do about it, and ends with a property that has nothing to do
-with gradients: $h_t$ depends on the *value* of $h_{t-1}$, so every step has
-to wait for the one before it. That dependency is the opening the transformer
-walks through by removing the recurrence entirely.
+A **recurrent neural network** (RNN) reads a sequence one step at a time, the
+way you read a sentence one word at a time. It keeps a running summary called
+the **hidden state**. At each step it mixes the new input with the old summary
+to make a new summary. It uses the same weights at every step, so one small
+set of weights handles a sequence of any length.
+
+In this lesson you build that cell, run it over a sequence, and train it with
+**backpropagation through time** (BPTT). You then see the catch: a gradient
+that travels back many steps gets multiplied by the same matrix again and
+again, so it fades to nothing or blows up. You measure that effect and build
+the two standard tools for living with it.
 
 ## What you already know
 
-- Reverse-mode automatic differentiation propagates vector-Jacobian products
-  backward through a computation graph, and a parameter used at multiple
-  points receives the sum of the gradients from every use.
-- For $A \in \mathbb{R}^{d \times d}$, the spectral radius $\rho(A)$ is the
-  largest magnitude among its eigenvalues, and Gelfand's formula states
-  $\lim_{n \to \infty} \lVert A^n \rVert^{1/n} = \rho(A)$.
-- $\tanh$ has derivative $\phi'(z) = 1 - \tanh^2(z) \in (0, 1]$, equal to $1$
-  only at $z = 0$.
-- `mlcheck.finite_difference` approximates a gradient by central differences.
+- Backpropagation applies the chain rule from the loss back to each weight.
+- When one weight is used in several places, its gradient is the sum of the
+  gradients from every place.
+- The derivative of $\tanh(z)$ is $1 - \tanh(z)^2$, which is between 0 and 1.
+- An **eigenvalue** $\lambda$ of a square matrix $W$ is a number for which
+  some vector $v$ satisfies $W v = \lambda v$.
+- The **norm** of a vector is its length, `np.linalg.norm(v)`.
 
-## The recurrent state equation
+## The recurrent cell
 
-A vanilla recurrent cell maps a state and an input to a new state:
+Picture someone listening to a story and keeping a one-line summary in their
+head. Each new sentence updates the summary. The summary is the hidden state
+$h$, and the update rule is the cell.
+
+Sequences in this exercise are **time-major**: `x` has shape `(T, n, d_x)`,
+with $T$ steps, $n$ examples in a batch, and $d_x$ input features per step.
+The hidden state has $d_h$ numbers per example. One step of the cell is
 
 $$
-h_t = \phi(z_t), \qquad z_t = W_{hh} h_{t-1} + W_{xh} x_t + b ,
+h_t = \tanh\left(x_t W_{xh}^{\top} + h_{t-1} W_{hh}^{\top} + b\right)
 $$
 
-with $\phi = \tanh$, $h_t \in \mathbb{R}^{d_h}$, and the same $W_{hh}$,
-$W_{xh}$, and $b$ reused at every $t$. Unrolled over $T$ steps, this is $T$
-copies of the same cell wired in a chain with tied weights. The one thing
-that's new is that a single set of weights now appears $T$ times, so the
-multivariable chain rule's rule for a repeated variable — sum the gradient
-from every occurrence — is most of the computation.
+Read it aloud: take this step's input $x_t$ and multiply by the
+input-to-hidden weights $W_{xh}$, shape `(d_h, d_x)`. Take the previous hidden
+state $h_{t-1}$ and multiply by the hidden-to-hidden weights $W_{hh}$, shape
+`(d_h, d_h)`. Add the two and a bias $b$, shape `(d_h,)`. Squash the result
+with $\tanh$ so every entry stays between $-1$ and $1$. In numpy:
+
+```python
+h_t = np.tanh(x_t @ W_xh.T + h_prev @ W_hh.T + b)
+```
+
+To run a whole sequence, start from an initial state $h_0$ and apply the cell
+once per step, storing each new state. The output has shape `(T, n, d_h)`.
+Row 0 holds $h_1$, the state after the first input; $h_0$ itself isn't stored.
+
+### Work a forward pass by hand
+
+Use one example, one input feature, and one hidden unit, so every quantity is
+a single number. Let $W_{xh} = 0.5$, $W_{hh} = 0.8$, $b = 0$, $h_0 = 0$, and
+inputs $x_1 = 1$, $x_2 = 0.5$.
+
+- Step 1: $z_1 = 0.5 \times 1 + 0.8 \times 0 = 0.5$, so
+  $h_1 = \tanh(0.5) = 0.4621$.
+- Step 2: $z_2 = 0.5 \times 0.5 + 0.8 \times 0.4621 = 0.6197$, so
+  $h_2 = \tanh(0.6197) = 0.5509$.
+
+Here $z_t$ is the value inside the $\tanh$, called the **pre-activation**.
 
 ## Backpropagation through time
 
-Suppose the loss accumulates one term per step, $\ell = \sum_{t=1}^{T}
-\ell_t(h_t)$. Differentiating the state equation gives the local Jacobian
+Unroll the loop and you get a long chain of identical cells, one per step.
+BPTT is ordinary backpropagation on that chain. You start at the last step and
+walk backward to the first.
+
+The gradient reaching a hidden state $h_t$ comes from two places: the loss
+attached directly to $h_t$, which the exercise passes in as `dH[t]`, and
+everything later in the sequence, which flows back through $h_{t+1}$. Call the
+second part the **carry**. At each step, going backward:
 
 $$
-\frac{\partial h_{t+1}}{\partial h_t} = \operatorname{diag}\big(\phi'(z_{t+1})\big)\, W_{hh} ,
+dh_t = dH_t + \text{carry}, \qquad
+dz_t = dh_t \odot \left(1 - h_t^2\right), \qquad
+\text{carry} \leftarrow dz_t\, W_{hh}
 $$
 
-so the gradient reaching $h_t$ — from its own loss term and from every later
-step — obeys the backward recursion
+Read it aloud: add the direct gradient to what came back from the future. Pass
+it through the $\tanh$ by multiplying element by element with $1 - h_t^2$,
+which is the $\tanh$ derivative written using the output you already stored.
+Then send it one step further back by multiplying by $W_{hh}$. The symbol
+$\odot$ means element-by-element multiplication.
+
+Every weight is reused at every step, so its gradient is a sum over steps:
 
 $$
-\frac{\partial \ell}{\partial h_t} = \frac{\partial \ell_t}{\partial h_t} +
-\left(\frac{\partial \ell}{\partial h_{t+1}}\right)^{\!\top}
-\operatorname{diag}\big(\phi'(z_{t+1})\big)\, W_{hh} ,
+dW_{xh} = \sum_t dz_t^{\top} x_t, \qquad
+dW_{hh} = \sum_t dz_t^{\top} h_{t-1}, \qquad
+db = \sum_t \textstyle\sum_{\text{rows}} dz_t
 $$
 
-running from $t = T$ down to $t = 1$. Unrolling it gives the closed form this
-lesson is named for: the gradient reaching step $t$ is a sum over every later
-step, each term carried back through a product of repeated Jacobians,
+Read it aloud: at each step, the upstream gradient transposed times that
+step's input gives a contribution, and you add them all up. The input gradient
+at each step is $dx_t = dz_t W_{xh}$. When the loop ends, whatever is left in
+the carry is the gradient for $h_0$. In numpy, inside a loop over
+`reversed(range(T))`:
+
+```python
+dz = (dH[t] + carry) * (1.0 - h_seq[t] ** 2)
+dW_hh += dz.T @ h_prev
+carry = dz @ W_hh
+```
+
+### Work the backward pass by hand
+
+Continue the example. Put a loss gradient of 1 on $h_2$ and 0 on $h_1$.
+
+- Step 2: $dh_2 = 1$. $dz_2 = 1 \times (1 - 0.5509^2) = 0.6965$.
+  Carry $= 0.6965 \times 0.8 = 0.5572$.
+- Step 1: $dh_1 = 0 + 0.5572$. $dz_1 = 0.5572 \times (1 - 0.4621^2) = 0.4382$.
+  Carry $= 0.4382 \times 0.8 = 0.3506$.
+
+The sums give:
+
+- $dW_{xh} = 0.6965 \times 0.5 + 0.4382 \times 1 = 0.7865$.
+- $dW_{hh} = 0.6965 \times 0.4621 + 0.4382 \times 0 = 0.3219$.
+- $db = 0.6965 + 0.4382 = 1.1347$.
+- $dx_1 = 0.4382 \times 0.5 = 0.2191$ and $dx_2 = 0.6965 \times 0.5 = 0.3482$.
+- $dh_0 = 0.3506$.
+
+## Why gradients vanish or explode
+
+Look at what happens to the carry. Every step backward multiplies it by
+$(1 - h^2)$ and by $W_{hh}$. Over many steps, you multiply by nearly the same
+thing many times. It's like compound interest: a rate a little below one
+shrinks your money to zero over enough years, and a rate a little above one
+makes it explode.
+
+For a matrix, the "rate" is its **spectral radius** $\rho(W)$, the largest
+absolute value among its eigenvalues. If the $\tanh$ slope along the path is
+about $\kappa$ (a number between 0 and 1), then after $T$ steps the gradient
+size is roughly
 
 $$
-\frac{\partial \ell}{\partial h_t} = \sum_{t'=t}^{T}
-\frac{\partial \ell_{t'}}{\partial h_{t'}}
-\prod_{s=t+1}^{t'} \operatorname{diag}\big(\phi'(z_s)\big)\, W_{hh} .
+\left(\kappa \, \rho(W_{hh})\right)^T
 $$
 
-Every term with $t' > t$ chains together $t' - t$ copies of the same kind of
-factor — the repeated Jacobian product the next section studies. The
-parameter gradients follow the same pattern as a convolution's shared
-weight: with $\delta_t = \operatorname{diag}(\phi'(z_t))\, (\partial \ell /
-\partial h_t)^{\top}$,
+Read it aloud: multiply the slope by the spectral radius, then raise it to the
+number of steps. Below one, it shrinks to zero; that's a **vanishing
+gradient**. Above one, it grows without limit; that's an **exploding
+gradient**. In numpy:
 
-$$
-\frac{\partial \ell}{\partial W_{hh}} = \sum_{t=1}^{T} \delta_t\, h_{t-1}^{\top}, \qquad
-\frac{\partial \ell}{\partial W_{xh}} = \sum_{t=1}^{T} \delta_t\, x_t^{\top}, \qquad
-\frac{\partial \ell}{\partial b} = \sum_{t=1}^{T} \delta_t .
-$$
+```python
+rho = np.max(np.abs(np.linalg.eigvals(W)))
+scale = (kappa * rho) ** T
+```
 
-Each is a sum over every time step, because the same weight is reused at
-every one of them.
+Eigenvalues can be complex numbers, so take `np.abs` before `np.max`. For
+example, with $W = \operatorname{diag}(0.5, 0.9)$, the eigenvalues are 0.5 and
+0.9, so $\rho = 0.9$. With $\kappa = 1$ and $T = 10$, the prediction is
+$0.9^{10} = 0.349$. Over 100 steps, $0.9^{100} \approx 2.7 \times 10^{-5}$,
+while $1.05^{100} \approx 131.5$. Small changes in $\rho$ make huge
+differences.
 
-## The spectral radius test
+Because $\kappa \le 1$ for $\tanh$, a spectral radius below one always leads
+to vanishing. A spectral radius above one can explode, but $\tanh$ saturates
+as the state grows, which pulls $\kappa$ back down. That leaves sudden spikes
+rather than steady growth.
 
-Consider a stretch of steps where the local slope stays roughly constant,
-$\phi'(z_s) \approx \kappa$. The repeated Jacobian product then behaves like
-$(\kappa W_{hh})^{n}$ for $n$ steps, and Gelfand's formula gives its
-asymptotic size:
+## Truncated BPTT
 
-$$
-\lVert (\kappa W_{hh})^n \rVert \sim \big(\kappa\, \rho(W_{hh})\big)^n
-\quad \text{as } n \to \infty .
-$$
+Storing every hidden state of a very long sequence costs a lot of memory.
+**Truncated BPTT** runs the forward pass over the whole sequence as usual, but
+runs the backward pass separately on chunks of $k$ steps. At the start of each
+chunk, it treats the incoming hidden state as a fixed constant, so no gradient
+crosses from one chunk into the one before it.
 
-Three regimes follow, and they're exhaustive: $\kappa\, \rho(W_{hh}) < 1$
-decays exponentially in the number of steps crossed, the **vanishing
-gradient**; $\kappa\, \rho(W_{hh}) > 1$ grows exponentially, the **exploding
-gradient**; and $\kappa\, \rho(W_{hh}) = 1$ is a critical point some
-initializations target deliberately, one that any drift in the parameters
-during training immediately leaves.
-
-For $\tanh$, $\kappa \le 1$ always, so $\rho(W_{hh}) < 1$ guarantees eventual
-vanishing — no choice of data or activation pattern avoids it. The converse
-isn't unconditional: $\rho(W_{hh}) > 1$ makes explosion possible, but only
-while the trajectory stays where $\kappa$ is close to its bound. $\tanh$ caps
-the forward state to $(-1, 1)^{d_h}$, so a growing state gets pushed toward
-$|z|$ large, where $\phi'(z) \to 0$ throttles $\kappa$ back down. The gradient
-can still spike sharply before that saturation kicks in, which is the
-transient instability gradient clipping exists to survive.
-
-## Truncated BPTT and the bias it introduces
-
-Differentiating through every step of a long sequence costs memory linear in
-$T$, and contributions that have crossed many vanishing-regime steps are
-negligible anyway. **Truncated BPTT** cuts the backward pass at a fixed
-window $k$: run the forward recursion continuously across the sequence, but
-backpropagate independently within chunks of $k$ steps, treating the hidden
-state carried in from the previous chunk as a constant.
-
-This is a bias, not noise: truncation deletes every gradient term whose path
-crosses a chunk boundary, every time, in the same direction. When the true
-dependency decays within $k$ steps anyway, the deleted terms were negligible.
-When a task genuinely depends on structure more than $k$ steps back,
-truncated BPTT can't learn it, because the gradient that would teach it is
-discarded before it's computed.
+The cost is a **bias**: the gradient always misses any link longer than the
+chunk. If your task depends on something 50 steps back and $k = 20$, the model
+never gets the signal it needs to learn it. When $k$ is at least the sequence
+length, truncated BPTT gives exactly the full BPTT answer.
 
 ## Gradient clipping by global norm
 
-Collect every parameter's gradient into one vector $g$, and define the
-**global norm** $G = \lVert g \rVert$. Clipping by global norm rescales every
-gradient tensor by the same scalar,
+Clipping stops a sudden spike from wrecking your weights. Treat all the
+gradient arrays as one long vector $g$ and measure its length $G$, the
+**global norm**. If $G$ is larger than a limit, shrink every array by the
+same factor:
 
 $$
-g \leftarrow \min\!\left(1, \frac{\text{max\_norm}}{G}\right) g .
+g \leftarrow \min\left(1, \frac{\text{max\_norm}}{G}\right) g
 $$
 
-The clipped vector is $cg$ for some positive $c$: a scalar multiple of $g$,
-with the same direction and norm exactly $\min(G, \text{max\_norm})$.
-Clipping never changes the direction the optimizer steps in; it only caps how
-far it steps, which is why it's the standard response to the transient
-spikes the exploding-gradient analysis predicts.
+Read it aloud: if the gradient is already short enough, multiply by 1 and
+leave it alone. Otherwise multiply by $\text{max\_norm}/G$, which makes its
+length exactly $\text{max\_norm}$. Every array gets the same factor, so the
+direction doesn't change; only the step size does. In numpy:
 
-## Teacher forcing and exposure bias
+```python
+G = np.sqrt(sum(np.sum(g ** 2) for g in grads))
+scale = min(1.0, max_norm / G)
+```
 
-A sequence model predicting $x_{t+1}$ from its own history can feed back
-either the ground-truth $x_t$ or its own prediction as the next step's input.
-**Teacher forcing** always feeds the ground truth, so training converges
-faster and avoids compounding early errors. But at inference, where there's
-no ground truth left to feed back, a single wrong prediction can push the
-hidden state somewhere training never visited, and errors compound in a way
-the training loss never penalized. This gap between training-time and
-inference-time inputs is **exposure bias**, worst for exactly the long,
-free-running generations that matter most in practice.
+For example, two gradients $[3]$ and $[4]$ have global norm 5. With a limit of
+1, the scale is $0.2$, giving $[0.6]$ and $[0.8]$, whose global norm is
+exactly 1.
 
-## Why sequential computation caps parallelism
+## Teacher forcing and why RNNs are slow
 
-$h_t$ depends on the *value* of $h_{t-1}$, a genuine data dependency between
-steps rather than a notational one. Computing $h_t$ can't begin until
-$h_{t-1}$ exists, so a sequence of length $T$ forces $T$ sequential steps
-forward and $T$ sequential steps backward, however many accelerator cores sit
-idle. A convolution or a dense layer has no such dependency between output
-positions — self-attention restores exactly that property for sequences,
-letting every position attend to every other position through matrix
-multiplies with no dependency between positions within a layer. The
-recurrence that keeps an RNN's parameter count independent of sequence length
-is the same recurrence that makes its training time scale with sequence
-length no matter the hardware.
+When an RNN learns to predict the next item, you can feed it the true previous
+item during training. That's **teacher forcing**. It trains fast, but at test
+time the model sees its own guesses, which may be wrong in ways it never saw
+in training. This mismatch is called **exposure bias**.
+
+An RNN also can't compute step $t$ until step $t-1$ is done. A sequence of
+length $T$ takes $T$ steps in a row, however many processor cores you have.
+Later lessons on attention remove that limit.
+
+## Build it step by step
+
+The checks test the functions in this order.
+
+1. **`rnn_cell_forward(x_t, h_prev, W_xh, W_hh, b)`.** Takes `x_t` of shape
+   `(n, d_x)` and `h_prev` of shape `(n, d_h)`. Returns the new state, shape
+   `(n, d_h)`. Use `@`, `.T`, and `np.tanh`. Common mistake: writing
+   `W_xh @ x_t`, which has the wrong shapes for batched rows.
+2. **`rnn_forward(x, h0, W_xh, W_hh, b)`.** Takes `x` of shape `(T, n, d_x)`.
+   Returns all states, shape `(T, n, d_h)`. Allocate with `np.empty`, loop over
+   `t`, and call your cell. Common mistake: storing `h0` in row 0.
+3. **`bptt(dH, x, h0, W_xh, W_hh, b)`.** Rerun `rnn_forward` to get the
+   states. Start the carry at zeros and loop `for t in reversed(range(T))`.
+   Use `h_seq[t - 1]` as the previous state, or `h0` when `t == 0`. Return
+   `(dx, dW_xh, dW_hh, db, dh0)`. Use `+=` for the weight sums and
+   `.sum(axis=0)` for the bias. Common mistake: using `h_seq[t]` instead of
+   the previous state in `dW_hh`.
+4. **`truncated_bptt(dH, x, h0, W_xh, W_hh, b, k)`.** Run the forward pass
+   once. For each chunk `start` in `range(0, T, k)`, call your `bptt` on the
+   slice, with the true state just before the chunk as its `h0`. Add the weight
+   gradients, copy the chunk's `dx`, and throw away its `dh0`. Return
+   `(dx, dW_xh, dW_hh, db)`. Common mistake: restarting each chunk from the
+   original `h0`.
+5. **`clip_by_global_norm(grads, max_norm)`.** Return a new list with every
+   array times one shared scale. Guard against a global norm of zero. Common
+   mistake: clipping each array by its own norm, which changes the direction.
+6. **`gradient_scale_over_time(W, phi_prime_bound, T)`.** Return
+   `(phi_prime_bound * rho) ** T` as a float. Common mistake: taking the
+   largest eigenvalue without `np.abs`.
 
 ## Cost and scaling
 
-| Quantity | Cost |
-|---|---|
-| Parameters | $d_h(d_h + d_x + 1)$, independent of $T$ |
-| Flops, one step | $2N(d_h^2 + d_h d_x)$ |
-| Flops, full sequence | $2NT(d_h^2 + d_h d_x)$ |
-| Activation memory, full BPTT | $O(NTd_h)$ |
-| Activation memory, truncated at $k$ | $O(Nkd_h)$ |
-| Sequential steps, forward or backward | $T$, regardless of parallel hardware |
+The table uses $n$ examples, $T$ steps, input size $d_x$, and hidden size
+$d_h$.
 
-Parameter count is flat in $T$ because of weight sharing; every other row
-grows with it, and the memory row is the concrete reason truncated BPTT
-exists even on tasks where the bias it introduces isn't a concern.
+| Quantity | How it grows |
+|---|---|
+| Weights | $d_h (d_h + d_x + 1)$, the same for any $T$ |
+| Work for one step | about $2 n (d_h^2 + d_h d_x)$ operations |
+| Work for the sequence | $T$ times one step |
+| Memory for full BPTT | grows with $n T d_h$ |
+| Memory for truncated BPTT | grows with $n k d_h$ |
+| Steps that must run in order | $T$, on any hardware |
+
+The weight count doesn't depend on sequence length. Everything else grows in
+a straight line with $T$.
 
 ## Where this breaks
 
-**Long-range dependencies are structurally hard to learn.** Whenever
-$\rho(W_{hh}) < 1$, the common case since larger values risk exploding, every
-gradient contribution from more than a few dozen steps back is exponentially
-small before training even sees it. A network with $\rho(W_{hh})$ near one
-can still spike sharply on sequences where activations linger near zero for
-many steps, which is why clipping is applied unconditionally rather than
-reserved for networks with $\rho(W_{hh}) > 1$.
+**Long-range links are hard to learn.** With $\rho(W_{hh}) < 1$, a gradient
+from 50 steps back is tiny before training even starts. Gated cells in the
+next lesson are the standard fix.
 
-**Truncated BPTT's window is a guess.** Choosing $k$ requires knowing how far
-back a task's dependencies reach, which is rarely known in advance; too small
-caps what the model can learn, and too large defeats the memory saving that
-motivated truncation.
+**Spikes happen anyway.** Even a well-behaved network can produce a sudden
+huge gradient. People clip every step, not only when $\rho$ is above one.
 
-**Exposure bias grows with generation length.** Teacher forcing's convergence
-advantage is largest exactly where its blind spot is worst: long outputs are
-where a single early mistake has the most steps left to compound.
+**The truncation window is a guess.** Too small a $k$ hides long links; too
+large a $k$ loses the memory saving.
 
-**The architecture resists parallel hardware.** No amount of gradient-flow
-engineering changes the fact that $T$ sequential dependencies take $T$
-sequential steps — a ceiling that better initialization, clipping, or gating
-(next lesson) can't lift, because it's a property of the recursion, not the
-numbers flowing through it.
+**Exposure bias grows with output length.** Long generated outputs give one
+early mistake many steps to compound.
+
+**Training is sequential.** No trick changes the fact that $T$ dependent steps
+take $T$ steps of time.
 
 ## The exercise
 
-You implement a vanilla RNN's forward pass and its backpropagation through
-time by hand, then measure the vanishing and exploding regimes this lesson
-derived instead of taking the spectral radius argument on faith.
+You build `rnn_cell_forward` and `rnn_forward`, then `bptt` for the full
+backward pass and `truncated_bptt` for the chunked version. You add
+`clip_by_global_norm` and `gradient_scale_over_time`, the spectral-radius
+prediction.
 
-Write `rnn_cell_forward(x_t, h_prev, W_xh, W_hh, b)` for one step and
-`rnn_forward(x, h0, W_xh, W_hh, b)` for a full sequence. Write `bptt(dH, x,
-h0, W_xh, W_hh, b)`, returning the gradient with respect to the input, both
-weight matrices, the bias, and the initial hidden state. Write
-`truncated_bptt(dH, x, h0, W_xh, W_hh, b, k)`, which must reduce to full
-`bptt` when $k$ equals the sequence length. Write `clip_by_global_norm(grads,
-max_norm)`, and `gradient_scale_over_time(W, phi_prime_bound, T)`, which
-returns the Gelfand-formula prediction $(\text{phi\_prime\_bound} \cdot
-\rho(W))^T$ for the size of a $T$-step Jacobian product.
-
-The checks verify `rnn_cell_forward` and `rnn_forward` against direct
-computation, `bptt` against `mlcheck.finite_difference`, that
-`truncated_bptt` with $k$ equal to the sequence length matches full `bptt`
-exactly, that `clip_by_global_norm` leaves an under-threshold gradient
-untouched and rescales an over-threshold one to exactly the threshold norm
-without changing its direction, that `gradient_scale_over_time` matches an
-independent eigenvalue computation, and that the measured gradient magnitude
-after 100 steps of a near-linear recurrence tracks the spectral-radius
-prediction for both a contracting and an expanding recurrent weight matrix.
+The checks compare your forward pass with a direct computation and your
+`bptt` with finite differences for every input. They confirm `truncated_bptt`
+matches `bptt` when `k` equals the sequence length and differs when `k` is 2.
+They confirm clipping leaves a small gradient alone and scales a large one to
+exactly the limit without turning it. Finally, they run 100 steps with
+$\rho = 0.9$ and $\rho = 1.05$ and confirm your measured `dh0` is within a
+factor of ten of your prediction.

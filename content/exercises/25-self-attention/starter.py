@@ -16,6 +16,9 @@ import numpy as np
 def softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
     """A numerically stable softmax along `axis`.
 
+    Steps: subtract the max along `axis` (keepdims=True), exponentiate, then
+    divide by the sum along `axis` (keepdims=True).
+
     Args:
         x: Input array, any shape.
         axis: Axis to normalise over.
@@ -31,6 +34,9 @@ def scaled_dot_product_attention(
     q: np.ndarray, k: np.ndarray, v: np.ndarray, mask: np.ndarray | None = None
 ):
     """Scaled dot-product attention for one or more queries.
+
+    Steps: scores = q @ k.T divided by sqrt(d_k); add the mask if given;
+    softmax each row; multiply the weights by v.
 
     Args:
         q: Queries, shape (Tq, d_k).
@@ -59,6 +65,10 @@ def multi_head_attention(
     mask: np.ndarray | None = None,
 ) -> np.ndarray:
     """Multi-head self-attention over a single sequence.
+
+    Steps: project x into Q, K, V; for each head, slice d // heads columns
+    and run scaled_dot_product_attention with the same mask; concatenate
+    the head outputs along the last axis; multiply by Wo.
 
     Args:
         x: Input sequence, shape (T, d).
@@ -91,8 +101,8 @@ def attention_flops(T: int, d: int, heads: int) -> int:
     Args:
         T: Sequence length.
         d: Model width.
-        heads: Number of heads (accepted, but the total should not depend on
-            it, as the lesson derives).
+        heads: Number of heads. Accepted but unused: splitting into heads
+            does not change the total.
 
     Returns:
         The hand-computed flop count, 8*T*d**2 + 4*T**2*d.

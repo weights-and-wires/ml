@@ -1,7 +1,7 @@
 {
   "id": "31-parameter-efficient-tuning",
   "title": "A LoRA layer from scratch",
-  "brief": "Implement LoRA's forward pass, its parameter and memory accounting, the merge that makes it free at inference, and the best rank-r approximation the method leans on.",
+  "brief": "Implement LoRA's forward pass, its parameter and memory accounting, the merge that makes it free at inference, and the best rank-r approximation of a matrix.",
   "needs_gpu": false,
   "timeout": 30,
   "packages": ["numpy"],

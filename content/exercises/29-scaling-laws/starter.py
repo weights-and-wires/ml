@@ -2,13 +2,13 @@
 
 Fill in the five functions below. `transformer_params` and `training_flops`
 turn an architecture into a parameter count and a compute estimate.
-`chinchilla_optimal` evaluates the closed-form compute-optimal split derived in
-the lesson. `fit_power_law` and `predict_loss` fit and evaluate the power law
+`chinchilla_optimal` evaluates the closed-form compute-optimal split from the
+lesson. `fit_power_law` and `predict_loss` fit and evaluate the power law
 the whole lesson is built on.
 
 The Chinchilla-style constants below are data, not the answer: they are what
 `chinchilla_optimal` and `predict_loss` are evaluated against, not something you
-need to derive. The derivation you must supply is the closed form itself.
+need to derive. You write the closed-form rule from the lesson.
 """
 
 import numpy as np
@@ -66,9 +66,14 @@ def chinchilla_optimal(compute: float) -> tuple:
     """Return the compute-optimal (N*, D*) for a given compute budget.
 
     Minimises L(N, D) = E + A / N**alpha + B / D**beta subject to
-    C = 6 * N * D, using CHINCHILLA_COEFFS = (E, A, B, alpha, beta). Solve the
-    Lagrange stationarity condition in closed form; do not run a numerical
-    optimiser.
+    C = 6 * N * D, using CHINCHILLA_COEFFS = (E, A, B, alpha, beta). Use the
+    closed-form rule from the lesson; do not run a numerical optimiser.
+
+    Steps:
+        1. Unpack E, A, B, alpha, beta from CHINCHILLA_COEFFS.
+        2. Compute a = beta / (alpha + beta) and the constant G.
+        3. N_star = G * 6**(-a) * compute**a.
+        4. D_star is whatever spends the rest of the budget: C = 6 N D.
 
     Args:
         compute: The training compute budget, in flops.
@@ -86,6 +91,12 @@ def fit_power_law(x: np.ndarray, y: np.ndarray) -> tuple:
     Take logs of both arrays and fit a straight line: log(y) = log(c) +
     k * log(x). The slope is the exponent, the intercept exponentiates to the
     coefficient.
+
+    Steps:
+        1. Take np.log of x and of y.
+        2. Center both log arrays by subtracting their means.
+        3. Slope k = sum(centered_u * centered_v) / sum(centered_u ** 2).
+        4. Intercept = mean(log y) - k * mean(log x); c = exp(intercept).
 
     Args:
         x: Positive values, shape (n,).

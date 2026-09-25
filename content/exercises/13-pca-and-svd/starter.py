@@ -90,8 +90,8 @@ def ppca_em(X: np.ndarray, k: int, iters: int) -> tuple[np.ndarray, float, list[
     """Fit probabilistic PCA by expectation-maximisation.
 
     Initialise W with `np.random.default_rng(0).normal(scale=0.1, size=(d, k))`
-    and sigma2 with 1.0. At each iteration, run the E-step and M-step derived
-    in the lesson, then record the marginal log-likelihood of the centred
+    and sigma2 with 1.0. At each iteration, run the E-step and M-step from
+    Step 5 of the lesson, then record the marginal log-likelihood of the centred
     data under the updated (W, sigma2).
 
     Args:

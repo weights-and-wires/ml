@@ -1,10 +1,10 @@
 # Machine learning
 
-A course that teaches machine learning to people who already have the
-mathematics. Thirty-three lessons run from least squares to mixtures of experts.
-Each one derives its result and then asks you to implement it, in an editor
-beside the text, against checks that verify the mathematics rather than the
-shape of your code.
+A hands-on course that teaches machine learning to undergraduates by having them
+build it. Thirty-three lessons run from fitting a line to mixtures of experts.
+Each one explains an idea in plain words, works a small example by hand, and
+then walks you through implementing it, in an editor beside the text, against
+checks that verify the results rather than the shape of your code.
 
 The reading pane is on the left and the editor is on the right, the way a
 programming-problem site arranges them. **Run** executes your file and streams
@@ -13,10 +13,11 @@ as they finish.
 
 ## Who it is for
 
-You know what a gradient, a Jacobian, an eigendecomposition, a convex function,
-and a maximum likelihood estimator are. The lessons do not explain those. They
-spend their space on derivations, on the assumptions a result needs, and on what
-each result costs in flops and memory.
+You have taken a first course in calculus, linear algebra, and probability, even
+if you remember little of it, and you can write Python. You don't need any
+machine learning background. The lessons define every term and symbol when it
+first appears, skip proofs, and show each formula next to the numpy code that
+computes it. Each lesson ends with a step-by-step guide to its exercise.
 
 ## What is in here
 
@@ -99,10 +100,18 @@ Validate what you write:
 .venv/bin/python scripts/check_content.py 05-logistic-regression
 ```
 
+```bash
+node scripts/check_math.mjs content/lessons/05-logistic-regression.md
+```
+
 That checks the front matter, the required sections, and the word count; runs
 every check against `solution.py`, which must pass all of them; and runs them
 against `starter.py`, which must fail at least one. Omit the slug to validate
 everything. The same script runs in CI on every push.
+
+`check_math.mjs` compiles every math segment with the frontend's own KaTeX, so
+math that fails only at render time fails here instead. Run `npm install` in
+`frontend/` first.
 
 ## How a run works
 

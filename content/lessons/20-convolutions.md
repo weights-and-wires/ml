@@ -2,14 +2,14 @@
 title: Convolutional networks
 slug: 20-convolutions
 part: "Part 4 — Vision and sequences"
-summary: Convolution as weight sharing and locality, the equivariance that follows from it, and the matrix multiply that makes it fast.
-minutes: 50
+summary: Build a 2-D convolution as one matrix multiply, with its backward pass, pooling, output sizes, and receptive fields.
+minutes: 70
 gpu: false
 objectives:
-  - Show that convolution commutes with translation, and explain why pooling only approximates invariance.
-  - Compute output size and receptive field for a stack of convolutional layers.
-  - Implement the forward and backward pass of a convolution through im2col.
-  - Compare the parameter and flop cost of a conv layer against a dense layer, and against a depthwise separable factorisation.
+  - Explain how a convolution shares weights across positions, and why a shifted input gives a shifted output.
+  - Compute the output size and receptive field of a stack of convolutional layers.
+  - Build the forward and backward pass of a convolution with im2col and matrix multiplies.
+  - Compare the number of weights in a convolutional layer, a dense layer, and a depthwise separable layer.
 prereqs:
   - 16-backpropagation
 exercise: 20-convolutions
@@ -17,274 +17,330 @@ exercise: 20-convolutions
 
 # Convolutional networks
 
-A multilayer perceptron applied to a 224-by-224 RGB image flattens it into a
-vector of 150,528 numbers and multiplies by a dense weight matrix that has no
-notion of which pixel sits next to which. Learning a detector for some
-pattern this way means learning it separately at every location it might
-appear, because nothing in the architecture says a shape in the top-left
-corner is the same shape in the bottom-right. Backpropagation tells you how
-to differentiate that dense matrix. It has nothing to say about why the
-matrix should be dense in the first place.
+A colour photo of 224 by 224 pixels holds $224 \times 224 \times 3 = 150{,}528$
+numbers. Feed that to a multilayer perceptron with 1000 hidden units, and the
+first layer alone needs about 150 million weights. That is slow, it needs a
+huge amount of data, and it ignores a basic fact about images: a cat in the
+top-left corner is still a cat in the bottom-right.
 
-Convolution replaces the dense matrix with two constraints built into the
-weights: locality, so each output depends on a small neighbourhood of the
-input, and weight sharing, so the same small set of weights is reused at
-every neighbourhood. Neither constraint follows from the data. You impose
-both because natural images are approximately stationary — a texture looks
-the same wherever it appears — and an object's identity does not depend on
-its pixel coordinates. This lesson makes those two constraints precise: what
-they buy in parameter count, the equivariance they prove, the backward pass
-they imply, and the matrix multiply, `im2col`, that makes the operation fast
-on hardware built for dense linear algebra.
+A convolutional network builds that fact in. It uses a small filter, say 3 by
+3 pixels, and slides it across the whole image. The same few weights look for
+the same pattern everywhere. A first layer might have a few thousand weights
+instead of 150 million.
+
+In this lesson you build a convolution layer from scratch, forward and
+backward. You turn it into one big matrix multiply with a trick called
+im2col, which is how fast libraries do it. You also compute output sizes and
+receptive fields, which tell you how much of the image each unit can see.
 
 ## What you already know
 
-- Reverse-mode automatic differentiation computes a full gradient in a small
-  constant multiple of the forward pass's cost.
-- The backward pass of any linear map is multiplication by its transpose.
-- A matrix product of shapes $(m, k)$ and $(k, n)$ costs $2mkn$ flops.
-- `mlcheck.finite_difference` approximates a gradient with central
-  differences.
-- Composing linear maps composes their matrices, so the chain rule for a
-  stack of linear layers is a chain of matrix products.
+- A dense layer multiplies its input by a weight matrix and adds a bias.
+- Backpropagation passes the gradient of the loss back through each layer.
+- A matrix multiply $A B$ sums products along the shared dimension.
+- The gradient of $Y = W X$ is $dW = dY \, X^\top$ and $dX = W^\top dY$.
+- numpy slicing like `a[start:stop:step]` picks every `step`-th element.
 
-## Convolution as a constrained linear map
+## What a convolution does
 
-Fix a single input channel and a 1-D signal. A dense layer maps $x \in
-\mathbb{R}^n$ to $y \in \mathbb{R}^n$ using an arbitrary matrix with $n^2$
-free parameters. A convolution with a kernel $w \in \mathbb{R}^k$, $k \ll n$,
-computes instead
+Think of a magnifying glass sliding over a page, looking for the letter "e".
+At every position, you ask the same question: how much does this patch look
+like an "e"? You write the answer down in a grid. That grid is the output.
 
-$$
-y[i] = \sum_{d=0}^{k-1} w[d]\, x[i + d] ,
-$$
+A convolution does this with numbers. The filter, also called the kernel, is a
+small grid of weights. At each position, you multiply the filter by the patch
+of image under it, entry by entry, and add everything up. Then you add a bias.
 
-which is still linear in $x$, so it is still a matrix multiply, but that
-matrix has only $k$ free parameters instead of $n^2$: nonzero only near the
-diagonal (locality), and identical along every diagonal (weight sharing).
-That drop from $n^2$ to $k$, independent of $n$, is the entire saving a
-convolution offers, and it costs you exactly what you would expect: a
-convolution can only represent a map that is local and shift-invariant.
-
-In two dimensions, with $C_{\text{in}}$ input and $C_{\text{out}}$ output
-channels, a kernel $w \in \mathbb{R}^{C_{\text{out}} \times C_{\text{in}}
-\times k \times k}$, stride $s$, and padding $p$ compute
+For one input channel and a $k \times k$ kernel $w$, the output at row $i$ and
+column $j$ is
 
 $$
-y[c_o, i, j] = b[c_o] + \sum_{c_i=1}^{C_{\text{in}}} \sum_{d_h=0}^{k-1}
-\sum_{d_w=0}^{k-1} w[c_o, c_i, d_h, d_w]\, x_p[c_i,\, s i + d_h,\, s j + d_w] ,
+y_{i,j} = b + \sum_{a=0}^{k-1}\sum_{c=0}^{k-1} w_{a,c}\; x_{i+a,\,j+c}
 $$
 
-where $x_p$ is $x$ zero-padded by $p$ on every spatial side. Every deep
-learning framework calls this operation "convolution," although it is
-technically a cross-correlation, because the sign of the flip never matters
-once the kernel is learned.
+Read it aloud: to get output pixel $(i, j)$, place the kernel's top-left
+corner on input pixel $(i, j)$. Multiply each kernel weight $w_{a,c}$ by the
+input pixel under it, add all $k \times k$ products, and add the bias $b$.
 
-## Translation equivariance, proved
+```python
+y[i, j] = b + np.sum(w * x[i:i+k, j:j+k])
+```
 
-Convolution commutes with a shift of the input: shifting $x$ by $a$ positions
-shifts the output $w * x$ by exactly $a$ positions too, for every kernel
-$w$, because sliding the input past a fixed kernel gives the same overlaps
-in a shifted order. This property is **equivariance**, not invariance — the
-output moves with the input rather than staying fixed — and it is a theorem
-about the operator, true before training touches the kernel at all. It holds
-exactly only away from a boundary. Zero padding breaks it near the edges,
-because a shift that pulls fresh zeros into a boundary output's receptive
-field changes what that output sees.
+Deep learning libraries call this a convolution, although mathematicians would
+call it a cross-correlation, because the kernel is not flipped. The exercise
+follows the libraries.
 
-## From equivariance to invariance: pooling
+Real images have several channels, such as red, green, and blue. A kernel then
+has shape `(C_in, k, k)`: one $k \times k$ slice per input channel, all summed
+together. A layer has `C_out` such kernels, so its weights have shape
+`(C_out, C_in, k, k)` and its bias has shape `(C_out,)`. The input has shape
+`(N, C_in, H, W)`: $N$ images, $C_{\text{in}}$ channels, height $H$, and width
+$W$.
 
-Equivariance means the feature map slides when the input slides. It does not
-by itself make anything invariant. A pooling layer trades resolution for
-approximate invariance: max pooling with window and stride $q$ computes
+### Worked example: a 2-by-2 kernel
 
-$$
-y[i] = \max_{0 \le d < q} x[qi + d] ,
-$$
-
-which stays unchanged under a shift only as long as the same input pixel
-remains the maximiser and still lands in the same window — true for small
-shifts away from a window boundary, and false the moment a shift moves the
-maximiser into a different window. Pooling also throws away any detail finer
-than the sampling resolution it leaves behind, so it buys robustness to
-small jitter at the cost of losing anything that varies faster than the
-stride resolves. Unlike
-equivariance, this robustness is a statistical tendency, not a guarantee: it
-degrades gradually as the shift grows.
-
-## Output size, stride, padding, and dilation
-
-A dilated kernel inserts $\delta - 1$ zeros between taps, reaching an
-effective span of $k' = \delta(k-1) + 1$ input positions. Sliding that span
-with stride $s$ across a padded input of length $n + 2p$ gives
+Take this 3-by-3 input and 2-by-2 kernel, with bias 0:
 
 $$
-n_{\text{out}} = \left\lfloor \frac{n + 2p - \delta(k-1) - 1}{s} \right\rfloor + 1 .
+x = \begin{bmatrix} 1 & 2 & 3 \\ 4 & 5 & 6 \\ 7 & 8 & 9 \end{bmatrix}, \qquad
+w = \begin{bmatrix} 1 & 0 \\ 0 & -1 \end{bmatrix}
 $$
 
-Each spatial dimension applies this formula independently.
+The kernel fits in 2 positions across and 2 down, so the output is 2 by 2:
 
-## Receptive fields
+- $y_{0,0} = 1 \cdot 1 + 0 \cdot 2 + 0 \cdot 4 + (-1) \cdot 5 = -4$
+- $y_{0,1} = 1 \cdot 2 + 0 \cdot 3 + 0 \cdot 5 + (-1) \cdot 6 = -4$
+- $y_{1,0} = 1 \cdot 4 + 0 \cdot 5 + 0 \cdot 7 + (-1) \cdot 8 = -4$
+- $y_{1,1} = 1 \cdot 5 + 0 \cdot 6 + 0 \cdot 8 + (-1) \cdot 9 = -4$
 
-A unit's receptive field is the set of input positions that can affect it.
-Let $r_l$ be that size at layer $l$, and let $j_l$ be the **jump**: the
-spacing, in input pixels, between adjacent units of layer $l$. A unit reads
-$k_l$ adjacent units from the previous layer, each $j_{l-1}$ input pixels
-apart, so
+This kernel measures the difference between a pixel and its lower-right
+neighbour. The input rises evenly, so every answer is the same.
 
-$$
-r_l = r_{l-1} + (k_l - 1)\, j_{l-1} , \qquad j_l = j_{l-1}\, s_l , \qquad r_0 = j_0 = 1 .
-$$
+### Shift in, shift out
 
-A worked stack makes this concrete: three layers with kernel size 3 and
-strides 2, 2, 1 give $r_0=1$, $r_1=3$, $r_2=7$, $r_3=15$. The same three
-kernels run at stride 1 throughout would reach only $r_3=7$. Downsampling
-early is the cheapest way to grow the receptive field, because every later
-layer inherits the compounded jump.
+Because the same weights are used at every position, moving the input one
+pixel to the right moves the output one pixel to the right. Nothing else
+changes. This property is called translation equivariance. It is why a
+convolution finds a cat wherever the cat is.
 
-## Parameters and flops: conv versus dense
+Pooling takes this a step further. Max pooling slides a window over each
+channel and keeps only the largest value in each window. Small shifts inside a
+window then often leave the output unchanged. That is only approximate: a
+shift that moves the largest value into the next window does change the
+output.
 
-A conv layer with kernel $k \times k$ has $C_{\text{out}}(C_{\text{in}}k^2 +
-1)$ parameters, independent of the spatial size, while a dense layer
-connecting the same flattened input and output needs a parameter for every
-input-output pair. For a $32 \times 32$ input and output with $k=3$, the
-dense layer needs roughly $32^4/9 \approx 1.16 \times 10^5$ times more
-parameters than the conv layer to represent a map that, if it happens to be
-local and shift-invariant, the conv layer represents exactly. That
-compression costs expressive power: a conv layer cannot represent a map that
-depends on distant pixels without stacking enough layers to reach them.
+## Output size
 
-## Convolution as a matrix multiply: `im2col`
+Four settings decide how big the output is:
 
-Hardware is fastest at one thing: dense matrix multiplication. `im2col`
-turns a convolution into exactly that. For every output position, gather the
-$C_{\text{in}}k^2$ input values its receptive field touches into one column
-of a matrix $X_{\text{col}}$, and reshape the kernel into a matrix
-$W_{\text{mat}}$. Then
+- **Kernel size $k$**: how many pixels wide the filter is.
+- **Stride $s$**: how many pixels the filter moves between positions.
+- **Padding $p$**: how many rows and columns of zeros you add on each side.
+- **Dilation $d$**: the spacing between kernel taps. With $d = 2$, a 3-wide
+  kernel skips every other pixel and covers 5 pixels.
+
+The output length along one axis is
 
 $$
-Y_{\text{mat}} = W_{\text{mat}} X_{\text{col}} + b \mathbf{1}^{\top}
+\text{out} = \left\lfloor \frac{\text{size} + 2p - \big(d\,(k - 1) + 1\big)}{s} \right\rfloor + 1
 $$
 
-computes exactly the convolution sum above, reshaped back to the output's
-shape. `im2col` does no arithmetic of its own — it is a gather that
-duplicates every pixel touched by more than one patch — but it turns the
-convolution into one call to a matrix-multiply routine, which is worth the
-$k^2$-fold memory cost on hardware built for dense linear algebra.
+Read it aloud: the padded input has length $\text{size} + 2p$. The kernel
+covers $d(k-1) + 1$ pixels. Subtract to get how far the kernel can travel,
+divide by the stride and round down (the $\lfloor \cdot \rfloor$ brackets), then
+add 1 for the starting position.
+
+```python
+effective_kernel = dilation * (kernel_size - 1) + 1
+out = (size + 2 * padding - effective_kernel) // stride + 1
+```
+
+Check it on some cases:
+
+| size | $k$ | $s$ | $p$ | $d$ | Calculation | Output |
+|---|---|---|---|---|---|---|
+| 7 | 3 | 1 | 0 | 1 | $(7 - 3) // 1 + 1$ | 5 |
+| 7 | 3 | 1 | 1 | 1 | $(9 - 3) // 1 + 1$ | 7 |
+| 7 | 3 | 2 | 1 | 1 | $(9 - 3) // 2 + 1$ | 4 |
+| 7 | 3 | 1 | 0 | 2 | $(7 - 5) // 1 + 1$ | 3 |
+
+## Receptive field
+
+The receptive field of a unit is the patch of the original image it can see.
+One 3-by-3 layer sees 3 pixels across. Stack a second 3-by-3 layer on top, and
+each of its units sees 3 units of the first layer, which together cover 5
+pixels. Deeper units see more of the image.
+
+Stride makes the field grow faster. After a layer with stride 2, neighbouring
+units are 2 pixels apart in the input, so each extra kernel tap adds 2 pixels
+of view. Keep a running "jump", the product of every earlier stride:
+
+$$
+r_{\text{new}} = r + (k - 1) \cdot \text{jump}, \qquad \text{jump}_{\text{new}} = \text{jump} \cdot s
+$$
+
+Read it aloud: start with $r = 1$ and $\text{jump} = 1$. For each layer in
+order, grow the field by the kernel size minus 1, times the current jump. Then
+multiply the jump by this layer's stride, ready for the next layer.
+
+```python
+r = r + (kernel_size - 1) * jump
+jump *= stride
+```
+
+### Worked example: receptive field
+
+Take three layers with $(k, s)$ equal to $(3, 2)$, $(3, 2)$, and $(3, 1)$:
+
+| Layer | $k$ | $s$ | jump used | $r$ after | jump after |
+|---|---|---|---|---|---|
+| start | | | | 1 | 1 |
+| 1 | 3 | 2 | 1 | $1 + 2 \times 1 = 3$ | 2 |
+| 2 | 3 | 2 | 2 | $3 + 2 \times 2 = 7$ | 4 |
+| 3 | 3 | 1 | 4 | $7 + 2 \times 4 = 15$ | 4 |
+
+Each unit at the top sees a 15-by-15 patch of the input.
+
+## Convolution as one matrix multiply
+
+Looping over every output pixel in Python is slow. The im2col trick ("image to
+columns") rearranges the input so that the whole convolution becomes one
+matrix multiply, which numpy runs fast.
+
+The idea: cut out every patch the kernel will visit, flatten each one into a
+column, and stack the columns side by side. For one image with $C_{\text{in}}$
+channels, each patch has $C_{\text{in}} k^2$ numbers. There are
+$L = H_{\text{out}} \times W_{\text{out}}$ patches. So the column matrix has
+shape $(C_{\text{in}} k^2, L)$.
+
+Flatten the weights the same way, one row per output channel, into
+$W_{\text{mat}}$ of shape $(C_{\text{out}}, C_{\text{in}} k^2)$. Now
+
+$$
+Y_{\text{mat}} = W_{\text{mat}} \, \text{col} + b
+$$
+
+Read it aloud: each row of $W_{\text{mat}}$ is one kernel, and each column of
+$\text{col}$ is one patch. Their product is every kernel applied to every
+patch at once. Add each output channel's bias to its whole row. The result
+has shape $(C_{\text{out}}, L)$, which you reshape to
+$(C_{\text{out}}, H_{\text{out}}, W_{\text{out}})$.
+
+```python
+w_mat = w.reshape(C_out, -1)
+out = np.einsum("oc,ncl->nol", w_mat, col) + b[None, :, None]
+```
+
+Here `np.einsum` does the matrix multiply for every image `n` in the batch.
+You can also loop over the batch and use `@`.
+
+### Building the columns
+
+You don't need to loop over every output position. Loop only over the $k^2$
+kernel offsets $(d_h, d_w)$. For each offset, one strided slice of the padded
+input gives the value at that offset for every output position at once:
+
+```python
+x_padded[:, :, dh : dh + stride * H_out : stride, dw : dw + stride * W_out : stride]
+```
+
+Store each slice in an array of shape `(N, C, k, k, H_out, W_out)`, then
+reshape to `(N, C * k * k, H_out * W_out)`. That order, channel then kernel row
+then kernel column, matches `w.reshape(C_out, -1)`. Use `np.pad` to add the
+zero border.
 
 ## The backward pass
 
-The bias gradient sums $\partial L/\partial y$ over every spatial position
-that uses it. The weight gradient at kernel tap $(d_h, d_w)$ is a
-correlation of the upstream gradient with the input: slide the gradient map
-across the padded input at the same stride the forward pass used, and sum
-the products. In the `im2col` picture, both gradients are one line of matrix
-calculus:
+You get the incoming gradient `dY` with the output's shape, and you need the
+gradients for the bias, the weights, and the input. Because the forward pass is
+a matrix multiply, you reuse the rules for $Y = W X$. Reshape `dY` to
+$dY_{\text{mat}}$ of shape $(N, C_{\text{out}}, L)$.
 
-$$
-\frac{\partial L}{\partial W_{\text{mat}}} = \frac{\partial L}{\partial Y_{\text{mat}}} X_{\text{col}}^{\top}, \qquad
-\frac{\partial L}{\partial X_{\text{col}}} = W_{\text{mat}}^{\top} \frac{\partial L}{\partial Y_{\text{mat}}} .
-$$
+- **Bias.** Each bias is added to every position of every image, so its
+  gradient is the sum of `dY` over the batch and over space:
+  `dY_mat.sum(axis=(0, 2))`.
+- **Weights.** $dW_{\text{mat}} = dY_{\text{mat}} \, \text{col}^\top$, summed
+  over the batch. Reshape it back to `(C_out, C_in, k, k)`.
+- **Columns.** $d\text{col} = W_{\text{mat}}^\top \, dY_{\text{mat}}$, with shape
+  $(N, C_{\text{in}} k^2, L)$.
 
-The input gradient needs one more step, because `im2col`'s gather is itself
-a linear map, $X_{\text{col}} = Sx$ for a 0/1 selection matrix $S$. Its
-backward pass is $S^\top$, usually called `col2im`: it scatters each column
-entry back to the input position it came from and sums the contributions
-where patches overlapped,
+```python
+dw_mat = np.einsum("nol,ncl->oc", dY_mat, col)
+dcol = np.einsum("oc,nol->ncl", w_mat, dY_mat)
+```
 
-$$
-\frac{\partial L}{\partial x} = S^{\top} \frac{\partial L}{\partial X_{\text{col}}} .
-$$
+The last step turns $d\text{col}$ back into an image-shaped gradient, with
+`col2im`. It runs im2col in reverse. For each kernel offset, add the slice of
+$d\text{col}$ back into the same strided positions of a zero array the size of
+the padded input. Use `+=`, not `=`, because patches overlap and one input
+pixel feeds several patches. Its gradient is the sum of all of them. Finally,
+cut off the padding.
 
-Indexed out directly rather than through `im2col`, this same gradient is a
-full correlation of the flipped kernel with the upstream gradient map — the
-classical description of a convolution's backward pass, and the same
-numbers this matrix form computes.
+## Build it step by step
 
-## $1 \times 1$ convolutions and depthwise separable convolutions
+The checks test the functions in this order.
 
-Setting $k=1$ removes the spatial sum entirely: $y[c_o,i,j] = b[c_o] +
-\sum_{c_i} w[c_o,c_i]\, x[c_i,i,j]$ mixes channels at every position
-independently, with no spatial receptive field at all. It is the cheapest
-way to change channel count, at $HWC_{\text{in}}C_{\text{out}}$
-multiply-adds.
-
-A depthwise separable convolution factors a $k \times k$ conv into a
-**depthwise** stage, which convolves each channel with its own $k \times k$
-filter and mixes no channels, followed by a $1\times1$ **pointwise** stage
-that mixes channels. The ratio of its cost to a standard conv's is
-
-$$
-\frac{1}{C_{\text{out}}} + \frac{1}{k^2} .
-$$
-
-At $k=3$ and $C_{\text{out}}=256$, a typical mid-network layer, this comes
-to about $0.115$ — roughly a ninefold reduction in flops, at the cost of
-being unable to represent a kernel whose weights genuinely couple a spatial
-offset to a specific pair of channels.
+1. **`conv_output_shape(size, kernel_size, stride, padding, dilation)`.**
+   Returns an integer. One line with `//`. The common mistake is forgetting the
+   dilation, so the kernel's reach is `kernel_size` instead of
+   `dilation * (kernel_size - 1) + 1`.
+2. **`im2col(x, kernel_size, stride, padding)`.** Takes `(N, C, H, W)`. Returns
+   `(N, C * k * k, H_out * W_out)`. Pad with `np.pad`, fill a six-axis array
+   with one strided slice per kernel offset, then reshape. The common mistake
+   is a slice end that is off by one, which gives the wrong number of output
+   positions.
+3. **`col2im(dcol, x_shape, kernel_size, stride, padding)`.** The reverse of
+   `im2col`, with `+=`. It isn't tested on its own, but `conv2d_backward` needs
+   it. When `padding` is 0, don't slice with `padding:-padding`, because `0:-0`
+   is empty.
+4. **`conv2d_forward(x, w, b, stride, padding)`.** Returns
+   `(N, C_out, H_out, W_out)`. Call `im2col`, multiply by `w.reshape(C_out, -1)`,
+   add the bias, and reshape. The common mistake is adding `b` without
+   `b[None, :, None]`, so it lines up with the wrong axis.
+5. **`conv2d_backward(dY, x, w, b, stride, padding)`.** Returns `(dx, dw, db)`
+   with the same shapes as `x`, `w`, and `b`. Rebuild `col`, compute the three
+   gradients, and call `col2im` for `dx`. The common mistake is forgetting to
+   sum `dw` over the batch.
+6. **`max_pool_forward(x, pool_size, stride)`.** Returns
+   `(N, C, H_out, W_out)`, with sizes from `conv_output_shape` at padding 0.
+   Loop over output positions and take `window.max(axis=(2, 3))`.
+7. **`receptive_field(layers)`.** Takes a list of `(kernel_size, stride)`
+   pairs. Returns an integer. The common mistake is updating the jump before
+   using it, which gives 21 instead of 15 in the worked example.
 
 ## Cost and scaling
 
-| Operation | Parameters | Multiply-adds |
-|---|---|---|
-| Dense layer, matched input and output | $C_{\text{in}}HW \cdot C_{\text{out}}H_{\text{out}}W_{\text{out}}$ | same |
-| Standard conv, $k \times k$ | $C_{\text{out}}(C_{\text{in}}k^2+1)$ | $H_{\text{out}}W_{\text{out}}C_{\text{out}}C_{\text{in}}k^2$ |
-| $1\times1$ conv | $C_{\text{out}}(C_{\text{in}}+1)$ | $HWC_{\text{in}}C_{\text{out}}$ |
-| Depthwise separable, $k \times k$ | $C_{\text{in}}(k^2+1) + C_{\text{out}}(C_{\text{in}}+1)$ | $H_{\text{out}}W_{\text{out}}C_{\text{in}}(k^2+C_{\text{out}})$ |
+The number of weights in a convolution layer is $C_{\text{out}} \cdot
+C_{\text{in}} \cdot k^2 + C_{\text{out}}$. It doesn't depend on the image
+size at all. The work does: each output pixel costs $C_{\text{in}} k^2$
+multiplies per output channel.
 
-`im2col` trades memory for that matmul speedup: $X_{\text{col}}$ holds $k^2$
-copies of every interior pixel, so its footprint is $k^2$ times the input's.
-That is the standing objection to it on memory-constrained hardware, and the
-reason production kernels favour direct, Winograd, or FFT-based convolution
-algorithms that avoid materialising it in full.
+Here is the cost for a 3-by-3 layer with 64 channels in and out, on a
+56-by-56 image:
+
+| Layer | Weights | Multiplies per image |
+|---|---|---|
+| Dense layer, every pixel to every pixel | about $4 \times 10^{10}$ | about $4 \times 10^{10}$ |
+| Convolution, $k = 3$ | $64 \cdot 64 \cdot 9 = 36{,}864$ | about $1.2 \times 10^8$ |
+| Depthwise separable, $k = 3$ | $64 \cdot 9 + 64 \cdot 64 = 4{,}672$ | about $1.5 \times 10^7$ |
+
+A depthwise separable layer splits the work in two. First, one $k \times k$
+filter per channel, with no mixing between channels. Then a 1-by-1
+convolution that mixes the channels. It needs about eight times fewer weights
+here, and phone-sized networks rely on it.
+
+im2col has a memory cost. The column matrix stores every pixel about $k^2$
+times, once for each patch it appears in. For a 3-by-3 kernel, that is about
+nine times the input's memory.
 
 ## Where this breaks
 
-**Non-stationary signals.** Locality and weight sharing are correct priors
-exactly when a signal's statistics do not depend on position. Tabular data
-with unrelated columns, or a task where absolute position carries meaning,
-gets little from convolution.
-
-**Pooling degrades continuously, not categorically.** Invariance from
-subsampling holds only for shifts smaller than the stride, away from window
-boundaries, so a network's robustness to shift is measured empirically, not
-guaranteed the way equivariance is. Strided convolutions used for
-downsampling share the same weakness for the same reason.
-
-**Zero padding is not translation-equivariant.** The proof above assumed no
-boundary. Every network with zero padding has border artefacts that deep
-stacks compound, which is why some architectures use reflection or circular
-padding instead when the border matters.
-
-**Fixed receptive fields cap long-range reasoning.** Stacking small kernels
-can grow a receptive field to cover a whole image, but each layer added is
-still local at every step. A task that needs one output to depend on two
-far-apart, dynamically determined positions is exactly what motivates
-dropping the locality constraint, which Part 5 covers with self-attention.
+- **Borders.** Without padding, each layer shrinks the image, and pixels near
+  the edge are seen less. Padding of $(k - 1)/2$ keeps the size the same for
+  odd $k$ and stride 1.
+- **Shift isn't everything.** A convolution handles shifts well, but not
+  rotations or changes of scale. People add rotated and resized copies of
+  training images, which is called data augmentation.
+- **Stride and pooling lose detail.** Striding skips pixels, so a small shift
+  can change the output more than you'd expect. Some networks blur before
+  downsampling to reduce this.
+- **Too small a receptive field.** If the top units can't see a whole object,
+  the network can't recognise it. Add layers, strides, or dilation.
+- **im2col memory.** Large images and batches can run out of memory. Fast
+  libraries use other methods for large kernels, or compute the columns in
+  pieces.
 
 ## The exercise
 
-You implement the forward and backward pass of a 2-D convolution through
-`im2col`, plus the two supporting measurements this lesson derived: output
-size and receptive field.
+You implement `conv_output_shape`, `im2col`, `col2im`, `conv2d_forward`,
+`conv2d_backward`, `max_pool_forward`, and `receptive_field`. The forward and
+backward pass must go through `im2col` and matrix multiplies, not through a
+loop over every output pixel.
 
-Write `conv_output_shape(size, kernel_size, stride, padding, dilation=1)`,
-returning the formula derived above for one spatial axis; `im2col(x,
-kernel_size, stride, padding)`, which gathers every patch of the batched
-input `x` into the column matrix; `conv2d_forward(x, w, b, stride, padding)`,
-built on top of `im2col` as a single matrix multiply; and
-`conv2d_backward(dY, x, w, b, stride, padding)`, returning the gradient with
-respect to the input, the weights, and the bias, built on `im2col`'s adjoint.
-Also write `max_pool_forward(x, pool_size, stride)` and
-`receptive_field(layers)`, which takes a list of `(kernel_size, stride)`
-pairs from the first layer of a stack to the last and returns the final
-receptive field using the recursion above.
-
-The checks confirm `conv_output_shape` against known stride-and-padding
-cases, `im2col` against direct slicing on a small tensor, and
-`conv2d_forward` against an independent quadruple-loop reference. All three
-outputs of `conv2d_backward` are checked against `mlcheck.finite_difference`.
-A further check shifts the input and confirms the output shifts by the same
-amount away from the border, `max_pool_forward` is checked against a direct
-windowed maximum, and `receptive_field` is checked against the three-layer
-stack worked out above.
+The checks verify the output-size formula, including dilation, that `im2col`
+gathers the same patches as direct slicing, and that `conv2d_forward` matches
+a slow loop reference with and without stride and padding. They check all
+three gradients from `conv2d_backward` against finite differences, and that
+shifting the input shifts the output. The last checks test max pooling
+against a direct windowed maximum and `receptive_field` against the 15 from
+the worked example.

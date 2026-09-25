@@ -2,14 +2,15 @@
 title: Backpropagation as reverse-mode AD
 slug: 16-backpropagation
 part: "Part 3 — Neural networks"
-summary: Backpropagation as reverse-mode automatic differentiation, with every vector-Jacobian product an MLP needs worked out.
-minutes: 55
+summary: Build a tiny autodiff engine that records a computation and runs the chain rule backwards to get every gradient in one pass.
+minutes: 70
 gpu: false
 objectives:
-  - Explain forward-mode and reverse-mode automatic differentiation as Jacobian-vector and vector-Jacobian products, and state their relative cost.
-  - State the vector-Jacobian product of an affine layer, a pointwise nonlinearity, a matrix product, and softmax-cross-entropy.
-  - State the memory-versus-recompute trade that checkpointing makes, and why it exists.
-  - State the error floor of central-difference numerical differentiation and explain why it checks a gradient rather than computes one.
+  - Explain how backpropagation applies the chain rule from the loss back to every input.
+  - Build the backward rule for addition, multiplication, matrix products, ReLU, and sum.
+  - Compute the softmax-cross-entropy loss and its gradient with respect to the logits.
+  - Build a topological sort so every gradient is complete before it flows further.
+  - Check any gradient against a finite-difference estimate.
 prereqs:
   - 15-multilayer-perceptrons
 exercise: 16-backpropagation
@@ -17,303 +18,291 @@ exercise: 16-backpropagation
 
 # Backpropagation as reverse-mode AD
 
-Every gradient this course has derived so far — the normal equations, the
-logistic loss, the M-step of a Gaussian mixture — was worked out by hand,
-once, for one specific function. Training a network with millions of
-parameters and an architecture that changes weekly cannot work that way.
-What makes it unnecessary is a fact about the chain rule that has nothing
-to do with neural networks specifically. The chain rule is a product of
-Jacobians, and matrix multiplication is associative. One particular way of
-parenthesising that product computes the gradient of a scalar with respect
-to every input at once, for the cost of a single extra pass over the
-computation. That fact is backpropagation. This lesson derives it from the
-chain rule directly, then works out the specific vector-Jacobian products
-an MLP needs, so that the exercise's autodiff engine has a hand-checked
-derivation behind every operation it implements.
+To train a network, you need the gradient of the loss with respect to every
+weight. The **gradient** is the list of partial derivatives: for each weight,
+how much the loss changes when you nudge that weight a little. In earlier
+lessons you worked out gradients by hand, one model at a time. That does not
+scale to networks with millions of weights.
+
+**Backpropagation** does the work for you. During the forward pass, it records
+every operation, like writing each step of a recipe on a card. Then it walks
+the cards backwards, applying the chain rule at each step. One backward pass
+gives the gradient for every weight at once, for about the cost of one more
+forward pass.
+
+This is called **reverse-mode automatic differentiation** (AD). In this lesson
+you build a small version of the engine inside PyTorch: a `Tensor` class that
+records operations and runs them in reverse.
 
 ## What you already know
 
-- The multivariable chain rule: for $y = f(g(x))$, the Jacobian is
-  $J_y = J_f(g(x))\, J_g(x)$, a product of Jacobians that extends to any
-  number of compositions.
-- The Jacobian of an affine map $x \mapsto Wx + b$ is $W$, constant in $x$.
-- A multilayer perceptron is an alternating composition of affine maps and
-  pointwise nonlinearities, from the previous lesson.
-- Matrix multiplication is associative but not commutative: $(AB)C = A(BC)$,
-  and the two sides can cost very different amounts of arithmetic despite
-  being equal.
-- Floating-point numbers carry a relative rounding error of about
-  $\varepsilon_{\text{machine}} \approx 2.2 \times 10^{-16}$ in double
-  precision, on every arithmetic operation.
+- The chain rule: if $y = f(u)$ and $u = g(x)$, then $\frac{dy}{dx} = \frac{dy}{du} \cdot \frac{du}{dx}$.
+- A forward pass through an MLP is a chain of matrix products, bias adds, and ReLUs.
+- Softmax turns a row of scores into probabilities that add up to 1.
+- A finite difference, $(f(x+h) - f(x-h)) / 2h$, estimates a derivative.
+- Numpy broadcasting stretches a `(m,)` bias across every row of an `(n, m)` matrix.
 
-## The computational graph
+## The graph and the tape
 
-Any expression built from primitive operations — addition, multiplication,
-matrix products, elementwise nonlinearities — is a directed acyclic graph:
-one node per intermediate value, one edge from each value to every value
-computed from it. Evaluating the expression is a forward pass over the
-graph in topological order. Every automatic differentiation method operates
-on this graph rather than on the symbolic expression, which lets it handle
-control flow and data-dependent structure that a purely symbolic
-differentiator would struggle with.
+Every value in the computation becomes a node. A node remembers three things:
 
-Write the graph as a chain of vector-valued stages for the purpose of
-deriving cost, $x_0 \to x_1 \to \cdots \to x_L$, with $x_\ell =
-f_\ell(x_{\ell-1})$ and Jacobian $J_\ell = \partial x_\ell / \partial
-x_{\ell-1}$. A real graph is not a chain — nodes can have multiple parents
-and children — but the chain captures the cost argument exactly, and a node
-with multiple children accumulates one gradient contribution from each.
+- `value`: the number or array it holds.
+- `grad`: the gradient of the final loss with respect to this node. It starts as zeros of the same shape.
+- `_children`: the nodes it was computed from, plus a small function `_backward_fn` that knows how to pass gradient back to them.
 
-## Forward mode and reverse mode
+Take $c = a \times b + a$ with $a = 3$ and $b = 2$. The forward pass builds two
+nodes: $p = a \times b = 6$ and $c = p + a = 9$.
 
-The end-to-end Jacobian from $x_0$ to $x_L$ is the chain rule's product,
+The backward pass starts at the output. The gradient of $c$ with respect to
+itself is 1. Then each node hands gradient to its children:
 
-$$
-J = J_L J_{L-1} \cdots J_1 ,
-$$
+- $c = p + a$: addition passes the gradient through unchanged. So $p$ gets 1 and $a$ gets 1.
+- $p = a \times b$: multiplication gives each input the gradient times the *other* input. So $a$ gets $1 \times 2 = 2$ and $b$ gets $1 \times 3 = 3$.
+- $a$ was used twice, so its contributions add: $1 + 2 = 3$.
 
-and every automatic differentiation method contracts this product against a
-vector without ever forming any $J_\ell$ densely. The two modes differ in
-which vector they carry and which side of the product they multiply from.
+You can check this by hand: $c = ab + a$, so $\frac{\partial c}{\partial a} = b + 1 = 3$ and $\frac{\partial c}{\partial b} = a = 3$.
 
-**Forward mode** fixes a direction $v \in \mathbb{R}^{n_0}$ and propagates
-$Jv$ from the right, $Jv = J_L(J_{L-1}(\cdots(J_1 v)\cdots))$. Each step is
-a **Jacobian-vector product** (JVP), $u_\ell = J_\ell u_{\ell-1}$ with
-$u_0 = v$, computed alongside the forward pass: for an affine layer the JVP
-is $W_\ell u_{\ell-1}$, and for a pointwise nonlinearity it is
-$f'(x_{\ell-1}) \odot u_{\ell-1}$. One sweep produces $Jv$ — one column of
-$J$ — at a cost within a constant factor of the forward pass. Recovering
-the full Jacobian this way costs $n_0$ sweeps, one per input dimension.
+That last step is the most important rule in the engine: **gradients
+accumulate**. Every backward function uses `+=`, never `=`.
 
-**Reverse mode** fixes a cotangent $u \in \mathbb{R}^{n_L}$, typically
-$u=1$ when $x_L$ is a scalar loss, and propagates $u^\top J$ from the left,
-$u^\top J = (((u^\top J_L)\, J_{L-1}) \cdots) J_1$. Each step is a
-**vector-Jacobian product** (VJP), $\bar{x}_{\ell-1} = \bar{x}_\ell J_\ell$,
-computed backward through the graph once every $x_\ell$ is known. One
-sweep produces the *entire* gradient of a scalar $x_L$ with respect to
-every coordinate of $x_0$, at a cost within a constant factor of the
-forward pass.
+## The backward rule for each operation
 
-**The cost argument.** These are the same associative product, contracted
-from opposite ends, and the asymmetry in what one sweep buys is the entire
-reason backpropagation is reverse mode. To get the full gradient of a
-scalar loss with respect to $n_0$ inputs, forward mode needs $n_0$ sweeps —
-one per basis direction — while reverse mode needs exactly one, because the
-output is already scalar. A network with millions of parameters and one
-scalar loss is the extreme case this asymmetry was built for: forward mode
-would cost millions of forward passes, reverse mode costs one backward
-pass. The asymmetry runs the other way for a low-dimensional input and a
-high-dimensional output. That is why both modes exist in a mature autodiff
-system: the choice between them depends on the function's input and output
-dimensions, not a universal preference.
+Each operation needs one backward rule. The rule takes the gradient arriving
+at the output, written $\bar{z}$ ("z-bar"), and turns it into gradients for the
+inputs. This is called a **vector-Jacobian product**. The **Jacobian** is the
+full table of partial derivatives of the output with respect to the input. You
+never build that table. Each rule computes its product with $\bar{z}$ directly.
 
-## The vector-Jacobian products an MLP needs
+### Addition and multiplication
 
-Backpropagation through a specific architecture is registering the VJP of
-each primitive operation, then letting the chain of VJPs run itself. Four
-suffice for an MLP trained with a softmax classifier.
-
-### Affine layer
-
-For $y = Wx + b$ with $x \in \mathbb{R}^n$, $W \in \mathbb{R}^{m \times n}$,
-and a cotangent $\bar y = \partial L/\partial y$ for some scalar $L$
-downstream, differentiating $y_i = \sum_j W_{ij}x_j + b_i$ gives
+For $z = x + y$ and $z = x \odot y$, where $\odot$ means elementwise
+multiplication:
 
 $$
-\bar x = W^\top \bar y, \qquad \bar W = \bar y\, x^\top, \qquad \bar b =
-\bar y .
+z = x + y:\quad \bar{x} \mathrel{+}= \bar{z},\ \ \bar{y} \mathrel{+}= \bar{z}
+\qquad\qquad
+z = x \odot y:\quad \bar{x} \mathrel{+}= \bar{z} \odot y,\ \ \bar{y} \mathrel{+}= \bar{z} \odot x
 $$
 
-Every VJP here costs the same order of flops as the forward matrix-vector
-product that produced $y$: an affine layer's backward pass is not free, but
-it is not more expensive in order of magnitude either.
+Read it aloud: addition copies the incoming gradient to both inputs.
+Multiplication gives each input the incoming gradient times the other input.
 
-### Pointwise nonlinearity
+```python
+self.grad += _unbroadcast(out.grad, self.value.shape)                  # add
+self.grad += _unbroadcast(out.grad * other.value, self.value.shape)    # mul
+```
 
-For $y = f(x)$ applied elementwise, the Jacobian is diagonal
-($\partial y_i/\partial x_j = f'(x_i)$ for $i=j$, zero otherwise), so
-
-$$
-\bar x = \bar y \odot f'(x) ,
-$$
-
-an elementwise product rather than a matrix-vector product. A diagonal
-Jacobian turns the general VJP formula into an $O(n)$ operation instead of
-$O(n^2)$. This is why activations are cheap relative to the affine layers
-around them, regardless of how expensive $f$ itself is to evaluate.
+**Broadcasting needs one extra step.** When you add a bias `b` of shape `(m,)`
+to `X` of shape `(n, m)`, numpy copies `b` into all $n$ rows. Each copy
+contributes to the loss, so the bias gradient is the sum of the incoming
+gradient over those rows. The provided `_unbroadcast(grad, shape)` does that
+summing for you. Call it in `__add__` and `__mul__` before every `+=`.
 
 ### Matrix product
 
-For $C = AB$ with $A \in \mathbb{R}^{m \times k}$, $B \in \mathbb{R}^{k
-\times n}$, and cotangent $\bar C$, differentiating $C_{ij} = \sum_l
-A_{il}B_{lj}$ gives
+For $Z = A B$, with $A$ of shape `(n, k)` and $B$ of shape `(k, m)`:
 
 $$
-\bar A = \bar C B^\top, \qquad \bar B = A^\top \bar C .
+\bar{A} \mathrel{+}= \bar{Z} B^\top, \qquad \bar{B} \mathrel{+}= A^\top \bar{Z}
 $$
 
-This is the batched generalisation of the affine layer's VJP: a batch of
-inputs stacked into a matrix multiplied by a shared weight matrix is
-exactly this operation. It costs two matrix products the same shape as the
-forward one, the origin of the folklore that a backward pass costs about
-twice a forward pass for a matmul-dominated network.
+Read it aloud: the gradient for $A$ is the incoming gradient times $B$
+transposed. The gradient for $B$ is $A$ transposed times the incoming gradient.
+A quick way to remember: the shapes only fit one way. $\bar{Z}$ is `(n, m)`,
+and you need `(n, k)` for $\bar{A}$, so multiply by $B^\top$, which is `(m, k)`.
 
-### Softmax combined with cross-entropy
+```python
+self.grad += out.grad @ other.value.T
+other.grad += self.value.T @ out.grad
+```
 
-Consider logits $z \in \mathbb{R}^c$, softmax probabilities $p_k = e^{z_k} /
-\sum_{k'} e^{z_{k'}}$, and a one-hot label $y$ with cross-entropy loss
-$L = -\sum_k y_k \log p_k$. The two Jacobians involved are individually
-messy: softmax's Jacobian $\partial p_k/\partial z_j = p_k(\delta_{kj} -
-p_j)$ is a full matrix, not diagonal. Their product collapses regardless. Chaining
-them and using $\sum_k y_k = 1$ (because $y$ is one-hot) gives
+### ReLU and sum
 
-$$
-\bar z = p - y .
-$$
-
-The softmax Jacobian's off-diagonal terms and cross-entropy's division by
-$p_k$ both vanish in the combination, leaving the cheapest possible
-formula: predicted probabilities minus the one-hot target, with no division
-anywhere. Implementing softmax and cross-entropy as two separate
-differentiable operations, and letting a generic chain rule combine their
-VJPs, would reintroduce the division by $p_k$. Recovering this formula
-would then require a cancellation that floating point does not perform.
-Without it, the computation can lose precision, or divide by a probability
-that underflowed to zero. Deriving and
-implementing the combined VJP directly, as the exercise does, is the
-numerically correct choice for exactly this reason.
-
-## Checkpointing
-
-Reverse mode needs every intermediate $x_\ell$ from the forward pass
-available when its VJP runs, because the pointwise nonlinearity's VJP needs
-$f'(x_{\ell-1})$ and the matmul VJPs need the original operands. Storing
-every activation in a network with $L$ layers of width $n$ and batch size
-$B$ costs $O(LnB)$ memory, linear in depth. For a deep enough network, or a
-long enough sequence, this becomes the binding constraint before compute
-does.
-
-**Checkpointing** trades memory for recomputation. Store only a subset of
-the activations, for instance one in every $\sqrt{L}$ layers. When the
-backward pass needs one that was not stored, recompute it by re-running the
-forward pass from the nearest checkpoint. Storing $O(\sqrt{L})$ checkpoints
-reduces memory from $O(L)$ to $O(\sqrt{L})$ at the cost of one extra forward
-pass overall, roughly a 33% increase in total compute for a network
-otherwise dominated by one forward and one backward pass. This is a real
-trade, not a free lunch: the right number of checkpoints depends on whether
-the model is memory-bound or compute-bound on the hardware it runs on.
-
-## Why numerical differentiation is a check, not a method
-
-A central-difference approximation to a partial derivative,
+ReLU lets gradient through where its input was positive and blocks it
+elsewhere. Sum turns an array into one number, and every entry contributed
+with weight 1, so each entry gets the incoming gradient.
 
 $$
-\frac{\partial L}{\partial x_i} \approx \frac{L(x + h e_i) - L(x - h e_i)}
-{2h} ,
+z = \operatorname{relu}(x):\quad \bar{x} \mathrel{+}= \bar{z} \odot [x > 0]
+\qquad\qquad
+z = \textstyle\sum_i x_i:\quad \bar{x} \mathrel{+}= \bar{z} \cdot \mathbf{1}
 $$
 
-costs two evaluations of $L$ per coordinate of $x$: $O(n)$ full forward
-passes to approximate a gradient with $n$ entries, against reverse mode's
-single backward pass for all $n$ entries at once. For a network with
-millions of parameters this is a different complexity class. That is why
-finite differences are never used to train anything, but are used
-constantly to check a hand-derived or hand-implemented gradient on a small
-example. This lesson's exercise checks every gradient exactly that way.
+Read it aloud: $[x > 0]$ is 1 where $x$ is positive and 0 elsewhere.
+$\mathbf{1}$ is an array of ones with the shape of $x$.
 
-The approximation also has an accuracy floor that no choice of $h$ can
-beat, from two errors that trade off against each other. The **truncation
-error** is $O(h^2 |L'''|)$ — central differences cancel the $O(h)$ term a
-one-sided difference would leave, which is why they are preferred at the
-same step size. Evaluating $L$ in floating point carries an absolute error
-of about $\varepsilon_{\text{machine}}|L|$, and dividing by $2h$ amplifies
-it to a **rounding error** of $O(\varepsilon_{\text{machine}}/h)$. Balancing
-the two, $h^2 \propto \varepsilon_{\text{machine}}/h$, gives $h^\star
-\propto \varepsilon_{\text{machine}}^{1/3}$ and an irreducible error floor
-of
+```python
+self.grad += out.grad * (self.value > 0)          # relu
+self.grad += out.grad * np.ones_like(self.value)  # sum
+```
+
+## The order of the backward pass
+
+A node may be used by several later nodes. You must collect all of its
+gradient before it passes gradient on to its own children. Otherwise it
+forwards an incomplete number.
+
+A **topological order** solves this. It lists nodes so that every node comes
+after all the nodes it was built from. Walk that list in reverse and every
+node is finished before you reach its children.
+
+You build the order with a **depth-first search**: visit a node's children
+first, then append the node. Keep a set of visited nodes so a shared node is
+added only once.
+
+```python
+def build(node):
+    if id(node) not in visited:
+        visited.add(id(node))
+        for child in node._children:
+            build(child)
+        topo.append(node)
+```
+
+After building `topo`, set the output's `grad` to ones and call each node's
+`_backward_fn` in `reversed(topo)`.
+
+### The diamond
+
+Take $b = a \times a$, $c = a + a$, and $d = b + c$, with $a = 2$. The node
+$a$ feeds both $b$ and $c$, and both feed $d$. By hand,
+$d = a^2 + 2a$, so $\frac{dd}{da} = 2a + 2 = 6$. With the right order, $d$
+passes 1 to both $b$ and $c$. Then $b$ passes $1 \times 2 + 1 \times 2 = 4$
+to $a$, and $c$ passes $1 + 1 = 2$, for a total of 6. The checks use this exact graph.
+
+## Softmax cross-entropy
+
+A classifier outputs one score per class, called **logits**. Softmax turns
+logits $z$ into probabilities $p$. Cross-entropy is the loss: minus the log of
+the probability given to the correct class. For $n$ examples with labels
+$y_i$, the loss is the mean:
 
 $$
-O\big(\varepsilon_{\text{machine}}^{2/3}\big)
+p_{ic} = \frac{e^{z_{ic}}}{\sum_{c'} e^{z_{ic'}}}, \qquad
+\text{loss} = -\frac{1}{n} \sum_{i=1}^{n} \log p_{i y_i}
 $$
 
-at the optimal step, about $10^{-11}$ in double precision. A one-sided
-forward difference has truncation error $O(h)$ rather than $O(h^2)$;
-balancing it against rounding gives $h^\star \propto
-\varepsilon_{\text{machine}}^{1/2}$ and a worse floor of
-$O(\varepsilon_{\text{machine}}^{1/2}) \approx 10^{-8}$. Central differences
-buy roughly three more digits of accuracy for the same reason QR beats the
-normal equations in lesson 2: cancelling a lower-order error term before it
-competes with rounding. No finite-difference scheme reaches machine
-precision, which is why the exercise's checks compare analytic gradients to
-finite differences with a tolerance like $10^{-5}$ rather than $10^{-12}$.
+Read it aloud: for row $i$, exponentiate every score and divide by the row
+total to get probabilities. Take the probability of the correct class, take
+its log, flip the sign, and average over the $n$ rows.
+
+To avoid overflow, subtract each row's largest score first. It cancels in the
+fraction, so the answer is unchanged:
+
+```python
+m = z.max(axis=1, keepdims=True)
+log_probs = (z - m) - np.log(np.exp(z - m).sum(axis=1, keepdims=True))
+loss = -log_probs[np.arange(n), labels].mean()
+```
+
+The gradient with respect to the logits is short and worth remembering:
+
+$$
+\frac{\partial\, \text{loss}}{\partial z} = \frac{1}{n}\left(p - \text{onehot}(y)\right)
+$$
+
+Read it aloud: take the probability matrix, subtract 1 at each row's correct
+class, and divide by $n$. The $\frac{1}{n}$ is there because the loss is a
+mean, not a sum. `onehot(y)` is a matrix with a 1 at the correct class of each
+row and 0 elsewhere.
+
+```python
+g = probs.copy()
+g[np.arange(n), labels] -= 1.0
+g /= n
+```
+
+### Worked example by hand
+
+One example, logits $z = [2, 1, 0]$, correct class 0.
+
+- Exponentials: $e^2 = 7.389$, $e^1 = 2.718$, $e^0 = 1$. The total is $11.107$.
+- Probabilities: $p = [0.6652, 0.2447, 0.0900]$.
+- Loss: $-\log 0.6652 = 0.4076$.
+- Gradient: $[0.6652 - 1, 0.2447, 0.0900] / 1 = [-0.3348, 0.2447, 0.0900]$.
+
+The gradient pushes the correct score up (negative gradient) and the others
+down.
+
+## Checking gradients with finite differences
+
+To check any gradient, nudge one input by a small $h$ both ways and measure
+the change in the loss:
+
+$$
+\frac{\partial\, \text{loss}}{\partial w} \approx \frac{\text{loss}(w + h) - \text{loss}(w - h)}{2h}
+$$
+
+Read it aloud: evaluate the loss slightly above and slightly below $w$,
+subtract, and divide by the gap $2h$. With $h$ around $10^{-5}$, the estimate
+is usually correct to 6 or more digits. Much smaller $h$ makes it worse,
+because rounding errors in the subtraction take over. This costs two forward
+passes per weight, so it is a test, not a training method.
+
+## Build it step by step
+
+Build the pieces in the order the checks test them.
+
+1. **`Tensor.__init__`.** Already written. It stores `value` as a float array and `grad` as zeros of the same shape. Read it so you know the fields.
+2. **`__add__(self, other)`.** Coerce `other` with `Tensor._coerce`. Build `out = Tensor(self.value + other.value, children=(self, other))`. Define an inner `_backward()` that adds `_unbroadcast(out.grad, ...)` to each operand's `grad`, and assign it to `out._backward_fn`. Return `out`. Common mistake: skipping `_unbroadcast`, so a `(m,)` bias gets a `(n, m)` gradient.
+3. **`__mul__(self, other)`.** Same pattern. Each operand gets `out.grad` times the other operand's `value`, unbroadcast. Common mistake: multiplying by the operand's own value.
+4. **`__matmul__(self, other)`.** Both are 2-D. Use `out.grad @ other.value.T` and `self.value.T @ out.grad`. No unbroadcast is needed. Common mistake: putting the transpose on the wrong side. Check the shapes.
+5. **`relu(self)`.** One child. Multiply `out.grad` by the mask `self.value > 0`. Common mistake: masking with the output instead of the input. For ReLU both give the same mask, but reading the input is the habit to keep.
+6. **`sum(self)`.** Returns a scalar `Tensor`. Backward spreads `out.grad` over `np.ones_like(self.value)`.
+7. **`backward(self)`.** Build `topo` with the depth-first search above, set `self.grad = np.ones_like(self.value)`, and call `_backward_fn` for each node in `reversed(topo)`. Common mistake: using `=` instead of `+=` in any backward function. The checks for `a * a` and the diamond catch it.
+8. **`softmax_cross_entropy(logits, labels)`.** Compute the loss in numpy with the stable log-sum-exp. Return a scalar `Tensor` with `children=(logits,)`. Its backward adds `out.grad * (probs - onehot) / n` to `logits.grad`. Common mistake: forgetting to divide by `n`, or computing `np.exp(z)` without subtracting the row maximum.
+9. **`mlp_loss_and_grad(params, X, y)`.** Wrap each `W` and `b` in a `Tensor`. Here `W` has shape `(in, out)`, so each layer is `h @ W + b`, the transpose of the lesson 15 convention. Apply `.relu()` after every layer except the last. Pass the last output to `softmax_cross_entropy`, call `.backward()` once, and return `(float(loss.value), grads)`, where `grads` copies each `W.grad` and `b.grad`. Common mistake: applying ReLU to the logits.
 
 ## Cost and scaling
 
-Let $L$ be the number of layers, $n$ the largest layer width, and $B$ the
-batch size.
+Reverse mode is cheap in time and hungry for memory. The table compares the
+ways to get a gradient for a network with $P$ parameters.
 
-| Quantity | Forward pass | Backward pass |
+| Method | Time for all $P$ gradients | Extra memory |
 |---|---|---|
-| Flops, one affine layer | $2n^2 B$ | $\approx 4n^2 B$ (two matmuls of the same size) |
-| Flops, one pointwise nonlinearity | $O(nB)$ | $O(nB)$ |
-| Memory for activations | $O(LnB)$ stored for reuse | Same, unless checkpointed |
-| Sweeps for a full gradient, reverse mode | — | $1$ |
-| Sweeps for a full gradient, forward mode | — | $n_0$ (the input dimension) |
+| Backpropagation (reverse mode) | about 2 to 3 forward passes | every stored activation |
+| Forward mode | about $P$ forward passes | small |
+| Finite differences | $2P$ forward passes | small |
 
-A full training step costs about three times the forward pass alone — one
-forward, roughly two forward-equivalents of backward — the standard rule of
-thumb for estimating training compute from a model's parameter count.
+Forward mode pushes a nudge from one input forward to the output, so you need
+one pass per input. Reverse mode pulls the gradient from the single loss back
+to every input at once. With one loss and millions of weights, reverse mode
+wins by a huge margin.
+
+The price is memory. The backward pass needs the forward values, such as `A`
+and `B` in a matrix product, so you keep every layer's activations until the
+backward pass uses them. Memory grows with depth times batch size.
+**Checkpointing** trades time for memory: it stores only some activations and
+recomputes the rest during the backward pass.
 
 ## Where this breaks
 
-**Non-differentiable operations.** An argmax, a hard threshold, or a
-sampling step has no useful Jacobian: it is piecewise constant with a
-derivative of zero almost everywhere, or its derivative is undefined
-outright. Straight-through estimators, the Gumbel-softmax relaxation, and
-REINFORCE-style score-function estimators manufacture a usable gradient
-signal through an operation that does not have a true one, each with its
-own bias-variance trade-off.
+**Overwriting instead of accumulating.** Using `=` in a backward function gives
+wrong gradients whenever a value is used twice. Always use `+=`.
 
-**Vanishing and exploding products.** The chain rule's product $J_L \cdots
-J_1$ can shrink or grow geometrically in the number of factors when the
-$J_\ell$ are not close to orthogonal. This is the mechanism behind
-vanishing and exploding gradients in deep and recurrent networks. Reverse mode computes
-an exact product of many matrices, and that kind of quantity is
-numerically fragile by nature.
+**Forgetting to zero gradients.** A `grad` keeps growing across calls to
+`backward`. Real libraries make you reset it before each step. In this
+exercise you build fresh `Tensor` objects on every call, so each one starts at
+zero.
 
-**Second-order information is not free.** Reverse mode gives the gradient
-at the cost of roughly one forward pass, but the Hessian is a different
-object. Computing it densely costs $O(n_0)$ reverse-mode sweeps, one per
-Hessian-vector product. An application that needs only a single
-Hessian-vector product is the exception: Pearlmutter's trick computes that
-with two extra passes. Assuming second-order methods inherit backpropagation's cheapness
-is a common and costly mistake.
+**Kinks.** ReLU has no derivative at exactly 0. Engines pick 0, which is fine in
+practice, but a finite-difference check that lands on a kink disagrees.
 
-**Memory, not compute, is often the binding constraint.** Storing
-activations for backward passes scales with depth and batch size in a way
-compute does not have to. That is why checkpointing exists, and why the
-largest models are frequently limited by accelerator memory before they
-are limited by flops available.
+**Overflow in softmax.** Large logits make `np.exp` return infinity. Subtract
+the row maximum first.
+
+**Running out of memory.** Deep networks with large batches store too many
+activations. Use smaller batches or checkpointing.
 
 ## The exercise
 
-You build a small reverse-mode autodiff engine around a `Tensor` class that
-holds a value, a gradient, and a backward closure. It implements `__add__`,
-`__mul__`, `__matmul__`, `relu`, `sum`, and `softmax_cross_entropy`. The
-last of these uses the combined VJP derived above, rather than composing
-separate softmax and cross-entropy nodes. `backward()` runs a topological sort over
-the graph reachable through each tensor's recorded children, then calls
-every node's backward closure in reverse order. A tensor used more than
-once accumulates every contribution to its gradient before that gradient
-is used further back. `mlp_loss_and_grad` then builds an MLP's forward pass
-out of these operations and reads its gradients back off the parameter
-tensors after one call to `backward()`.
+You implement `Tensor.__add__`, `Tensor.__mul__`, `Tensor.__matmul__`,
+`Tensor.relu`, `Tensor.sum`, `Tensor.backward`, `softmax_cross_entropy`, and
+`mlp_loss_and_grad` in `starter.py`. The helper `_unbroadcast` is provided.
 
-The checks verify every operation's gradient against
-`mlcheck.finite_difference`, including a broadcast bias in `__add__`. They
-verify that a tensor used twice within a single operation accumulates
-rather than overwrites its gradient, and that a diamond-shaped graph — one
-tensor feeding two paths that later recombine — backpropagates correctly
-through both paths. They also verify that `softmax_cross_entropy`'s
-gradient matches the closed-form $p - y$ derived above, and that
-`mlp_loss_and_grad` matches finite differences end to end on a small
-two-layer network.
+The checks confirm that a `Tensor` starts with a zero gradient and that each
+operation's gradient matches finite differences, including a broadcast bias.
+They test that `a * a` gives 6 at $a = 3$, that the diamond gives 6 at
+$a = 2$, and that the softmax-cross-entropy gradient equals
+$(p - \text{onehot}(y)) / n$. The last check compares `mlp_loss_and_grad` with
+finite differences on a small two-layer network.

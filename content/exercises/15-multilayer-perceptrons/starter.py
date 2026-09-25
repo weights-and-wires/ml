@@ -4,7 +4,7 @@ A layer is a dict `{"W": ndarray(out, in), "b": ndarray(out,), "activation":
 name}`, with `name` one of `"relu"`, `"gelu"`, or `"identity"`. A network is a
 list of such layers, applied in order: `h = activation(h @ W.T + b)`.
 
-Fill in the eight functions below.
+Fill in the nine functions below, in order. The lesson walks through each one.
 """
 
 import numpy as np

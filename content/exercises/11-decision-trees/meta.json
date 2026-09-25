@@ -1,10 +1,12 @@
 {
   "id": "11-decision-trees",
-  "title": "CART from split search to pruning",
-  "brief": "Implement Gini and entropy, an O(n log n) split search, tree growth, prediction, and cost-complexity pruning.",
+  "title": "Build a decision tree from scratch",
+  "brief": "Write Gini and entropy, a fast split search with running sums, then grow, predict with, and prune a tree.",
   "needs_gpu": false,
   "timeout": 60,
-  "packages": ["numpy"],
+  "packages": [
+    "numpy"
+  ],
   "hints": [
     "Sort each feature once with numpy.argsort, then sweep a running left-side sum (and sum of squares, for mse) as you move one point at a time from right to left. Skip a candidate threshold when it falls between two equal feature values, since no split is possible there.",
     "For gini and entropy, use numpy.bincount(y) to get class counts, divide by the total to get proportions, and apply the formulas directly. Guard entropy against log(0) by masking out zero-count classes before taking the log.",

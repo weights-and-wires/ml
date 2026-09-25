@@ -2,14 +2,14 @@
 title: Optimisers for deep networks
 slug: 17-optimisers
 part: "Part 3 — Neural networks"
-summary: How stochastic gradients change the update rule, and the momentum, Adam, AdamW, and schedule tricks that make training stable.
-minutes: 45
+summary: Build SGD, momentum, Adam, and AdamW behind one interface, plus the warmup-and-cosine learning-rate schedule.
+minutes: 60
 gpu: false
 objectives:
-  - Explain why a stochastic gradient forces a decaying or noise-tolerant step size, and why momentum cannot fix that on its own.
-  - Implement Adam's bias correction and explain what problem it solves.
-  - Explain why weight decay and L2 regularisation diverge once the gradient is preconditioned, and what AdamW changes to reconcile them.
-  - Build a cosine learning-rate schedule with linear warmup, and explain what the warmup phase protects against.
+  - Build SGD and momentum update steps, and compute momentum's effective step size.
+  - Build Adam with bias correction, and explain why the correction is needed early in training.
+  - Explain how AdamW's weight decay differs from adding an L2 term to the gradient.
+  - Compute a learning rate from a linear warmup followed by cosine decay.
 prereqs:
   - 03-gradient-descent
   - 16-backpropagation
@@ -18,251 +18,377 @@ exercise: 17-optimisers
 
 # Optimisers for deep networks
 
-Lesson 3 treated gradient descent as an iteration on the exact gradient of a
-fixed, convex objective. Training a deep network breaks both assumptions: you
-can only afford the gradient of a random minibatch, not the full dataset, and
-a nonlinear network's loss surface is not convex. A minibatch gradient's
-expectation is the true gradient, but its variance never goes away, no matter
-how far training runs.
+In lesson 16 you learned how to compute the gradient of a network's loss. The
+gradient tells you which way is downhill. It doesn't tell you how big a step to
+take, or how to cope when the gradient is noisy or points in an awkward
+direction. That is the job of an optimiser.
 
-This lesson builds the optimiser stack deep learning runs on from that one
-fact. Gradient noise forces a smaller or smarter step than plain gradient
-descent uses, which is why momentum alone cannot recover the convergence
-rate lesson 3 derived for the noiseless case. Rescaling the step per
-parameter — the idea behind Adam — answers loss surfaces whose curvature
-differs by orders of magnitude across directions, a problem the next lesson
-covers in more depth. The lesson closes with two choices every training run
-makes before it starts: how weight decay interacts with an adaptive update,
-and how the learning rate should move over training.
+Plain gradient descent works on small, tidy problems. Deep networks are not
+tidy. You compute each gradient from a small random batch, so it is noisy. The
+loss surface is often steep in some directions and flat in others. Both
+problems make a single fixed learning rate a poor fit.
+
+In this lesson you build four optimisers that share one interface: SGD,
+momentum, Adam, and AdamW. You also build a learning-rate schedule that ramps
+up and then decays. These are the tools that almost every deep learning
+project uses.
 
 ## What you already know
 
-- Backpropagation computes an exact gradient of the loss on a chosen batch, at
-  a cost proportional to one forward pass.
-- An unbiased estimator's expectation equals the quantity it estimates, and
-  averaging `n` independent copies divides its variance by `n`.
-- Gradient descent converges under smoothness and convexity, and momentum
-  speeds up that convergence when the gradient is exact.
-- A surface's condition number is the ratio of its largest to its smallest
-  curvature; a large condition number makes a single global step size hard to
-  choose well.
-- An exponential moving average $x_k = \beta x_{k-1} + (1-\beta)y_k$ weights
-  the past geometrically, with an effective window of about $1/(1-\beta)$
-  steps.
+- Gradient descent moves the weights a small step against the gradient.
+- The learning rate controls how big that step is.
+- A gradient computed on a random batch is a noisy estimate of the full gradient.
+- Backpropagation gives you the gradient of the loss for every weight.
+- L2 regularisation adds a penalty that pulls weights toward zero.
 
-## Stochastic gradients need a different step
+## One interface for every optimiser
 
-Write the empirical risk as $L(w) = \frac{1}{n}\sum_{i=1}^n \ell_i(w)$ and a
-minibatch gradient over a random batch $\mathcal B$ of size $B$ as $g(w) =
-\frac{1}{B}\sum_{i\in\mathcal B}\nabla\ell_i(w)$. This gradient is unbiased,
-$\mathbb E[g(w)] = \nabla L(w)$, but its variance falls only as $1/B$:
+Every optimiser in this lesson is a function with the same shape. It takes the
+current weights, the gradient, and a small dictionary called `state`. It
+returns the new weights and the new state.
 
-$$
-\operatorname{Var}(g(w)) = \frac{\sigma^2}{B} .
-$$
+```python
+new_w, new_state = step_fn(w, grad, state, lr=0.01)
+```
 
-Unbiasedness alone does not make gradient descent converge to a point. At the
-true minimum $\nabla L(w) = 0$, but $g(w)$ is not, so a fixed step keeps the
-iterate jittering forever. The step has to shrink over time for training to
-settle — a schedule like $\eta_k = \eta_0/k$ shrinks fast enough to control
-that noise while still summing to infinity, so an initial error can always be
-corrected given enough steps.
+The `state` dictionary is the optimiser's memory. Plain SGD remembers nothing,
+so its state stays empty. Momentum remembers a running velocity. Adam remembers
+two running averages and a step counter. On the first call, `state` is `{}`,
+and each optimiser treats a missing entry as zeros.
 
-In the noiseless case, momentum turns gradient descent's $O(1/K)$ convergence
-into $O(1/K^2)$. Once the gradient carries noise of variance $\sigma^2$, no
-first-order method can localise the minimiser faster than $O(1/\sqrt K)$
-using $K$ noisy gradients, because two minimisers close enough together are
-indistinguishable given that much noisy data. Momentum still helps in
-practice — it damps oscillation and speeds up early training — but it does
-not change this asymptotic rate the way it does with an exact gradient.
+This shared shape means one training loop can drive any optimiser. You write
+that loop as `run_optimiser`.
 
-## Minibatching, warmup, and batch size
+## Plain SGD
 
-Quartering the batch variance $\sigma^2/B$ takes sixteen times the data per
-step, and a larger batch also costs more compute per step. A bigger batch
-pays off only when a wider GPU or more parallel workers absorb that extra
-work at no added wall-clock cost.
-
-If you scale the batch size by a factor $k$, scale the learning rate by
-roughly the same factor — the linear-scaling heuristic. It follows from
-noticing that $k$ small steps at $(B, \eta)$ land close to one step at
-$(kB, k\eta)$, provided the gradient barely changes across those $k$ steps.
-That assumption fails at the start of training, when weights move fast and
-consecutive gradients disagree. **Warmup** ramps the learning rate up from a
-small value over the first few hundred steps, so training spends the unstable
-early phase at a safer rate and only reaches the fully scaled rate once the
-approximation above holds.
-
-## Momentum as a moving average of gradients
-
-Heavy-ball momentum replaces the raw gradient with a running accumulator:
+Stochastic gradient descent (SGD) is gradient descent where each gradient comes
+from a random batch rather than the whole dataset. The update is the same one
+you already know:
 
 $$
-v_k = \beta v_{k-1} + g_k, \qquad w_{k+1} = w_k - \eta v_k ,
+w_{\text{new}} = w - \eta \, g
 $$
 
-starting from $v_0 = 0$. Under a gradient $g$ that stays constant, $v_k$
-approaches $g/(1-\beta)$, so the eventual step per iteration is
-$\eta v_k \approx \frac{\eta}{1-\beta}g$. With $\beta = 0.9$, momentum
-eventually moves ten times faster than plain gradient descent at the same
-$\eta$, along a direction the gradient keeps pointing toward. Along a
-direction where the gradient's sign flips every step — exactly the
-oscillation ill-conditioned problems produce — the accumulated terms cancel
-instead of adding up, so the effective step there stays close to $\eta$.
-Amplifying a persistent signal while damping an alternating one is the whole
-mechanism.
+Read it aloud: the new weights equal the old weights minus the learning rate
+$\eta$ (the Greek letter eta) times the gradient $g$. Every weight moves
+against its own gradient, scaled by the same $\eta$.
 
-## Adaptive per-parameter steps
+```python
+new_w = w - lr * grad
+```
 
-**AdaGrad** and **RMSProp** rescale each parameter's step by its own recent
-gradient magnitude, so a coordinate with large gradients gets a smaller step
-and a coordinate with small gradients gets a larger one. AdaGrad accumulates
-the sum of every squared gradient seen so far, which only grows, so its step
-eventually shrinks to zero even on parameters that still need to move.
-RMSProp uses an exponential moving average of the squared gradient instead
-of a running sum, so the denominator can grow or shrink as the local
-gradient scale changes.
+For example, with $w = 1.0$, $g = 0.1$, and $\eta = 0.1$, the new weight is
+$1.0 - 0.1 \times 0.1 = 0.99$.
+
+SGD has two weaknesses. First, noise: each batch gradient points in a slightly
+different direction, so the weights jitter. Second, uneven curvature. Picture
+a long, narrow valley. Across the valley the walls are steep, and along it the
+floor slopes gently. A learning rate small enough to avoid bouncing between the
+steep walls is far too small to make progress along the floor.
+
+## Momentum
+
+Momentum fixes some of that. Think of a ball rolling downhill. It doesn't stop
+and restart at every bump. It builds up speed in the direction it keeps
+going, and bumps from side to side cancel out.
+
+Momentum keeps a velocity $v$, a running total of past gradients where older
+ones fade away:
+
+$$
+v_{\text{new}} = \beta \, v + g, \qquad w_{\text{new}} = w - \eta \, v_{\text{new}}
+$$
+
+Read it aloud: the new velocity is $\beta$ (beta, a number such as 0.9) times
+the old velocity, plus the current gradient. Then the weights move by the
+learning rate times the new velocity. A $\beta$ of 0.9 means each past
+gradient keeps 90% of its influence at every step.
+
+```python
+v = beta * state.get("v", np.zeros_like(w)) + grad
+new_w = w - lr * v
+```
+
+This version has no $(1 - \beta)$ factor in front of $g$. That matters for the
+next result.
+
+### Worked example: velocity builds up
+
+Suppose the gradient is a constant $g = 2$ and $\beta = 0.9$. Start with
+$v = 0$:
+
+| Step | Calculation | Velocity $v$ |
+|---|---|---|
+| 1 | $0.9 \times 0 + 2$ | 2.0 |
+| 2 | $0.9 \times 2.0 + 2$ | 3.8 |
+| 3 | $0.9 \times 3.8 + 2$ | 5.42 |
+| many | settles where $v = 0.9v + 2$ | 20.0 |
+
+The velocity settles at $g / (1 - \beta) = 2 / 0.1 = 20$. So once momentum has
+warmed up on a steady slope, each step has size
+
+$$
+\frac{\eta}{1 - \beta} \, g
+$$
+
+Read it aloud: momentum behaves like plain SGD with a learning rate
+$1 / (1 - \beta)$ times larger. With $\beta = 0.9$, that is ten times larger.
+This is why people lower $\eta$ when they turn momentum on.
+
+On a narrow valley, the gradients across the valley flip sign each step and
+mostly cancel inside $v$. The gradients along the floor all point the same
+way and add up. The ball speeds up where it should.
+
+Momentum does not remove the noise from stochastic gradients. It averages the
+noise over roughly $1 / (1 - \beta)$ steps, but the effective step also grows by
+the same factor. To settle at the bottom, you still need to shrink the learning
+rate over time. That is what a schedule does, later in this lesson.
 
 ## Adam
 
-Adam keeps an exponential moving average of the gradient and one of its
-square:
+Momentum uses one learning rate for every weight. Adam gives each weight its
+own step size. The idea: if a weight's gradient is usually large, take smaller
+steps for it. If it is usually small, take larger steps. Adam measures "usually"
+with running averages.
+
+Adam keeps two running averages for every weight:
+
+- $m$, the average gradient. This is like momentum's velocity.
+- $v$, the average squared gradient. Its square root measures how large the
+  gradient typically is.
+
+An exponential moving average (EMA) is a running average where older values
+fade by a factor each step. Adam updates both averages like this:
 
 $$
-m_k = \beta_1 m_{k-1} + (1-\beta_1)g_k, \qquad
-v_k = \beta_2 v_{k-1} + (1-\beta_2)g_k^2 ,
+m_{\text{new}} = \beta_1 m + (1 - \beta_1)\, g, \qquad
+v_{\text{new}} = \beta_2 v + (1 - \beta_2)\, g^2
 $$
 
-starting from $m_0 = v_0 = 0$. Starting at zero biases both estimates toward
-zero in early training: under a gradient that has been roughly constant for
-$k$ steps, $m_k \approx g(1-\beta_1^k)$, so at $k=1$ with $\beta_1=0.9$ the raw
-estimate carries only a tenth of the true gradient. Dividing out the known
-factor corrects this exactly under that assumption:
+Read it aloud: the new $m$ is 90% old $m$ plus 10% of today's gradient
+(with $\beta_1 = 0.9$). The new $v$ is 99.9% old $v$ plus 0.1% of today's
+squared gradient (with $\beta_2 = 0.999$). Here $g^2$ squares each entry of
+the gradient separately. Unlike momentum, these averages do have the
+$(1 - \beta)$ factor, so they are true averages.
+
+```python
+m = beta1 * m_prev + (1 - beta1) * grad
+v = beta2 * v_prev + (1 - beta2) * grad**2
+```
+
+### Bias correction
+
+Both averages start at zero. That drags them toward zero for the first few
+steps. After one step with gradient $g$, the average $m$ equals $0.1 g$, not
+$g$. After $t$ steps with a constant gradient, $m = (1 - \beta_1^t)\, g$.
+
+The fix is to divide that shrinkage back out. Let $t$ be the number of steps
+taken so far, counting this one:
 
 $$
-\hat m_k = \frac{m_k}{1-\beta_1^k}, \qquad \hat v_k = \frac{v_k}{1-\beta_2^k} ,
+\hat{m} = \frac{m}{1 - \beta_1^{\,t}}, \qquad \hat{v} = \frac{v}{1 - \beta_2^{\,t}}
 $$
 
-and the update is
+Read it aloud: $\hat{m}$ ("m hat") is $m$ divided by one minus $\beta_1$ to
+the power $t$. Early on, $1 - \beta_1^t$ is small, so the division scales $m$
+back up. After many steps, $\beta_1^t$ is close to zero, and the correction
+fades to nothing.
+
+```python
+m_hat = m / (1 - beta1**t)
+v_hat = v / (1 - beta2**t)
+```
+
+### The Adam update
+
+Adam then moves each weight by its corrected average gradient, divided by
+the square root of its corrected average squared gradient:
 
 $$
-w_{k+1} = w_k - \eta\,\frac{\hat m_k}{\sqrt{\hat v_k}+\epsilon} .
+w_{\text{new}} = w - \eta \, \frac{\hat{m}}{\sqrt{\hat{v}} + \epsilon}
 $$
 
-Without this correction, early steps would be far smaller than intended,
-throttling exactly the phase warmup is otherwise built to protect.
+Read it aloud: the step is the learning rate times "typical direction" over
+"typical size". The small number $\epsilon$ (epsilon, such as $10^{-8}$)
+prevents division by zero.
 
-The ratio $\hat m_k/\sqrt{\hat v_k}$ barely changes if you multiply every
-gradient by a constant $c$: multiplying $g$ by $c$ multiplies $m_k$ by $c$ and
-$\sqrt{v_k}$ by $|c|$, so the ratio cancels the constant almost entirely. Plain
-SGD has no such cancellation — its step $\eta g_k$ scales with $c$ directly.
+```python
+new_w = w - lr * m_hat / (np.sqrt(v_hat) + eps)
+```
 
-## Weight decay and AdamW
+### Worked example: the first Adam step
 
-L2 regularisation adds $\frac{\lambda}{2}\lVert w\rVert^2$ to the loss, which
-adds $\lambda w$ to the gradient. Under plain SGD this produces the same
-update as shrinking the weight directly, $w_{k+1} = w_k(1-\eta\lambda) - \eta
-g_k$ — "L2 regularisation" and "weight decay" name the same thing.
+Take one weight with $w = 0$, gradient $g = 3$, $\eta = 0.1$,
+$\beta_1 = 0.9$, $\beta_2 = 0.999$, and $t = 1$:
 
-They stop being the same once the gradient is preconditioned. Fold $\lambda
-w$ into $g$ before computing Adam's moments, and the decay term gets divided
-by $\sqrt{\hat v_k}+\epsilon$ along with the rest of the gradient: a parameter
-with a large, noisy gradient has its decay shrunk, while a stationary
-parameter keeps a decay close to $\eta\lambda w$. AdamW decouples the two
-terms instead: it computes $m_k$ and $v_k$ from the raw gradient only, and
-applies the shrinkage afterward, outside the adaptive step:
+1. $m = 0.9 \times 0 + 0.1 \times 3 = 0.3$.
+2. $v = 0.999 \times 0 + 0.001 \times 9 = 0.009$.
+3. $\hat{m} = 0.3 / (1 - 0.9) = 3$.
+4. $\hat{v} = 0.009 / (1 - 0.999) = 9$.
+5. The step is $0.1 \times 3 / (\sqrt{9} + 10^{-8}) \approx 0.1$.
+6. The new weight is $w \approx -0.1$.
+
+If the gradient had been 3000 instead of 3, the step would still be about 0.1.
+Adam's step size depends on the learning rate, not on the scale of the
+gradient. SGD's step would have been a thousand times larger. The checks test
+this directly.
+
+## AdamW: weight decay done right
+
+Weight decay shrinks every weight a little on each step, which keeps weights
+small and helps the model generalise. With plain SGD, adding an L2 penalty
+$\tfrac{\lambda}{2}\|w\|^2$ to the loss gives exactly the same result as weight
+decay, because its gradient $\lambda w$ gets scaled by the same $\eta$.
+
+Adam breaks that. If you add $\lambda w$ to the gradient, Adam divides it by
+$\sqrt{\hat{v}}$ like everything else. Weights with large gradients get almost
+no decay, and weights with small gradients get a lot. The decay no longer does
+what you asked for.
+
+AdamW keeps the two apart. It runs a normal Adam step using the raw gradient,
+then subtracts the decay separately:
 
 $$
-w_{k+1} = w_k - \eta\left(\frac{\hat m_k}{\sqrt{\hat v_k}+\epsilon}
-+ \lambda w_k\right) .
+w_{\text{new}} = w_{\text{Adam}} - \eta \, \lambda \, w
 $$
 
-The two updates agree exactly when $\lambda = 0$, and otherwise differ by the
-term $\eta\lambda w_k$ that AdamW adds back unpreconditioned — a uniform
-shrinkage rate that does not depend on a parameter's gradient history.
+Read it aloud: take the weights Adam would produce, then subtract the learning
+rate times the weight decay rate $\lambda$ (lambda) times the old weights, the
+ones from before this step. The decay never passes through Adam's averages.
+
+```python
+new_w, new_state = adam_step(w, grad, state, lr, beta1, beta2, eps)
+new_w = new_w - lr * weight_decay * w
+```
+
+With `weight_decay=0`, AdamW gives exactly the same result as Adam.
 
 ## Learning-rate schedules
 
-A **linear warmup** ramps $\eta$ from a small value to a peak $\eta_{\max}$
-over the first $w$ steps, $\eta_k = \eta_{\max}\cdot k/w$ for $k \le w$, for
-the reasons already covered above: early steps carry unreliable signal, so
-the schedule keeps the step small until the rest of training's assumptions
-hold.
+A fixed learning rate is a compromise. Early in training you want to move fast.
+Late in training you want small steps so the noise doesn't keep kicking the
+weights away from a good spot. A schedule changes the learning rate over time.
 
-**Cosine decay** takes over after warmup and brings the rate smoothly down to
-zero by a target step $T$:
+The most common schedule has two parts:
+
+1. **Warmup.** For the first `warmup` steps, the rate rises in a straight line
+   from 0 to a peak value. At the start, Adam's averages are based on only a
+   few gradients, and the weights are random. Big steps then can throw the
+   model somewhere it never recovers from. Warmup starts gently.
+2. **Cosine decay.** From `warmup` to `total`, the rate follows half a cosine
+   wave from the peak down to 0. It drops slowly at first, faster in the
+   middle, and slowly again at the end.
+
+Here is the formula for the decay part. Let $p$ be the fraction of the decay
+phase that is done:
 
 $$
-\eta_k = \eta_{\max}\cdot\frac{1}{2}\left(1+\cos\!\Big(\pi\,\frac{k-w}{T-w}\Big)\right) , \qquad w \le k \le T .
+p = \frac{\text{step} - \text{warmup}}{\text{total} - \text{warmup}}, \qquad
+\eta(\text{step}) = \eta_{\text{peak}} \cdot \tfrac{1}{2}\big(1 + \cos(\pi p)\big)
 $$
 
-At $k=w$ this equals $\eta_{\max}$, and at $k=T$ it equals $0$, with no jump
-at any point in between. That smoothness is the main advantage over a step
-schedule that divides $\eta$ by a constant at a few chosen epochs: cosine
-decay needs no guess about which epochs matter.
+Read it aloud: $p$ goes from 0 at the end of warmup to 1 at the final step.
+At $p = 0$, $\cos(0) = 1$, so the rate is the full peak. At $p = 1$,
+$\cos(\pi) = -1$, so the rate is 0. At $p = 0.5$, the rate is half the peak.
+During warmup, the rate is $\eta_{\text{peak}} \cdot \text{step} / \text{warmup}$.
+
+```python
+p = min(max((step - warmup) / (total - warmup), 0.0), 1.0)
+lr = peak * 0.5 * (1.0 + np.cos(np.pi * p))
+```
+
+### Worked example: a schedule
+
+Take `warmup=100`, `total=1000`, and `peak=0.01`:
+
+| Step | Phase | Calculation | Learning rate |
+|---|---|---|---|
+| 0 | warmup | $0.01 \times 0/100$ | 0.0 |
+| 50 | warmup | $0.01 \times 50/100$ | 0.005 |
+| 100 | decay, $p = 0$ | $0.01 \times 0.5 \times 2$ | 0.01 |
+| 325 | decay, $p = 0.25$ | $0.01 \times 0.5 \times (1 + 0.7071)$ | 0.0085355 |
+| 550 | decay, $p = 0.5$ | $0.01 \times 0.5 \times 1$ | 0.005 |
+| 1000 | decay, $p = 1$ | $0.01 \times 0.5 \times 0$ | 0.0 |
+
+If `warmup` is greater than or equal to `total`, there is no decay phase, and
+dividing by `total - warmup` would fail. In that case, return `peak`.
+
+## Build it step by step
+
+The checks test the functions in this order. Each step builds on the one
+before.
+
+1. **`sgd_step(w, grad, state, lr)`.** Takes arrays `w` and `grad` of the same
+   shape. Returns `(new_w, state)`. One line of arithmetic. The common mistake
+   is forgetting to return a tuple.
+2. **`momentum_step(w, grad, state, lr, beta)`.** Read the old velocity with
+   `state.get("v", np.zeros_like(w))`. Compute the new velocity, move `w`, and
+   return `{"v": v}` as the new state. The common mistake is adding a
+   `(1 - beta)` factor. The checks expect `v = beta * v + grad`, which is what
+   gives the $\eta / (1 - \beta)$ step size.
+3. **`adam_step(w, grad, state, lr, beta1, beta2, eps)`.** Read `t` with
+   `state.get("t", 0) + 1`, and read `m` and `v` with zero defaults. Update both
+   averages, bias-correct them, and take the step. Return
+   `{"m": m, "v": v, "t": t}`. Store the raw `m` and `v`, not the corrected
+   ones. The common mistake is storing $\hat{m}$, which compounds the
+   correction on every call.
+4. **`adamw_step(..., weight_decay)`.** Call `adam_step`, then subtract
+   `lr * weight_decay * w` using the `w` that came in. The common mistake is
+   adding `weight_decay * w` to `grad`, which is plain L2, not AdamW.
+5. **`cosine_schedule(step, warmup, total, peak)`.** Three branches: guard
+   `warmup >= total`, the linear warmup, and the cosine. Use `np.cos` and
+   `np.pi`. The common mistake is measuring $p$ from step 0 instead of from
+   the end of warmup.
+6. **`run_optimiser(grad_fn, init, step_fn, steps)`.** Start with
+   `w = np.array(init, dtype=float)`, an empty state, and `history = [w.copy()]`.
+   Loop `steps` times: compute the gradient, call `step_fn(w, grad, state)`,
+   and append a copy. Return `(w, history)`. The history has `steps + 1`
+   entries. The common mistake is appending `w` without `.copy()`.
 
 ## Cost and scaling
 
-Every optimiser here costs $O(d)$ flops per step beyond the gradient itself,
-for $d$ parameters. They differ in how much extra state they keep per
-parameter.
+Every optimiser here works on each weight separately, so the time per step
+grows in a straight line with the number of weights. The difference is memory:
+how many extra arrays of the same size as `w` each one keeps.
 
-| Optimiser | Extra state | Extra memory (float32) |
+| Optimiser | Extra arrays stored | Memory for a 1-billion-weight model (32-bit) |
 |---|---|---|
-| SGD | none | $0$ |
-| Momentum | one array, $v$ | $4d$ bytes |
-| AdaGrad / RMSProp | one array | $4d$ bytes |
-| Adam / AdamW | two arrays, $m$ and $v$ | $8d$ bytes |
+| SGD | 0 | 0 GB |
+| Momentum | 1 ($v$) | 4 GB |
+| Adam | 2 ($m$, $v$) | 8 GB |
+| AdamW | 2 ($m$, $v$) | 8 GB |
 
-Adam doubles the optimiser state a plain SGD run needs, which is why training
-a model with $d$ parameters treats optimiser memory as a real cost, alongside
-the $4d$ bytes the parameters themselves occupy, before gradients or
-activations are counted.
+For large models, Adam's two extra arrays are often the biggest memory cost
+after the weights themselves. The time for an optimiser step is small next to
+the forward and backward pass.
 
 ## Where this breaks
 
-**AdaGrad on long, non-convex runs.** Its accumulator only grows, so the step
-eventually stops moving every coordinate. RMSProp and Adam replaced it for
-deep networks.
-
-**Adam without decoupled decay.** Folding L2 into the gradient under an
-adaptive optimiser tends to generalise worse than SGD with momentum at a
-matched decay rate. AdamW closes most of that gap.
-
-**Skipping warmup after scaling the batch size or peak rate.** The
-linear-scaling heuristic only holds locally, so runs that skip warmup after a
-large batch or a high peak rate diverge often in the first few hundred steps.
-
-**Treating $O(1/\sqrt K)$ as a wall-clock guarantee.** It bounds the number of
-gradient evaluations needed, not seconds. Halving the batch size to take more
-steps in the same wall-clock time does not beat the bound once noise, not
-step count, limits progress.
+- **Learning rate too high.** The loss blows up or turns into `nan`. Lower the
+  rate by a factor of three to ten, or add warmup.
+- **Momentum with an unchanged learning rate.** Turning on momentum with
+  $\beta = 0.9$ makes steps about ten times larger. Lower $\eta$ to compensate.
+- **Tiny $\hat{v}$.** When a weight's gradients are almost always zero, Adam's
+  denominator is tiny and a rare nonzero gradient causes a huge step.
+  A larger $\epsilon$ tames this.
+- **L2 inside Adam.** Adding the penalty to the gradient gives uneven decay.
+  Use AdamW's separate decay instead.
+- **No decay at the end.** With a fixed rate, noisy gradients keep the weights
+  jittering around the minimum. A schedule that decays to zero lets them
+  settle.
+- **Adam generalising worse than SGD.** On some vision tasks, well-tuned SGD
+  with momentum reaches slightly better test accuracy. People often try both.
 
 ## The exercise
 
-You implement four optimiser steps sharing one interface —
-`step_fn(w, grad, state, **hyperparameters) -> (new_w, new_state)` — so one
-loop can drive any of them. Write `sgd_step`, `momentum_step`, and `adam_step`
-with the bias correction derived above, then `adamw_step`, which reuses
-`adam_step`'s moment update and adds the decoupled decay term separately.
-Write `cosine_schedule(step, warmup, total, peak)`, returning the learning
-rate at a given step, and `run_optimiser(grad_fn, init, step_fn, steps)`, a
-loop that starts at `init`, calls `step_fn` `steps` times, and returns the
-final iterate and the full trajectory.
+You implement `sgd_step`, `momentum_step`, `adam_step`, `adamw_step`,
+`cosine_schedule`, and `run_optimiser`. Every step function returns
+`(new_w, new_state)`, so `run_optimiser` can drive any of them through
+`functools.partial`.
 
-The checks build from the smallest piece up: that `sgd_step` and
-`momentum_step`'s velocity recursion match direct arithmetic, and that
-momentum's steady-state step size under a constant gradient converges to
-$\eta/(1-\beta)$ times that gradient. Another check confirms `adam_step`'s
-raw and bias-corrected moments match the closed-form expectation derived
-above at small `t`, which catches a missing or wrong correction term
-directly. A further check compares `adam_step` and `adamw_step` on identical
-inputs and requires their outputs to differ by exactly $\eta\lambda w$, and
-another rescales the gradient by a large constant to confirm Adam's update
-barely moves while SGD's scales with it directly. `cosine_schedule` is
-checked at the end of warmup, at the total step count, and at the midpoint of
-the decay. The last check runs `run_optimiser` with each of the four step
-functions, using hyperparameters you choose, to reach a target loss on a
-quadratic whose two curvatures differ by a factor of a hundred — the
-anisotropic problem no single global learning rate handles well in every
-direction at once.
+The checks verify SGD's update, momentum's velocity rule and its $\eta / (1 -
+\beta)$ steady-state step, Adam's raw and bias-corrected averages, the exact
+difference between Adam and AdamW, Adam's near-indifference to gradient scale,
+and the schedule's values at key steps. The last check runs all four
+optimisers on a narrow valley, a quadratic 100 times steeper in one direction
+than the other, and expects each to reach a low loss.

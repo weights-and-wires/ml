@@ -2,8 +2,8 @@
 
 Fill in the seven functions below. The first two build kernel matrices; `is_psd`
 checks the property that makes a function a valid kernel at all.
-`kernel_ridge_fit` and `kernel_ridge_predict` solve ridge regression in the
-RKHS the kernel induces. `random_fourier_features` builds an explicit,
+`kernel_ridge_fit` and `kernel_ridge_predict` fit and use kernel ridge
+regression. `random_fourier_features` builds an explicit,
 finite-dimensional approximation to the RBF kernel's implicit feature map.
 `representer_check` evaluates the regularised objective for a candidate
 function given by its kernel-expansion coefficients over some point set,
@@ -101,9 +101,9 @@ def random_fourier_features(X: np.ndarray, D: int, gamma: float, rng: np.random.
 
         Z(x) = sqrt(2 / D) * cos(omega @ x + phase) ,
 
-    stacked over every row of X. By Bochner's theorem, E[Z(x) . Z(x')]
-    equals the RBF kernel value k(x, x') exactly, so `Z @ Z.T` is an unbiased
-    Monte Carlo approximation of the RBF Gram matrix.
+    stacked over every row of X. On average over the random draws, `Z @ Z.T`
+    equals the RBF Gram matrix, and the error shrinks as D grows.
+    Draw omega first and the phases second, both from `rng`.
 
     Args:
         X: Points, shape (n, d).
@@ -134,8 +134,8 @@ def representer_check(K: np.ndarray, y: np.ndarray, lam: float, coeffs: np.ndarr
         coeffs: Coefficients of the candidate function, shape (N,).
 
     Returns:
-        sum((y - f(x_1..n))**2) + lam * ||f||_H^2, as a float, where
-        ||f||_H^2 = coeffs @ K @ coeffs.
+        sum((y - f(x_1..n))**2) + lam * (squared size of f), as a float, where
+        the squared size of f is coeffs @ K @ coeffs.
     """
     raise NotImplementedError("representer_check")
 

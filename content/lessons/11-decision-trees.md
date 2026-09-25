@@ -2,14 +2,14 @@
 title: Decision trees
 slug: 11-decision-trees
 part: "Part 2 — Classical machine learning"
-summary: Axis-aligned recursive partitioning, the impurity measures that drive it, and the pruning that keeps a single tree honest.
-minutes: 35
+summary: Build a decision tree from scratch, from impurity scores and fast split search to growing, predicting, and pruning.
+minutes: 60
 gpu: false
 objectives:
-  - State the constant that minimises squared error and the constant that minimises log loss on a leaf.
-  - State why exact optimal tree learning is NP-hard and what greedy recursive splitting gives up in exchange.
-  - Implement the split search in O(n log n) per feature using sorted order and running sums.
-  - State the weakest-link argument behind cost-complexity pruning and see why the pruned sequence is nested.
+  - Compute Gini impurity, entropy, and squared-error impurity for a set of labels.
+  - Find the best split on a feature in one sorted pass using running sums.
+  - Build a tree by recursive splitting, and predict by walking each row to a leaf.
+  - Prune a grown tree with a per-leaf penalty, and explain why a bigger penalty gives a smaller tree.
 prereqs:
   - 01-the-learning-problem
 exercise: 11-decision-trees
@@ -17,113 +17,224 @@ exercise: 11-decision-trees
 
 # Decision trees
 
-Every hypothesis class you have fit so far commits to a global form before it sees the data: a hyperplane, a sigmoid of a hyperplane, a fixed set of basis functions. A decision tree commits to nothing global. It partitions the feature space into axis-aligned boxes and fits an independent constant inside each one, so its flexibility is exactly the flexibility of the partition you choose. That buys interaction effects and nonlinearity for free, with no feature engineering and no kernel, at the price of a combinatorial search: choosing the best partition of $n$ points into boxes is not a convex problem, and it is not a tractable one either.
+A decision tree is a game of twenty questions. To guess a house price, it asks "Is the floor area at most 80 square metres?" and then, depending on the answer, "Is it within 2 km of the centre?" Each answer sends you down a branch. After a few questions you reach a leaf, and the leaf holds the prediction.
 
-This lesson builds the tree practitioners actually fit: a greedy, recursive approximation to the optimal partition, the impurity measures that decide each split, and the pruning procedure that stops the recursion from memorising the training set. The tree this procedure produces is unstable on its own: a small change to the data can flip an early split and rearrange everything beneath it. That instability is not a flaw to patch here. It is the property the next lesson exploits by averaging many trees together.
+Every model so far picked one shape in advance, such as a straight line or a sigmoid of a line. A tree does not. It chops the data into boxes and predicts one number inside each box. That lets it capture curves and interactions between features without any feature engineering.
+
+The catch is that finding the best set of boxes is too hard to solve exactly. So in practice you build the tree greedily, one question at a time, and then cut it back so it does not memorise the training data. This lesson builds that whole pipeline.
 
 ## What you already know
 
-- Empirical risk minimisation: choose the hypothesis that minimises average loss over the training sample.
-- The maximum likelihood estimate of a categorical distribution's parameters is the vector of observed class proportions.
-- A held-out estimate of risk is the only honest way to compare models of different complexity.
-- $NP$-hardness: a problem is $NP$-hard when no known algorithm solves every instance in polynomial time, and none is expected to exist.
+- Training a model means choosing the one with the smallest average loss on the training data.
+- The mean of a set of numbers is the constant that minimises squared error to those numbers.
+- The fraction of labels in each class is the natural estimate of that class's probability.
+- A model that scores perfectly on training data can still do badly on new data.
 
-## The hypothesis class
+## How a tree predicts
 
-A tree of depth $D$ recursively splits $\mathbb R^d$ along coordinate axes. Each internal node holds a feature index $j$ and a threshold $\tau$, and sends a point $x$ left when $x_j \le \tau$ and right otherwise. Each leaf $\ell$ owns a box $R_\ell$, the intersection of the constraints along its root-to-leaf path, and predicts one constant $c_\ell$ for every point that lands there:
+A tree is made of nodes. An internal node holds two things: a feature index $j$ and a threshold $t$. A row $x$ goes left when $x_j \le t$ and right otherwise. A leaf holds one number, its value, and that value is the prediction for every row that lands there.
 
-$$
-f(x) = \sum_{\ell} c_\ell\, \mathbb 1[x \in R_\ell] .
-$$
+What number should a leaf predict? Use the mean of the training labels that reached it. For squared error, the mean is the best possible constant. For a 0/1 classification label, the mean of $y$ is the fraction of class-1 rows, which is also the best probability estimate. So one rule, "leaf value is the mean", serves both regression and classification.
 
-Fixing the partition decouples the leaves: each $c_\ell$ minimises loss only over the points inside $R_\ell$. Fitting a tree is two problems, not one. You choose a partition, then solve one small estimation problem per leaf.
+In numpy, a leaf's value is one line:
 
-### The leaf constant
+```python
+value = float(y_leaf.mean())
+```
 
-For squared loss, $c_\ell$ minimises $\sum_{i\in\ell}(y_i-c)^2$; differentiating gives the within-leaf mean, $c_\ell = \frac1{n_\ell}\sum_{i\in\ell} y_i$. For a $K$-class leaf under log loss, the same style of argument, a Lagrange multiplier enforcing $\sum_k q_k=1$, gives $q_k = n_k/n_\ell$, the empirical class proportion. Both are the plug-in maximum-likelihood estimate of the label under the leaf's local distribution: Gaussian for squared loss, categorical for log loss. On a binary leaf, $q_1$ and the mean of $y$ coincide, so one leaf value serves regression and classification alike.
+To predict, you start at the root and follow the questions until you hit a leaf:
 
-### Why the optimal partition is out of reach
+```python
+node = root
+while not node.is_leaf:
+    node = node.left if x[node.feature] <= node.threshold else node.right
+```
 
-Choosing the loss-minimising partition, subject to a leaf budget, means choosing which of exponentially many recursive splits to make at every node, each choice reshaping which choices are worth making beneath it. Deciding whether a training set admits a zero-error tree with at most $k$ leaves is $NP$-hard: it instantiates the general problem of finding a minimal boolean decision diagram consistent with a truth table.
+Take a tiny tree: the root asks "is $x_0 \le 0.5$?", the left leaf predicts $-1$, and the right leaf predicts $1$. The rows $0.0$, $0.5$, and $-3.0$ all go left and get $-1$. The rows $1.0$ and $10.0$ go right and get $1$. The row $0.5$ goes left because the test is "less than or equal".
 
-What survives is a greedy relaxation: at each node, search every feature and threshold for the single split that most reduces an impurity criterion, apply it, and recurse into the children independently. This throws away any split that only pays off two levels down, which is exactly what makes the search tractable.
+## Impurity: how mixed is a node?
 
-## Impurity measures
+To pick a good question, you need a score for how mixed a group of labels is. That score is called **impurity**. It is zero when every label in the group is the same, and it grows as the group gets more mixed. A good split turns one mixed group into two purer groups.
 
-An impurity function $I(S)$ scores a set of labels: zero when pure, larger when mixed.
+### Gini impurity
 
-**Squared-error impurity** is the leaf's residual variance, $I_{\text{mse}}(S)=\frac1{|S|}\sum_{i\in S}(y_i-\bar y_S)^2$.
-
-**Gini impurity**, for class proportions $p_k$, is $I_{\text{gini}}(S)=1-\sum_k p_k^2$. Read the second form, $\sum_k p_k(1-p_k)$, as an expected error rate: draw two labels independently from $S$'s own distribution, and that sum is the chance they disagree.
-
-**Entropy** is $I_{\text{ent}}(S)=-\sum_k p_k\log p_k$. It equals the average log loss the leaf's own optimal constant achieves on its own points, not an ad hoc measure of disorder but the realised training loss under the criterion the tree is ultimately scored on.
-
-For two classes with $p=p_1$, both reduce to concave functions of $p$ that vanish at $p\in\{0,1\}$: $I_{\text{gini}}=2p(1-p)$ and $I_{\text{ent}}=-p\log p-(1-p)\log(1-p)$. They share the same maximum at $p=\tfrac12$ and the same curvature there, so a split that reduces one substantially reduces the other by nearly the same proportion. The two criteria rarely disagree on which split to take; disagreements are confined to near-ties.
-
-## The split-search algorithm
-
-Evaluating every threshold directly costs $O(n)$ work per threshold, and there are $O(n)$ thresholds, so $O(n^2)$ per feature. Sorting removes the redundancy: sort feature $j$'s values once, in $O(n\log n)$, then sweep the threshold left to right, moving one point at a time from the right side to the left.
-
-For squared error, maintain running sums $S_L=\sum_{i\in L} y_i$ and $Q_L=\sum_{i\in L}y_i^2$; the right side's sums follow by subtraction from the totals. The left variance is $Q_L/n_L-(S_L/n_L)^2$, updated in $O(1)$ per step. For Gini or entropy on a binary label, maintaining the running count of positive labels in the left partition is enough, since each impurity is a closed-form function of that count and $n_L$. One feature costs $O(n\log n)$ for the sort plus $O(n)$ for the sweep, so a node with $d$ features costs $O(nd\log n)$.
-
-The criterion that picks a split is the reduction
+Let $p_k$ be the fraction of labels in the group that equal class $k$. Gini impurity is
 
 $$
-\Delta I = I(S) - \frac{n_L}{n}I(S_L) - \frac{n_R}{n}I(S_R) ,
+G = 1 - \sum_k p_k^2 .
 $$
 
-the parent's impurity minus the sample-weighted average of the children's. That weighting is what keeps $\Delta I \ge 0$ from being trivially achievable by putting every point on one side, so the search only accepts splits that genuinely help.
+Read it aloud: square each class fraction, add the squares, and subtract the total from one. If one class has every label, its fraction is 1, the sum of squares is 1, and $G = 0$. Another way to see it: $G$ is the chance that two labels drawn at random from the group, with replacement, disagree.
 
-## Cost-complexity pruning
+```python
+p = np.bincount(y) / y.size
+g = 1.0 - np.sum(p ** 2)
+```
 
-A tree grown until every leaf is pure drives training risk to zero and generalises poorly. Limiting depth in advance is one fix; pruning a fully grown tree back is a better one, because it judges which splits earned their keep only after seeing the whole tree.
+### Entropy
 
-Define the cost complexity of tree $T$ as
-
-$$
-R_\alpha(T) = R(T) + \alpha\,|\text{leaves}(T)|, \qquad R(T) = \sum_{\ell} n_\ell\, I(\ell) ,
-$$
-
-impurity across leaves plus a penalty $\alpha$ per leaf. $R(T)$ only falls as splits are added, so $\alpha$ is the exchange rate that makes growing costly enough to stop. Because $R_\alpha$ decomposes additively over leaves, comparing "collapse to a leaf" against "keep the subtree" at every node, bottom-up, produces the exact minimiser of $R_\alpha$ over every subtree of the fully grown tree.
-
-The classical **weakest-link** algorithm computes the whole path at once. For an internal node $t$ with subtree $T_t$, define
+Entropy is a second way to score mixing:
 
 $$
-g(t) = \frac{R(t) - R(T_t)}{|\text{leaves}(T_t)| - 1} ,
+H = -\sum_k p_k \log p_k .
 $$
 
-the per-leaf cost of keeping $t$'s subtree instead of collapsing it. Repeatedly collapsing the node with the smallest $g(t)$ produces a nested sequence $T_0 \supset T_1 \supset \cdots \supset \{\text{root}\}$, with nondecreasing collapsed $g$ values. Each $T_k$ is the optimal pruned tree for every $\alpha$ in $[g(t_k), g(t_{k+1}))$, so one sweep produces the optimal tree at every complexity level, rather than one bottom-up pass per candidate $\alpha$.
+Read it aloud: for each class, multiply its fraction by the natural log of that fraction, add them up, and flip the sign. The log is the natural log, so the unit is nats. A class with $p_k = 0$ contributes nothing, by the convention $0 \log 0 = 0$. Entropy equals the average log loss the leaf pays when it predicts its own class fractions for its own rows.
 
-### Surrogate splits and missing values
+```python
+p = np.bincount(y) / y.size
+p = p[p > 0]            # drop empty classes so log(0) never runs
+h = -np.sum(p * np.log(p))
+```
 
-CART handles a missing feature value at prediction time without imputing it. Alongside the primary split, it records surrogate splits: among the remaining features, the threshold whose partition agrees most often with the primary one. A row missing the primary feature is routed by the best surrogate it has, and to the majority branch if every surrogate is also missing. This degrades gracefully only when some other feature correlates with the primary one.
+For a binary label with $p$ the fraction of class 1, Gini becomes $2p(1-p)$. Both Gini and entropy are zero at $p = 0$ and $p = 1$ and largest at $p = 0.5$. They almost always pick the same split.
+
+### Squared-error impurity
+
+For a regression target, impurity is the variance of the labels in the group:
+
+$$
+V = \frac{1}{m}\sum_{i=1}^{m} (y_i - \bar y)^2 ,
+$$
+
+where $m$ is the number of rows in the group and $\bar y$ is their mean. Read it aloud: take each label's distance from the group mean, square it, and average. This is the mean squared error the leaf makes when it predicts $\bar y$.
+
+```python
+v = np.mean((y - y.mean()) ** 2)
+```
+
+### A worked example
+
+Take the six labels $[0, 0, 1, 1, 1, 2]$. The class fractions are $p_0 = 2/6 = 1/3$, $p_1 = 3/6 = 1/2$, and $p_2 = 1/6$.
+
+- Gini: the squares are $1/9$, $1/4$, and $1/36$, which sum to $14/36$. So $G = 1 - 14/36 = 22/36 \approx 0.6111$.
+- Entropy: $-(\tfrac13 \log \tfrac13 + \tfrac12 \log \tfrac12 + \tfrac16 \log \tfrac16) = 0.3662 + 0.3466 + 0.2986 \approx 1.0114$.
+
+Two more values to check your code against: four labels $[0, 1, 2, 3]$ give Gini $0.75$ and entropy $\log 4 \approx 1.3863$. Four copies of the same label give zero for both.
+
+## Choosing the best split
+
+A split is a feature and a threshold. The best split is the one that makes the children purer than the parent by the largest amount. That amount is called the **gain**:
+
+$$
+\text{gain} = I_{\text{parent}} - \frac{n_L}{n} I_L - \frac{n_R}{n} I_R .
+$$
+
+Read it aloud: start with the parent's impurity. Subtract the left child's impurity weighted by the share of rows that went left, $n_L / n$. Subtract the right child's impurity weighted by its share, $n_R / n$. The weights matter. Without them, a split that peels off one lucky row would look as good as a split that cleanly halves the data.
+
+```python
+gain = parent_imp - (n_left * left_imp + n_right * right_imp) / n
+```
+
+### Which thresholds to try
+
+Sort one feature's values. Any threshold between the same two neighbouring values gives the same split, so you only need one candidate per gap: the midpoint between two consecutive, different sorted values. If two neighbours are equal, there is no gap and no split there.
+
+### Running sums make it fast
+
+The slow way recomputes both children's impurity from scratch at every threshold. That costs about $n$ steps per threshold, and there are about $n$ thresholds, so about $n^2$ steps per feature.
+
+The fast way sorts once and slides the threshold from left to right. Each step moves exactly one row from the right child to the left child. If you keep running totals, each step costs a constant amount of work.
+
+For squared error, keep the running sum of labels $S_L$ and the running sum of squared labels $Q_L$ on the left. The left variance is then
+
+$$
+V_L = \frac{Q_L}{n_L} - \left(\frac{S_L}{n_L}\right)^2 .
+$$
+
+Read it aloud: the mean of the squares minus the square of the mean. The right side uses the same formula with $S_R = S_{\text{total}} - S_L$ and $Q_R = Q_{\text{total}} - Q_L$. In numpy, `np.cumsum` gives every running sum at once:
+
+```python
+cum_sum = np.cumsum(ys)        # ys is y reordered by the sorted feature
+cum_sq = np.cumsum(ys ** 2)
+left_sum, left_sq = cum_sum[:-1], cum_sq[:-1]
+```
+
+For a 0/1 label under Gini or entropy, the running count of 1s on the left is enough. Divide it by $n_L$ to get $p_L$, and apply the binary formula.
+
+### A worked split
+
+Take one feature $x = [1, 2, 3, 4]$ with labels $y = [1, 3, 8, 10]$. The parent mean is $5.5$, and the parent variance is $(20.25 + 6.25 + 6.25 + 20.25)/4 = 13.25$.
+
+The running sums are `cumsum(y) = [1, 4, 12, 22]` and `cumsum(y**2) = [1, 10, 74, 174]`. The following table shows every candidate threshold.
+
+| Threshold | $n_L$ | $S_L$ | $Q_L$ | $V_L$ | $V_R$ | Gain |
+|---|---|---|---|---|---|---|
+| 1.5 | 1 | 1 | 1 | 0 | 8.667 | 6.75 |
+| 2.5 | 2 | 4 | 10 | 1 | 1 | 12.25 |
+| 3.5 | 3 | 12 | 74 | 8.667 | 0 | 6.75 |
+
+At threshold 2.5, the left variance is $10/2 - (4/2)^2 = 5 - 4 = 1$. The right side has $S_R = 18$ and $Q_R = 164$, so $V_R = 164/2 - 9^2 = 1$. The gain is $13.25 - (2 \cdot 1 + 2 \cdot 1)/4 = 12.25$. That is the best split.
+
+## Growing the tree
+
+Growing is recursion. At a node, find the best split, send each row left or right, and repeat on each child. Stop and make a leaf when any of these holds:
+
+- The node is already pure (impurity close to zero).
+- The node is at `max_depth`.
+- No valid split exists, because there are too few rows or every feature is constant.
+- The best split has no positive gain.
+
+This search is **greedy**: it takes the best question right now and never looks ahead. Finding the truly best tree is known to be computationally intractable for large data, so greedy search is the practical choice. The price is that it can miss a pair of splits that only help together.
+
+A tree with no depth limit keeps splitting until every leaf is pure. On data with distinct inputs, that means zero training error, which usually means it has memorised noise.
+
+## Pruning the tree back
+
+Pruning grows a big tree first and then removes the splits that did not earn their keep. It gives each leaf a price $\alpha$ and asks whether the drop in error is worth the extra leaves.
+
+The **cost** of a tree is
+
+$$
+R_\alpha(T) = \sum_{\text{leaves}} n_\ell \, I_\ell \;+\; \alpha \times (\text{number of leaves}) .
+$$
+
+Read it aloud: for each leaf, multiply its row count $n_\ell$ by its impurity $I_\ell$, and add them up. That is the total training error. Then add $\alpha$ for every leaf. With $\alpha = 0$, pruning keeps every useful split. With a huge $\alpha$, one leaf is cheapest, so the tree collapses to its root.
+
+You find the cheapest tree bottom-up. At each internal node, first prune both children. Then compare two costs:
+
+- Collapse to a leaf: `n_samples * impurity + alpha`.
+- Keep the split: the left child's cost plus the right child's cost.
+
+Keep whichever is cheaper. Because each subtree's cost only grows faster than a single leaf's cost as $\alpha$ rises, a larger $\alpha$ never gives you more leaves. The pruned trees form a nested sequence: each is a cut-down version of the one before.
+
+Using the worked split: the parent has 4 rows and impurity 13.25, so collapsing costs $53 + \alpha$. The two children each have 2 rows and impurity 1, so keeping costs $2 + 2 + 2\alpha = 4 + 2\alpha$. Keeping wins while $\alpha < 49$.
+
+## Build it step by step
+
+The checks test the functions in this order, so build them in this order too.
+
+1. **`gini(y)`.** Takes an integer label array of shape `(n,)` and returns a float. Use `np.bincount`, divide by the total, then `1 - np.sum(p**2)`. Common mistake: dividing by the number of classes instead of the number of labels.
+2. **`entropy(y)`.** Same input and output. Use `np.bincount`, keep only the nonzero counts, then `-np.sum(p * np.log(p))`. Common mistake: taking `np.log` of a zero fraction, which returns `nan`.
+3. **`predict_tree(tree, X)`.** Takes a root `Node` and `X` of shape `(n, d)`, and returns an array of shape `(n,)`. Loop over rows, and walk each from the root with the `while not node.is_leaf` loop. Common mistake: using `<` instead of `<=`, which sends rows that sit exactly on the threshold the wrong way.
+4. **`best_split(X, y, criterion, min_samples_leaf)`.** Returns `(feature, threshold, gain)` or `None`. For each feature, sort with `np.argsort`, reorder `y`, build running sums with `np.cumsum`, and compute the gain for all candidate positions at once. Mark a position invalid when neighbouring sorted values are equal or a side has fewer than `min_samples_leaf` rows, and use `np.argmax` over the valid gains. The threshold is the midpoint `0.5 * (xs[i] + xs[i + 1])`. Common mistake: returning a threshold equal to a data value, or forgetting the `n_L / n` weights.
+5. **`grow_tree(X, y, criterion, max_depth, min_samples_leaf)`.** Returns the root `Node`. Write an inner function `build(X, y, depth)` that makes a leaf node with `n_samples`, `impurity`, and `value = y.mean()`, checks the stopping rules, and otherwise splits with a boolean mask `X[:, feature] <= threshold` and recurses. Common mistake: storing the class label instead of the mean as `value`.
+6. **`cost_complexity_prune(tree, alpha)`.** Returns a new tree. Write a recursive helper that returns both the pruned node and its cost. Build new `Node` objects rather than editing the input. Common mistake: comparing against the children's unpruned costs.
 
 ## Cost and scaling
 
-| Operation | Cost | Notes |
-|---|---|---|
-| Best split at one node, $n$ rows, $d$ features | $O(nd \log n)$ | Sort per feature, one linear sweep with running sums. |
-| Full tree, sorted order carried through recursion | $O(nd \log n + nd \cdot \text{depth})$ | Sort each feature once. |
-| Full tree, re-sorting at every node | $O(n^2 d \log n)$ worst case | Depth can reach $n$ on adversarial data. |
-| Prediction, one query | $O(\text{depth})$ | A root-to-leaf walk. |
-| Cost-complexity pruning, whole path | $O(|T_0|)$ | One weakest-link sweep. |
+The following table shows how the work grows with $n$ rows and $d$ features.
 
-The gap between the second and third rows is why production implementations pass sorted index arrays down the recursion instead of re-sorting at every node: that turns a tree that is linear in $n$, up to logarithms, into one that is quadratic.
+| Task | How the work grows | Why |
+|---|---|---|
+| Best split at one node | About $n \log n$ per feature, so $d \cdot n \log n$ | Sorting dominates; the sweep is one pass. |
+| Best split, slow way | About $n^2$ per feature | Recomputes impurity at every threshold. |
+| Growing a whole tree | Split cost times depth, roughly | Each level of the tree touches every row once. |
+| Predicting one row | Proportional to depth | One question per level. |
+| Pruning | Proportional to the number of nodes | Each node is visited once. |
+
+Memory is small: the data plus one node per split. Real libraries sort each feature once and pass sorted index arrays down the tree instead of re-sorting at every node.
 
 ## Where this breaks
 
-**Axis-aligned bias.** A single split cuts perpendicular to one coordinate axis. A diagonal decision boundary needs a staircase of splits to approximate, each adding variance without adding much accuracy.
-
-**Instability.** Because the split search is greedy and each split is a hard decision, a handful of points near a threshold can flip which feature wins at the root, and everything beneath it follows that choice. Two similar training sets can produce structurally different trees. The next lesson addresses this directly, by averaging many trees rather than stabilising any one of them.
-
-**Myopia.** A greedy split search cannot see that two mediocre splits in sequence might beat the best single split available at the current step. Features that are only informative in combination, an XOR-like interaction, can look useless to every one-step split, regardless of depth budget.
-
-**High-cardinality categorical features.** A feature with many distinct values offers more candidate thresholds, and so more chances for one to reduce impurity by chance on the training set, biasing the search toward it even without extra signal.
+- **Diagonal boundaries.** Every split cuts along one feature axis. A diagonal boundary needs a staircase of many small splits. Adding features such as $x_1 + x_2$ helps.
+- **Instability.** A few rows near a threshold can change the root split, and the whole tree below it changes too. The next lesson fixes this by averaging many trees.
+- **Short-sightedness.** Greedy search cannot see that two weak splits together are strong. An XOR pattern, where neither feature helps alone, can fool it.
+- **Features with many values.** A feature with many distinct values offers more thresholds, so it is more likely to win by luck. Limiting depth and pruning reduce the damage.
+- **Overfitting.** A fully grown tree memorises noise. Prune it, and choose $\alpha$ on held-out data.
 
 ## The exercise
 
-You build CART from its two smallest pieces up to a pruned tree. Implement `gini` and `entropy`, each taking an integer label array and returning its impurity, then `best_split(X, y, criterion)`, which returns the feature, threshold, and impurity reduction of the best axis-aligned split using sorted order and running sums rather than recomputing from scratch at every threshold.
+You build a CART-style tree from the smallest pieces up. Implement `gini` and `entropy`, then `predict_tree`, then `best_split` with the sorted, running-sum sweep. Next, implement `grow_tree`, which recurses `best_split` into a full tree, and `cost_complexity_prune`, the bottom-up collapse-or-keep pass.
 
-Then implement `grow_tree`, which recurses `best_split` into a full tree subject to a maximum depth and a minimum leaf size, and `predict_tree`, which walks a fitted tree to a leaf for each query row. Finally implement `cost_complexity_prune(tree, alpha)`, the bottom-up collapse-or-keep pass derived above.
-
-The checks confirm `gini` and `entropy` against their formulas at a pure node, a uniform node, and a mixed node; that `best_split` finds the same split, to numerical precision, as an $O(n^2)$ brute-force search over every threshold; that a tree grown without a depth limit drives training error to zero; that every leaf's prediction equals the mean of the training labels routed there; and that the number of leaves after `cost_complexity_prune` is nonincreasing as `alpha` grows, confirming the nested-sequence property the weakest-link argument predicts.
+The checks confirm `gini` and `entropy` at a pure, a uniform, and a mixed node. They walk `predict_tree` through a hand-built tree. They compare `best_split` against a slow brute-force search under squared error and Gini. They confirm that an unlimited tree reaches zero training error and that each leaf predicts the mean of its training labels. Finally, they check that the leaf count after `cost_complexity_prune` never grows as `alpha` grows, stays full at `alpha = 0`, and drops to one leaf for a very large `alpha`.
