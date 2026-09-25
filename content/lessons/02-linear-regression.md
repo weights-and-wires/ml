@@ -39,7 +39,9 @@ You have $n$ examples and $d$ features. Stack them into the data matrix $X$, whi
 
 The predictions for every example at once are
 
-$$\hat{y} = Xw$$
+$$
+\hat{y} = Xw
+$$
 
 Read it aloud: for each row of $X$, multiply each feature by its weight and add them up. That sum is the prediction $\hat{y}$ for that row.
 
@@ -51,7 +53,9 @@ This lesson has no separate bias $b$. To get one, add a column of ones to $X$. T
 
 The loss is half the sum of squared errors:
 
-$$L(w) = \tfrac{1}{2} \lVert Xw - y \rVert^2$$
+$$
+L(w) = \tfrac{1}{2} \lVert Xw - y \rVert^2
+$$
 
 Read it aloud: take the error vector $Xw - y$, one error per example. Square each error and add them. The symbol $\lVert v \rVert$ is the norm, or length, of a vector $v$, so $\lVert v \rVert^2$ is the sum of its squared entries. The $\tfrac{1}{2}$ only tidies up the derivative.
 
@@ -63,7 +67,9 @@ loss = 0.5 * np.sum((X @ w - y) ** 2)
 
 The loss is a bowl in weight space. Its lowest point is where the gradient is zero. The gradient is the vector of partial derivatives, one per weight, and it points uphill. For this loss the gradient is $X^\top(Xw - y)$. Setting it to zero gives the normal equations:
 
-$$X^\top X \, w = X^\top y$$
+$$
+X^\top X \, w = X^\top y
+$$
 
 Read it aloud: on the left, $X^\top X$ is a $d \times d$ matrix, sometimes called the Gram matrix. Each entry measures how much two features overlap. On the right, $X^\top y$ is a length-$d$ vector that measures how much each feature lines up with the targets. The best $w$ solves this square system.
 
@@ -83,7 +89,13 @@ This gives you a free check on any solver. Compute $X^\top(y - Xw)$ and look at 
 check = np.abs(X.T @ (y - X @ w)).max()
 ```
 
+> [!TIP]
+> Run this check after every solver you write. Compare it with `np.abs(X.T @ y).max()`: a result many orders of magnitude smaller means the fit is right.
+
 Geometrically, $Xw$ is the point in the space of all possible predictions that sits closest to $y$. Closest means the line from it to $y$ drops straight down, at a right angle. This is called a projection.
+
+> [!KEY]
+> Least squares projects $y$ onto the columns of $X$. The residual left over is at right angles to every column, so $X^\top(y - Xw) = 0$.
 
 ## A worked example by hand
 
@@ -91,11 +103,15 @@ Fit a line $\hat{y} = w_1 + w_2 x$ to three points: $(1, 1)$, $(2, 2)$, and $(3,
 
 The data matrix and targets are:
 
-$$X = \begin{bmatrix} 1 & 1 \\ 1 & 2 \\ 1 & 3 \end{bmatrix}, \quad y = \begin{bmatrix} 1 \\ 2 \\ 2 \end{bmatrix}$$
+$$
+X = \begin{bmatrix} 1 & 1 \\ 1 & 2 \\ 1 & 3 \end{bmatrix}, \quad y = \begin{bmatrix} 1 \\ 2 \\ 2 \end{bmatrix}
+$$
 
 The two sides of the normal equations are:
 
-$$X^\top X = \begin{bmatrix} 3 & 6 \\ 6 & 14 \end{bmatrix}, \quad X^\top y = \begin{bmatrix} 5 \\ 11 \end{bmatrix}$$
+$$
+X^\top X = \begin{bmatrix} 3 & 6 \\ 6 & 14 \end{bmatrix}, \quad X^\top y = \begin{bmatrix} 5 \\ 11 \end{bmatrix}
+$$
 
 The determinant of $X^\top X$ is $3 \cdot 14 - 6 \cdot 6 = 6$. Solving gives $w_1 = (14 \cdot 5 - 6 \cdot 11)/6 = 4/6 \approx 0.6667$ and $w_2 = (3 \cdot 11 - 6 \cdot 5)/6 = 3/6 = 0.5$.
 
@@ -116,6 +132,9 @@ A rule of thumb: solving a problem with condition number $10^k$ loses about $k$ 
 
 Here is the problem. The condition number of $X^\top X$ is $\kappa^2$, the square of the condition number of $X$. So the normal equations lose about $2k$ digits, while a method that works on $X$ directly loses only $k$. In the worked example, $\kappa(X) \approx 6.79$ and $\kappa(X^\top X) \approx 46.1$. If $\kappa = 10^7$, the normal equations keep about 2 digits and a good method keeps about 9.
 
+> [!KEY]
+> Forming $X^\top X$ squares the condition number. So the normal equations lose about twice as many digits as QR or the SVD, which work on $X$ directly.
+
 The two methods below never form $X^\top X$.
 
 ## Solve with QR
@@ -124,7 +143,9 @@ The QR factorisation splits $X$ into $X = QR$. Here $Q$ has shape $n \times d$ a
 
 Substitute $X = QR$ into the normal equations and cancel. You get
 
-$$R \, w = Q^\top y$$
+$$
+R \, w = Q^\top y
+$$
 
 Read it aloud: rotate the targets into the $Q$ coordinates, then solve a triangular system. A triangular system is solved one unknown at a time from the bottom row up. This is called back substitution.
 
@@ -139,7 +160,9 @@ The singular value decomposition (SVD) splits $X$ into $X = U \Sigma V^\top$. $U
 
 The least squares weights are
 
-$$w = V \, \Sigma^{-1} \, U^\top y$$
+$$
+w = V \, \Sigma^{-1} \, U^\top y
+$$
 
 Read it aloud from right to left: rotate $y$ into the $U$ coordinates, divide each coordinate by its singular value, then rotate back with $V$.
 
@@ -147,6 +170,9 @@ Read it aloud from right to left: rotate $y$ into the $U$ coordinates, divide ea
 U, s, vt = np.linalg.svd(X, full_matrices=False)
 w = vt.T @ ((U.T @ y) / s)
 ```
+
+> [!WARNING]
+> numpy's `vt` is already $V^\top$. You get $V$ with `vt.T`. Transposing it again, or treating `vt` as $V$, silently gives the wrong weights.
 
 ### When features repeat each other
 
@@ -158,6 +184,16 @@ Dividing by a zero singular value blows up. The fix is to drop every singular va
 keep = s > rcond * s[0]
 w = vt[keep].T @ ((U[:, keep].T @ y) / s[keep])
 ```
+
+> [!KEY]
+> When features repeat each other, many weight vectors fit equally well. Cutting the tiny singular values picks the shortest one, the minimum-norm solution.
+
+> [!RECAP]
+> - Predictions are `X @ w`, and the loss is half the sum of squared residuals.
+> - The least squares $w$ solves $X^\top X w = X^\top y$, so the residual is at right angles to every column of $X$.
+> - The condition number is `s[0] / s[-1]`, and the normal equations square it.
+> - QR solves $Rw = Q^\top y$ by back substitution. The SVD gives $w = V \Sigma^{-1} U^\top y$.
+> - For repeated features, keep only the singular values above `rcond * s[0]`.
 
 ## Build it step by step
 

@@ -57,6 +57,10 @@ Instead of picking one winner, attention blends every value, mostly from the
 best matches. Because every step is smooth, you can train it with ordinary
 backpropagation.
 
+> [!KEY]
+> Attention scores a query against every key, turns the scores into weights with
+> a softmax, and returns the weighted average of the values.
+
 In a translation model, the query is the decoder's state $s_t$ at output step
 $t$: "what do I need now?" The keys and values are the encoder states $h_i$:
 "here's what's at position $i$". In this exercise the shapes are:
@@ -85,6 +89,10 @@ context = weights @ values
 ```
 
 The starter file gives you this `softmax` already.
+
+> [!KEY]
+> The decoder builds a fresh context from all the encoder states at every output
+> step. It no longer has to squeeze the whole input into one vector.
 
 ## Multiplicative attention
 
@@ -145,6 +153,11 @@ scores = np.tanh(u) @ v           # shape (T_x,)
 Here `W1 @ query` has shape `(d,)`, and numpy adds it to every row of
 `keys @ W2.T`. Then you apply the same softmax and weighted sum as before.
 
+> [!TIP]
+> Write the shape of each result in a comment, as the code above does. When a
+> shape doesn't match the comment, you have usually swapped `W1` and `W2` or
+> dropped a `.T`.
+
 ### Work an additive example by hand
 
 Use the same query, keys, and values, with $W_1$ and $W_2$ both the identity
@@ -161,6 +174,10 @@ key. Two moderate entries after $\tanh$ add up to more than one large entry.
 Flip $v$ to $[-1, -1]$ and the scores become $[-0.9640, -1.5232]$, giving
 weights $[0.6363, 0.3637]$. Now the matching key wins. You use exactly this
 trick in the copy task at the end.
+
+> [!KEY]
+> In additive attention, the learned vector $v$ decides what counts as a good
+> match. A key that equals the query doesn't win on its own.
 
 ## The backward pass of additive attention
 
@@ -207,6 +224,11 @@ du = np.outer(dscores, v) * (1.0 - t ** 2)
 dW1 = np.outer(du.sum(axis=0), query)
 ```
 
+> [!WARNING]
+> Use `du.sum(axis=0)`, shape `(d,)`, for both `dW1` and `dquery`. If you pass
+> the full `(T_x, d)` array to `np.outer`, it still runs, because `np.outer`
+> flattens its inputs, but `dW1` gets the wrong shape.
+
 ## The alignment matrix
 
 Run attention once per decoder step and stack the weight rows. You get a
@@ -217,6 +239,18 @@ correspondence, so people plot it to see what the model uses.
 
 For a copy task, where output $t$ should equal input $t$, the ideal alignment
 matrix is the identity: step $t$ looks only at position $t$.
+
+> [!RECAP]
+> - Every form of attention ends the same way: softmax the scores, then take
+>   `weights @ values`.
+> - Additive scores are `np.tanh(W1 @ query + keys @ W2.T) @ v`. `W1` goes with
+>   the query.
+> - Multiplicative scores are `keys @ query`, or `keys @ (W.T @ query)` when you
+>   pass a `W`.
+> - The backward pass runs in reverse: values and weights, the softmax step, the
+>   $\tanh$ step, then the two projections.
+> - In the copy task, a negative $v$ makes the matching position win, so the
+>   alignment matrix is close to the identity.
 
 ## Build it step by step
 

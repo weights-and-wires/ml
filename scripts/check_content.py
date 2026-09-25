@@ -34,6 +34,7 @@ REQUIRED_SECTIONS = [
     "## Where this breaks",
     "## The exercise",
 ]
+CALLOUTS = ("KEY", "TIP", "WARNING", "RECAP")
 BANNED = [
     r"\bsimply\b", r"\bjust simply\b", r"\beasily\b", r"\bobviously\b",
     r"\bnote that\b", r"\be\.g\.", r"\bi\.e\.", r"\betc\.", r"\bcurrently\b",
@@ -190,6 +191,23 @@ def check_lesson(path: Path, problems: list[str], seen_exercises: set[str]) -> N
         found = re.search(pattern, prose, flags=re.I)
         if found:
             problems.append(f"{path.name}: avoid {found.group(0)!r}")
+
+    for kind in re.findall(r"^>\s*\[!(\w+)\]", body, flags=re.M):
+        if kind not in CALLOUTS:
+            problems.append(
+                f"{path.name}: unknown callout [!{kind}]; use one of {', '.join(CALLOUTS)}"
+            )
+    recaps = len(re.findall(r"^>\s*\[!RECAP\]", body, flags=re.M))
+    if recaps > 1:
+        problems.append(f"{path.name}: {recaps} recap callouts, the contract allows one")
+
+    for line in prose.split("\n"):
+        if re.match(r"^\s*(>\s*)?\$\$.+\$\$\s*$", line):
+            problems.append(
+                f"{path.name}: a one-line $$...$$ renders as inline math; "
+                "put $$ on its own lines above and below"
+            )
+            break
 
     if body.count("$$") % 2 != 0:
         problems.append(f"{path.name}: an unclosed $$ display-math block")

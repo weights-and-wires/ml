@@ -62,8 +62,10 @@ itself is 1. Then each node hands gradient to its children:
 
 You can check this by hand: $c = ab + a$, so $\frac{\partial c}{\partial a} = b + 1 = 3$ and $\frac{\partial c}{\partial b} = a = 3$.
 
-That last step is the most important rule in the engine: **gradients
-accumulate**. Every backward function uses `+=`, never `=`.
+That last step is the most important rule in the engine.
+
+> [!KEY]
+> Gradients accumulate. A node used in several places gets the sum of all its contributions, so every backward function uses `+=`, never `=`.
 
 ## The backward rule for each operation
 
@@ -98,6 +100,9 @@ contributes to the loss, so the bias gradient is the sum of the incoming
 gradient over those rows. The provided `_unbroadcast(grad, shape)` does that
 summing for you. Call it in `__add__` and `__mul__` before every `+=`.
 
+> [!KEY]
+> When numpy broadcasts a value into many copies, the value's gradient is the sum of the gradients of all the copies.
+
 ### Matrix product
 
 For $Z = A B$, with $A$ of shape `(n, k)` and $B$ of shape `(k, m)`:
@@ -110,6 +115,9 @@ Read it aloud: the gradient for $A$ is the incoming gradient times $B$
 transposed. The gradient for $B$ is $A$ transposed times the incoming gradient.
 A quick way to remember: the shapes only fit one way. $\bar{Z}$ is `(n, m)`,
 and you need `(n, k)` for $\bar{A}$, so multiply by $B^\top$, which is `(m, k)`.
+
+> [!TIP]
+> A gradient always has the same shape as the value it belongs to. When you forget where a transpose goes, write down the shapes and pick the only product that fits.
 
 ```python
 self.grad += out.grad @ other.value.T
@@ -145,6 +153,9 @@ forwards an incomplete number.
 A **topological order** solves this. It lists nodes so that every node comes
 after all the nodes it was built from. Walk that list in reverse and every
 node is finished before you reach its children.
+
+> [!KEY]
+> Run the backward functions in reverse topological order. Each node then has its full gradient before it passes any of it on.
 
 You build the order with a **depth-first search**: visit a node's children
 first, then append the node. Keep a set of visited nodes so a shared node is
@@ -195,6 +206,9 @@ log_probs = (z - m) - np.log(np.exp(z - m).sum(axis=1, keepdims=True))
 loss = -log_probs[np.arange(n), labels].mean()
 ```
 
+> [!WARNING]
+> `log_probs[np.arange(n), labels]` picks one entry per row. `log_probs[:, labels]` picks an `(n, n)` block instead, and its mean is the wrong loss.
+
 The gradient with respect to the logits is short and worth remembering:
 
 $$
@@ -205,6 +219,9 @@ Read it aloud: take the probability matrix, subtract 1 at each row's correct
 class, and divide by $n$. The $\frac{1}{n}$ is there because the loss is a
 mean, not a sum. `onehot(y)` is a matrix with a 1 at the correct class of each
 row and 0 elsewhere.
+
+> [!KEY]
+> The gradient of mean softmax cross-entropy with respect to the logits is $(p - \text{onehot}(y)) / n$: the predicted probabilities minus the true ones, divided by $n$.
 
 ```python
 g = probs.copy()
@@ -238,6 +255,13 @@ subtract, and divide by the gap $2h$. With $h$ around $10^{-5}$, the estimate
 is usually correct to 6 or more digits. Much smaller $h$ makes it worse,
 because rounding errors in the subtraction take over. This costs two forward
 passes per weight, so it is a test, not a training method.
+
+> [!RECAP]
+> - Every backward function adds to `grad` with `+=`, so a node used twice collects both contributions.
+> - Addition copies $\bar{z}$ to both inputs, multiplication scales it by the other input, and both call `_unbroadcast` before the `+=`.
+> - For a matrix product, $\bar{A} = \bar{Z} B^{\top}$ and $\bar{B} = A^{\top} \bar{Z}$. ReLU masks with `self.value > 0`, and sum spreads $\bar{z}$ over ones.
+> - `backward` builds a topological order by depth-first search, sets the output's `grad` to ones, and calls `_backward_fn` in `reversed(topo)`.
+> - Softmax cross-entropy computes the loss with the stable log-sum-exp and sends $(p - \text{onehot}(y)) / n$ back to the logits.
 
 ## Build it step by step
 

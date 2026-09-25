@@ -12,6 +12,8 @@ type Props = {
   gpuAvailable: boolean;
   /** Whether this lesson's work is worth sending to a GPU. */
   gpuLesson: boolean;
+  /** The next lesson, offered once every check passes. */
+  next?: string | null;
   onSolved: () => void;
 };
 
@@ -22,6 +24,7 @@ export default function ExercisePane({
   initialCode,
   gpuAvailable,
   gpuLesson,
+  next,
   onSolved,
 }: Props) {
   const [code, setCode] = useState(initialCode);
@@ -354,6 +357,7 @@ export default function ExercisePane({
               mode={mode}
               backend={backend}
               summary={summary}
+              next={next}
             />
           }
         />

@@ -99,6 +99,9 @@ signs = rng.choice(np.array([-1.0, 1.0]), size=(num_draws, n))
 estimate = (F @ signs.T).max(axis=0).mean() / n
 ```
 
+> [!WARNING]
+> `F @ signs.T` has shape (number of models, `num_draws`). Take the max over `axis=0`, across models, to keep the best model for each draw. Then average over the draws.
+
 A set with one model scores close to 0, because on average its dot product
 with random signs is 0. A set that can match every possible sign pattern
 scores exactly 1, the maximum.
@@ -156,6 +159,9 @@ folds = [np.sort(chunk) for chunk in np.array_split(order, k)]
 `np.array_split` handles sizes that don't divide evenly. With $n = 7$ and
 $k = 3$, it gives folds of size 3, 2, and 2.
 
+> [!TIP]
+> Check your folds with `np.array_equal(np.sort(np.concatenate(folds)), np.arange(n))`. It is `True` only when every index appears exactly once.
+
 The choice of $k$ is a trade-off:
 
 - Each fold trains on only $\frac{k-1}{k}$ of the data. With less data a
@@ -166,6 +172,9 @@ The choice of $k$ is a trade-off:
 
 At $k = n$ you get *leave-one-out*: the least bias and among the most noise.
 Values from 5 to 10 are the usual compromise.
+
+> [!KEY]
+> In cross-validation, every example is scored once, by a model that never saw it. The average of the $k$ fold scores is your estimate of the true risk.
 
 ## The leave-one-out shortcut
 
@@ -203,6 +212,9 @@ H = X @ np.linalg.inv(X.T @ X + lam * np.eye(d)) @ X.T
 loo = (y - H @ y) / (1 - np.diag(H))
 ```
 
+> [!KEY]
+> For ridge, one fit gives every leave-one-out residual. Divide each ordinary residual by one minus its leverage.
+
 ### Work the shortcut by hand
 
 Take one feature, three examples, and $\lambda = 1$:
@@ -239,6 +251,9 @@ cross-validation picks the penalty using only that data. The outer fold then
 scores the result on examples the inner loop never saw. The outer score
 estimates how well the whole pick-then-fit recipe works.
 
+> [!KEY]
+> The best score among many settings is too optimistic. To report an honest number, score the choice itself on data the choice never saw.
+
 ## Learning curves
 
 A *learning curve* plots training error and validation error against the
@@ -257,6 +272,13 @@ Reading the curve tells you what to do next:
 To make the curves smooth, hold out one fixed validation set, shuffle the
 rest once, and train on the first `size` examples of that shuffle. Each
 training set then contains the smaller ones.
+
+> [!RECAP]
+> - The theoretical gap shrinks like $1/\sqrt{n}$, but the bounds are too loose to pick a model.
+> - k-fold cross-validation shuffles once, splits with `np.array_split`, and records the MSE on each held-out fold.
+> - For ridge, the leave-one-out residual is $r_i / (1 - h_{ii})$, where $h_{ii}$ is diagonal entry $i$ of the hat matrix.
+> - A learning curve uses one fixed validation set and trains on growing prefixes of one shuffled pool.
+> - The random-sign estimate takes the best model for each draw, averages over draws, and divides by $n$.
 
 ## Build it step by step
 

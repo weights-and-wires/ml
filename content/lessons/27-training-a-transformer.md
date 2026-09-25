@@ -80,6 +80,11 @@ loss = nll.mean()
 
 `gather` picks, at each position, the entry whose index is the target.
 
+> [!TIP]
+> Check shapes around `gather`. `logp` is `(..., V)`, `targets.unsqueeze(-1)`
+> is `(..., 1)`, and after `squeeze(-1)` the result has the same shape as
+> `targets`.
+
 ### A worked example
 
 Take two positions with $V = 3$. The logits are $[2, 0, 0]$ with target 0, and
@@ -97,6 +102,10 @@ An untrained model has logits near zero, so it spreads probability evenly:
 $1/V$ for every token. Its loss is $-\log(1/V) = \log V$, whatever the target.
 With $V = 11$, that's 2.398. With $V = 50000$, it's 10.82. If your very first
 loss is far from $\log V$, you have a bug. Find it before spending any compute.
+
+> [!KEY]
+> An untrained model should score a loss close to $\log V$. Check your first
+> loss against it before you spend any compute.
 
 ### Perplexity
 
@@ -163,8 +172,11 @@ $$
 Read aloud: square every gradient entry in every array, add them all up, and
 take the square root. That's the global norm $g$. If it's over the limit,
 multiply every array by the limit divided by $g$. Afterwards the global norm
-is exactly the limit. Shrinking everything by the same factor keeps the
-direction of the step and only changes its length.
+is exactly the limit.
+
+> [!KEY]
+> Clipping by the global norm shrinks every gradient by the same factor. The
+> step keeps its direction and only gets shorter.
 
 ```python
 total = math.sqrt(sum(float((g**2).sum()) for g in grads))
@@ -172,6 +184,10 @@ if total > max_norm:
     for g in grads:
         g *= max_norm / total   # in place
 ```
+
+> [!WARNING]
+> Scale with `g *= ...`, in place. Writing `g = g * ...` makes a new array and
+> leaves the caller's gradients unclipped.
 
 For the gradients $[3, 4]$ and $[0]$, the global norm is 5. With a limit of
 10, nothing changes. With a limit of 2.5, both arrays are halved, and
@@ -207,6 +223,10 @@ v = b2 * v + (1 - b2) * g**2
 m_hat, v_hat = m / (1 - b1**step), v / (1 - b2**step)
 theta = theta * (1 - lr * wd) - lr * m_hat / (torch.sqrt(v_hat) + eps)
 ```
+
+> [!WARNING]
+> Count $t$ from 1. On the first update, $t = 1$. With $t = 0$, the bias
+> correction divides by $1 - \beta^0 = 0$.
 
 A worked example: $\theta = 1$, $g = 0.5$, step 1, lr 0.1, $\lambda = 0.1$.
 Then $m = 0.05$ and $v = 0.0125$. After bias correction, $\hat{m} = 0.5$ and
@@ -247,6 +267,10 @@ gradient by $s$ too. Divide the gradients by $s$ before the optimiser step.
 bf16 has the same range as fp32, so it needs no scaling. It's less precise,
 but it doesn't lose small numbers.
 
+> [!KEY]
+> fp16 has a small range, so tiny gradients round to zero unless you scale the
+> loss. bf16 has the range of fp32, so it needs no loss scaling.
+
 ## How much compute a run takes
 
 The forward pass costs about $2N$ flops per token for a model with $N$
@@ -269,6 +293,21 @@ flops = 6 * params * tokens
 A model with a million weights trained on ten thousand tokens takes
 $6 \times 10^{6} \times 10^{4} = 6 \times 10^{10}$ flops. Lesson 29 uses this
 rule to choose model sizes.
+
+> [!KEY]
+> Training costs about $6ND$ flops: $2N$ per token for the forward pass and
+> $4N$ for the backward pass.
+
+> [!RECAP]
+> - The loss is the mean of minus the log-probability of each target, using
+>   `torch.logsumexp` along `dim=-1`.
+> - An untrained model scores about $\log V$, and perplexity is $e^L$.
+> - The schedule climbs in a straight line to the peak during warmup, then
+>   follows a cosine down to the floor at `total`.
+> - Clipping takes one norm over all gradient arrays, scales them in place, and
+>   returns the norm before clipping.
+> - AdamW counts steps from 1, bias-corrects $m$ and $v$, and skips decay for
+>   names in `no_decay`.
 
 ## Build it step by step
 

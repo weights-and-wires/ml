@@ -62,6 +62,10 @@ x1 = x + attention(layer_norm(x, g1, b1)) @ Wo
 x2 = x1 + swiglu(layer_norm(x1, g2, b2), W_gate, W_up, W_down)
 ```
 
+> [!WARNING]
+> Add each sublayer's output to the raw `x`, not to `layer_norm(x)`. If you add
+> it to the normalised copy, the clean residual path disappears.
+
 Layer norm works on each row by itself:
 
 $$
@@ -88,6 +92,10 @@ on the main path between every pair of blocks, and a gradient flowing back
 through 50 of them can shrink or blow up. Pre-norm keeps the main path clean:
 $X' = X + (\text{something})$. The "$X +$" part passes the gradient straight
 back, untouched, however deep the stack is.
+
+> [!KEY]
+> In a pre-norm block, the "$X +$" path carries the gradient straight back
+> through every block. That clean path is what lets you stack dozens of them.
 
 There's a useful side effect. If both output projections, $W_O$ and
 $W_{\text{down}}$, are all zeros, each sublayer adds zero, and the block
@@ -140,6 +148,11 @@ With the usual $d_{\text{ff}} = 4d$, a model with $d = 64$ has
 $d_{\text{ff}} = 256$ and $d_h \approx 171$. That's why SwiGLU configs have
 odd-looking hidden sizes.
 
+> [!KEY]
+> SwiGLU has three matrices instead of two. Shrinking its hidden width to
+> $\tfrac{2}{3} d_{\text{ff}}$ keeps the weight count the same as a plain
+> feed-forward network.
+
 ## Telling the model where a token is
 
 ### Sinusoidal encodings
@@ -165,6 +178,11 @@ angles = np.arange(T)[:, None] * omega[None, :]   # (T, d/2)
 pe[:, 0::2], pe[:, 1::2] = np.sin(angles), np.cos(angles)
 ```
 
+> [!WARNING]
+> Here sines go in the even columns and cosines in the odd columns. RoPE,
+> later in this lesson, uses a different layout with two halves side by side.
+> Don't mix the two.
+
 Try $T = 2$ and $d = 4$. The frequencies are $\omega_0 = 1$ and $\omega_1 =
 10000^{-1/2} = 0.01$. Row 0 is $[0, 1, 0, 1]$. Row 1 is
 $[\sin 1, \cos 1, \sin 0.01, \cos 0.01] = [0.8415, 0.5403, 0.0100, 0.99995]$.
@@ -173,6 +191,10 @@ Each sine and cosine pair is a point on a circle. Moving $k$ positions turns
 every point by a fixed angle $k\,\omega_i$. So the encoding at $p + k$ is the
 same rotation of the encoding at $p$, for every $p$. A linear layer can learn
 that rotation, which lets the model reason about "three tokens back".
+
+> [!KEY]
+> Moving $k$ positions turns every sine and cosine pair by the same angle. So
+> the step from $p$ to $p + k$ is one fixed linear map, wherever $p$ is.
 
 ### Rotary position embeddings
 
@@ -217,7 +239,15 @@ angles = np.arange(T)[:, None] * rope_frequencies(d_head)[None, :]  # (T, d_head
 cos = np.concatenate([np.cos(angles), np.cos(angles)], axis=-1)      # (T, d_head)
 ```
 
+> [!TIP]
+> Build the $(T, d_{\text{head}})$ cosine and sine tables once. They broadcast
+> against a `(heads, T, d_head)` array, so one call rotates every head.
+
 Then apply RoPE to each head's queries and keys, never to the values.
+
+> [!KEY]
+> RoPE turns each query and key by the angle for its own position. Their dot
+> product then depends only on the distance between the two tokens.
 
 ### Two other options, in words
 
@@ -227,6 +257,17 @@ Then apply RoPE to each head's queries and keys, never to the values.
 - **ALiBi** adds no vectors at all. It subtracts a penalty from each score
   that grows with the distance between the two tokens, so far-away tokens get
   less attention.
+
+> [!RECAP]
+> - The pre-norm block is `x1 = x + Attn(LN1(x))`, then `x2 = x1 + FFN(LN2(x1))`.
+> - Layer norm works along the last axis with $\epsilon = 10^{-5}$, then applies
+>   the gain and bias.
+> - SwiGLU is `(silu(x @ W_gate) * (x @ W_up)) @ W_down`, with SiLU on the gate
+>   only.
+> - Sinusoidal encodings interleave sine and cosine columns. RoPE uses the
+>   rotate-half layout $[-x_2, x_1]$ on queries and keys only.
+> - A block has $4d^2 + 3 d\, d_h + 4d$ parameters, with $d_h$ rounded from
+>   $2 d_{\text{ff}} / 3$.
 
 ## Build it step by step
 

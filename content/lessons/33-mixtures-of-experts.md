@@ -83,6 +83,11 @@ top = np.argsort(-logits, axis=-1)[:, :k]        # (n, k)
 chosen = np.take_along_axis(full_probs, top, axis=-1)
 ```
 
+> [!TIP]
+> `np.take_along_axis` picks a different set of columns in each row. With `top`
+> of shape `(n, k)`, it returns the `(n, k)` probabilities of each token's
+> chosen experts.
+
 ### Worked example
 
 One token with logits $[2, 1, 0, -1]$ over 4 experts, and $k = 2$:
@@ -95,6 +100,10 @@ One token with logits $[2, 1, 0, -1]$ over 4 experts, and $k = 2$:
 The output is $0.7311 \cdot \text{expert}_0(x) + 0.2689 \cdot
 \text{expert}_1(x)$. Experts 2 and 3 cost nothing for this token.
 
+> [!KEY]
+> Each token runs only its top $k$ experts, mixed by gate weights that sum to
+> one. Every other expert costs that token nothing.
+
 ## Count active and total parameters
 
 With $E$ experts of $P_{\text{expert}}$ parameters each, $k$ chosen per token,
@@ -106,8 +115,11 @@ P_{\text{active}} = k \cdot P_{\text{expert}} + P_{\text{shared}}
 $$
 
 Read it as: the model stores all $E$ experts but runs only $k$ of them per
-token. The shared part counts in both. Compute per token follows the active
-count. Memory follows the total count.
+token. The shared part counts in both.
+
+> [!KEY]
+> Compute per token follows the active count, $k$ experts. Memory follows the
+> total count, all $E$ experts.
 
 For $E = 8$ experts of 100 million parameters, $k = 2$, and 100 million shared
 parameters: total is $8 \times 100 + 100 = 900$ million, active is $2 \times
@@ -124,6 +136,10 @@ gradient of exactly zero. It could never learn.
 
 Multiplying by $g_i$ fixes that. The gate weights change smoothly as the
 logits change, so the loss has something to pass back to the router.
+
+> [!KEY]
+> The top-$k$ choice itself has no gradient. Multiplying each expert's output
+> by its gate weight is the only path that lets the router learn.
 
 Here's the gradient. Let $\bar{y}$ be the gradient of the loss with respect
 to the token's output, a vector of length `d_out`. For each chosen expert,
@@ -186,6 +202,10 @@ f = np.bincount(expert_indices.ravel(), minlength=E) / (n * k)
 P = gate_probs.mean(axis=0)
 ```
 
+> [!WARNING]
+> Divide the counts by $n \cdot k$, the number of routing slots, not by $n$.
+> With $k = 2$, dividing by $n$ makes $f$ sum to 2 instead of 1.
+
 Both $f$ and $P$ sum to one. If routing is perfectly even, each is $1/E$, so
 the sum is $E \times (1/E)^2 = 1/E$ and the loss is exactly 1. If everything
 goes to one expert, both are 1 there and 0 elsewhere, and the loss is $E$.
@@ -196,6 +216,10 @@ by a small weight, often around 0.01, before being added to the main loss.
 Only $P$ carries gradient, because $f$ comes from counting. The gradient
 lowers the probability of each expert in proportion to how much traffic it
 already gets.
+
+> [!KEY]
+> The balancing loss is 1 for perfectly even routing and $E$ for total
+> collapse. Its gradient pushes probability away from the busiest experts.
 
 ### Worked example
 
@@ -242,6 +266,18 @@ with small batches or slow links it can take longer than the expert math.
 Two more tricks are common. A *router z-loss* keeps the router's logits from
 growing huge, which matters in 16-bit arithmetic. A *shared expert* runs on
 every token alongside the routed ones, so the routed experts can specialise.
+
+> [!RECAP]
+> - The router takes a row-wise softmax of `x @ W_gate`, keeps the top $k$ by
+>   logit, and renormalises their probabilities into gate weights.
+> - A token's output is the gate-weighted sum of `x[t] @ experts[i]` over its
+>   chosen experts.
+> - Active parameters are $k P_{\text{expert}} + P_{\text{shared}}$, and total
+>   parameters are $E P_{\text{expert}} + P_{\text{shared}}$.
+> - The balancing loss is $E \sum_i f_i P_i$, with $f$ counted over $n k$
+>   slots.
+> - Capacity is $\lceil \gamma n k / E \rceil$, at least 1. Tokens claim slots
+>   in row order, and a slot at a full expert is dropped.
 
 ## Build it step by step
 

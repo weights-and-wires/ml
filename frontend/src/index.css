@@ -124,13 +124,11 @@ body {
   line-height: 1.2;
 }
 .lesson h2 {
-  font-size: 1.28rem;
-  font-weight: 620;
+  font-size: 1.32rem;
+  font-weight: 640;
   color: var(--color-ink-100);
-  margin-top: 2.2em;
-  padding-top: 0.9em;
-  border-top: 1px solid var(--color-ink-800);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
 }
 .lesson h3 {
   font-size: 1.06rem;
@@ -198,6 +196,7 @@ body {
 }
 .lesson table {
   width: 100%;
+  border-radius: 10px;
   border-collapse: collapse;
   font-size: 0.88rem;
   display: block;
@@ -211,8 +210,11 @@ body {
   text-align: left;
   vertical-align: top;
 }
+.lesson tbody tr:nth-child(even) td {
+  background: color-mix(in oklab, var(--color-ink-900) 70%, transparent);
+}
 .lesson th {
-  background: var(--color-ink-900);
+  background: color-mix(in oklab, var(--accent, var(--color-wire-500)) 10%, var(--color-ink-900));
   color: var(--color-ink-100);
   font-weight: 600;
 }
@@ -251,4 +253,900 @@ body {
 }
 .appear {
   animation: pulse-in 140ms ease-out;
+}
+
+/* ------------------------------------------------------------------------
+   The reading pane: a sticky bar, per-part accent, and focus mode.
+   `--accent` is set on the reader from the lesson's part.
+   ------------------------------------------------------------------------ */
+
+.reader {
+  --accent: var(--color-wire-500);
+  --accent-soft: color-mix(in oklab, var(--accent) 14%, transparent);
+  --accent-line: color-mix(in oklab, var(--accent) 38%, transparent);
+  scroll-padding-top: 64px;
+}
+
+.reader-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in oklab, var(--color-ink-950) 82%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--color-ink-800);
+}
+.reader-bar-inner {
+  height: 46px;
+}
+.reader-bar-num {
+  display: inline-flex;
+  min-width: 1.9rem;
+  justify-content: center;
+  border-radius: 6px;
+  padding: 0.1rem 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.reader-progress {
+  height: 2px;
+  background: transparent;
+  overflow: hidden;
+}
+.reader-progress > span {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+  background: linear-gradient(90deg, var(--accent), var(--color-good-500));
+  transition: transform 120ms linear;
+}
+
+.reader-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  border: 1px solid var(--color-ink-700);
+  background: var(--color-ink-900);
+  border-radius: 10px;
+  padding: 0.35rem;
+  box-shadow: 0 18px 50px -12px rgb(0 0 0 / 0.7);
+}
+.reader-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: 7px;
+  padding: 0.45rem 0.55rem;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--color-ink-300);
+}
+.reader-menu-item:hover {
+  background: var(--color-ink-850);
+  color: var(--color-ink-100);
+}
+.reader-menu-item.is-current {
+  background: var(--accent-soft);
+  color: var(--color-ink-100);
+}
+.reader-menu-dot {
+  display: inline-flex;
+  size: 1.25rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--color-ink-700);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--color-ink-500);
+}
+.reader-menu-dot.is-read {
+  border-color: transparent;
+  background: color-mix(in oklab, var(--color-good-500) 22%, transparent);
+  color: var(--color-good-500);
+}
+
+.part-chip {
+  border-radius: 999px;
+  border: 1px solid var(--accent-line);
+  background: var(--accent-soft);
+  color: color-mix(in oklab, var(--accent) 70%, white);
+  padding: 0.15rem 0.6rem;
+  font-size: 10.5px;
+  font-weight: 550;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* The objectives, as numbered targets. */
+.goals {
+  position: relative;
+  border-radius: 14px;
+  border: 1px solid var(--color-ink-800);
+  background:
+    linear-gradient(135deg, var(--accent-soft), transparent 55%),
+    var(--color-ink-900);
+  padding: 1.1rem 1.2rem;
+}
+.goals-title {
+  margin-bottom: 0.75rem;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--accent) 65%, white);
+}
+.goals-num {
+  display: inline-flex;
+  width: 1.35rem;
+  height: 1.35rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: color-mix(in oklab, var(--accent) 70%, white);
+}
+
+/* Sections. Each `##` arrives wrapped in a <section> by rehypeLesson. */
+.reader-title,
+.lesson h1 {
+  font-size: 2.05rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  background: linear-gradient(100deg, var(--color-ink-100) 30%, color-mix(in oklab, var(--accent, var(--color-wire-500)) 75%, white));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.lesson .lesson-intro > p:first-child {
+  font-size: 1.06rem;
+  color: var(--color-ink-100);
+}
+.lesson .lesson-intro > * + *,
+.lesson .lesson-section > * + * {
+  margin-top: 1.05em;
+}
+.lesson-section {
+  margin-top: 2.6em;
+  padding-top: 1.4em;
+  border-top: 1px solid var(--color-ink-800);
+  scroll-margin-top: 58px;
+  transition: opacity 260ms ease, filter 260ms ease;
+}
+.h2-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.45rem;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-500);
+}
+.h2-num {
+  display: inline-flex;
+  min-width: 1.75rem;
+  justify-content: center;
+  border-radius: 6px;
+  padding: 0.12rem 0.3rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+  color: color-mix(in oklab, var(--accent, var(--color-wire-500)) 75%, white);
+  background: var(--accent-soft, var(--color-ink-850));
+  box-shadow: inset 0 0 0 1px var(--accent-line, var(--color-ink-700));
+  transition: background 200ms, color 200ms;
+}
+.h2-text {
+  display: block;
+}
+.lesson-section.is-read .h2-num {
+  color: var(--color-good-500);
+  background: color-mix(in oklab, var(--color-good-500) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-good-500) 35%, transparent);
+}
+.lesson-section[data-kind="pitfalls"] .h2-kicker { color: color-mix(in oklab, var(--color-bad-500) 80%, white); }
+.lesson-section[data-kind="build"] .h2-kicker { color: color-mix(in oklab, var(--color-good-500) 80%, white); }
+.lesson-section[data-kind="exercise"] .h2-kicker { color: color-mix(in oklab, var(--accent, var(--color-wire-500)) 80%, white); }
+
+/* Focus mode dims every section but the one being read. */
+.reader[data-focus] .lesson-intro:not(.is-current),
+.reader[data-focus] .lesson-section:not(.is-current) {
+  opacity: 0.26;
+  filter: saturate(0.4);
+}
+.reader[data-focus] .lesson-section:not(.is-current):hover {
+  opacity: 0.6;
+}
+.reader[data-focus] .lesson-section.is-current {
+  opacity: 1;
+}
+
+/* "What you already know" reads as a ticked checklist. */
+.lesson-section[data-kind="recap"] > ul {
+  list-style: none;
+  padding-left: 0;
+}
+.lesson-section[data-kind="recap"] > ul > li {
+  position: relative;
+  padding-left: 1.7em;
+}
+.lesson-section[data-kind="recap"] > ul > li::before {
+  content: "✓";
+  position: absolute;
+  left: 0.1em;
+  top: 0.05em;
+  color: var(--color-good-500);
+  font-weight: 700;
+}
+
+/* "Build it step by step" becomes a numbered path. */
+.lesson-section[data-kind="build"] > ol {
+  list-style: none;
+  padding-left: 0;
+  counter-reset: step;
+}
+.lesson-section[data-kind="build"] > ol > li {
+  position: relative;
+  counter-increment: step;
+  padding: 0.85rem 1rem 0.9rem 3.1rem;
+  border: 1px solid var(--color-ink-800);
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--color-ink-900) 80%, transparent);
+}
+.lesson-section[data-kind="build"] > ol > li + li {
+  margin-top: 0.75rem;
+}
+.lesson-section[data-kind="build"] > ol > li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0.85rem;
+  top: 0.85rem;
+  display: flex;
+  width: 1.6rem;
+  height: 1.6rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--color-good-500), color-mix(in oklab, var(--color-good-500) 55%, var(--accent, var(--color-wire-500))));
+  color: var(--color-ink-950);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.lesson-section[data-kind="build"] > ol > li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 1.63rem;
+  top: 2.65rem;
+  bottom: -0.8rem;
+  width: 2px;
+  background: linear-gradient(var(--color-good-500), transparent);
+  opacity: 0.35;
+}
+
+/* "Where this breaks": one card per failure mode. */
+.lesson .pitfall {
+  position: relative;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--color-bad-500) 22%, var(--color-ink-800));
+  background: color-mix(in oklab, var(--color-bad-500) 5%, var(--color-ink-900));
+  padding: 0.8rem 1rem 0.85rem 2.6rem;
+}
+.lesson .pitfall::before {
+  content: "!";
+  position: absolute;
+  left: 0.9rem;
+  top: 0.85rem;
+  display: flex;
+  width: 1.1rem;
+  height: 1.1rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-bad-500) 25%, transparent);
+  color: var(--color-bad-500);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.lesson .pitfall .runin {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: var(--color-ink-100);
+}
+
+.lesson ul.pitfall-list {
+  list-style: none;
+  padding-left: 0;
+}
+.lesson ul.pitfall-list > li + li {
+  margin-top: 0.7rem;
+}
+
+/* A whole section that works an example by hand gets the example's card. */
+.lesson-section[data-kind="example"] {
+  border-top: none;
+}
+.lesson-section[data-kind="example"] {
+  position: relative;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--color-warm-500) 28%, var(--color-ink-800));
+  background:
+    linear-gradient(160deg, color-mix(in oklab, var(--color-warm-500) 8%, transparent), transparent 45%),
+    var(--color-ink-900);
+  padding: 1.1rem 1.2rem 1.2rem;
+}
+.lesson-section[data-kind="example"] .h2-kicker {
+  color: var(--color-warm-500);
+}
+.lesson-section[data-kind="example"] .h2-num {
+  color: var(--color-warm-500);
+  background: color-mix(in oklab, var(--color-warm-500) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-warm-500) 32%, transparent);
+}
+.lesson-section[data-kind="example"] .formula,
+.lesson-section[data-kind="example"] .codeblock {
+  background: var(--color-ink-950);
+}
+
+/* Run-in headings elsewhere. */
+.lesson strong.runin {
+  color: var(--color-ink-100);
+}
+
+/* Terms the lesson defines: a highlighter stroke you can find again. */
+.lesson strong.term {
+  color: var(--color-ink-100);
+  background: linear-gradient(
+    180deg,
+    transparent 58%,
+    color-mix(in oklab, var(--color-warm-500) 30%, transparent) 58%
+  );
+  border-radius: 2px;
+  padding: 0 0.1em;
+  scroll-margin-top: 90px;
+}
+.lesson strong.term.flash {
+  animation: term-flash 1.6s ease-out;
+}
+@keyframes term-flash {
+  0%, 30% {
+    background: color-mix(in oklab, var(--color-warm-500) 55%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-warm-500) 25%, transparent);
+  }
+}
+
+/* "Common mistake" becomes a small warning tag. */
+.mistake-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  margin-right: 0.35em;
+  border-radius: 999px;
+  padding: 0.02em 0.55em 0.05em;
+  font-size: 0.74em;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  vertical-align: 0.08em;
+  color: var(--color-warm-500);
+  background: color-mix(in oklab, var(--color-warm-500) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-warm-500) 30%, transparent);
+}
+.mistake-tag::before {
+  content: "⚠";
+}
+
+/* Display maths sits in a frame, with its plain-English reading beneath. */
+.lesson .formula {
+  position: relative;
+  border-radius: 12px;
+  border: 1px solid var(--accent-line, var(--color-ink-700));
+  background:
+    radial-gradient(420px 120px at 50% 0%, var(--accent-soft, transparent), transparent 70%),
+    var(--color-ink-900);
+  padding: 0.2rem 1.1rem;
+  margin-block: 1.4em;
+}
+.lesson .formula > .katex-display {
+  margin: 0.9em 0;
+}
+.lesson .formula > .readaloud-lead {
+  margin-top: 0.2rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--color-ink-700);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-ink-400);
+}
+.lesson .readaloud {
+  margin-top: 0.6em !important;
+  margin-bottom: 0.9rem;
+  font-size: 0.92em;
+}
+.lesson .formula > .readaloud {
+  list-style: none;
+  padding-left: 0;
+}
+.lesson .formula > .readaloud > li {
+  padding-left: 0.9em;
+  border-left: 2px solid var(--accent-line, var(--color-ink-700));
+}
+
+/* Worked examples: a card that invites a pencil. */
+.lesson .worked {
+  position: relative;
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--color-warm-500) 28%, var(--color-ink-800));
+  background:
+    linear-gradient(160deg, color-mix(in oklab, var(--color-warm-500) 8%, transparent), transparent 45%),
+    var(--color-ink-900);
+  padding: 1rem 1.15rem 1.1rem;
+  margin-top: 1.8em !important;
+}
+.lesson .worked > * + * {
+  margin-top: 0.9em;
+}
+.lesson .worked > h3 {
+  margin-top: 0.3rem;
+}
+.worked-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-warm-500);
+}
+.worked-label::before {
+  content: "✎";
+  font-size: 1.2em;
+  letter-spacing: 0;
+}
+
+/* Callouts from `> [!KEY]` and friends. */
+.callout {
+  --c: var(--color-wire-500);
+  position: relative;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, var(--c) 32%, var(--color-ink-800));
+  background:
+    linear-gradient(120deg, color-mix(in oklab, var(--c) 12%, transparent), transparent 60%),
+    var(--color-ink-900);
+  padding: 0.8rem 1rem 0.9rem 1.05rem;
+  box-shadow: inset 3px 0 0 var(--c);
+}
+.callout-key { --c: var(--accent, var(--color-wire-500)); }
+.callout-tip { --c: var(--color-good-500); }
+.callout-warning { --c: var(--color-warm-500); }
+.callout-recap { --c: #9b7bff; }
+.callout-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.3rem;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--c) 78%, white);
+}
+.callout-icon::before {
+  display: inline-flex;
+  width: 1.15rem;
+  height: 1.15rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--c) 22%, transparent);
+  font-size: 0.8rem;
+  letter-spacing: 0;
+}
+.callout-key .callout-icon::before { content: "★"; }
+.callout-tip .callout-icon::before { content: "💡"; font-size: 0.72rem; }
+.callout-warning .callout-icon::before { content: "!"; font-weight: 800; }
+.callout-recap .callout-icon::before { content: "↺"; }
+.callout-body > * + * {
+  margin-top: 0.55em;
+}
+.callout-key .callout-body {
+  font-size: 1.02rem;
+  font-weight: 500;
+  color: var(--color-ink-100);
+}
+.callout-recap .callout-body ul {
+  list-style: none;
+  padding-left: 0;
+}
+.callout-recap .callout-body li {
+  position: relative;
+  padding-left: 1.4em;
+}
+.callout-recap .callout-body li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: color-mix(in oklab, var(--c) 80%, white);
+}
+
+/* Inline code that names an exercise function: a link into the editor. */
+.lesson .symbol {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.15em;
+  border-radius: 6px;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+.lesson .symbol code {
+  border-color: color-mix(in oklab, var(--color-good-500) 35%, var(--color-ink-800));
+  background: color-mix(in oklab, var(--color-good-500) 9%, var(--color-ink-850));
+  transition: background 150ms, border-color 150ms;
+}
+.lesson .symbol:hover code {
+  border-color: var(--color-good-500);
+  background: color-mix(in oklab, var(--color-good-500) 18%, var(--color-ink-850));
+}
+.symbol-arrow {
+  font-size: 0.72em;
+  color: var(--color-good-500);
+  opacity: 0.7;
+  transition: transform 150ms, opacity 150ms;
+}
+.lesson .symbol:hover .symbol-arrow {
+  opacity: 1;
+  transform: translate(1px, -1px);
+}
+
+/* Code blocks carry their language and a copy button. */
+.codeblock {
+  border-radius: 10px;
+  border: 1px solid var(--color-ink-800);
+  background: var(--color-ink-900);
+  overflow: hidden;
+}
+.codeblock-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.5rem 0.3rem 0.9rem;
+  border-bottom: 1px solid var(--color-ink-800);
+  background: var(--color-ink-850);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-ink-500);
+}
+.codeblock-bar button {
+  border-radius: 5px;
+  padding: 0.15rem 0.5rem;
+  color: var(--color-ink-400);
+}
+.codeblock-bar button:hover {
+  background: var(--color-ink-800);
+  color: var(--color-ink-100);
+}
+.lesson .codeblock pre {
+  border: none;
+  border-radius: 0;
+  margin: 0;
+}
+.lesson .callout .codeblock,
+.lesson .worked .codeblock {
+  background: var(--color-ink-950);
+}
+
+/* One sentence rendered on its own, such as a flashcard's back. */
+.lesson-inline {
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+.lesson-inline strong {
+  color: var(--color-warm-500);
+}
+
+/* Flashcards. */
+.cards {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-ink-800);
+}
+.cards-title {
+  font-size: 1.1rem;
+  font-weight: 640;
+  color: var(--color-ink-100);
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid var(--color-ink-800);
+  background: var(--color-ink-900);
+  transition: border-color 200ms, transform 200ms, background 200ms;
+}
+.card:hover {
+  border-color: color-mix(in oklab, var(--color-warm-500) 40%, var(--color-ink-800));
+  transform: translateY(-1px);
+}
+.card.is-flipped {
+  border-color: color-mix(in oklab, var(--color-warm-500) 45%, var(--color-ink-800));
+  background: color-mix(in oklab, var(--color-warm-500) 6%, var(--color-ink-900));
+}
+.card-face {
+  flex: 1;
+  min-height: 5.5rem;
+  padding: 0.85rem 1rem;
+  text-align: left;
+  border-radius: 12px;
+}
+.card.is-flipped .card-face {
+  animation: card-flip 260ms ease-out;
+}
+@keyframes card-flip {
+  from {
+    transform: rotateX(70deg);
+    opacity: 0.2;
+  }
+}
+.card-front {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.card-term {
+  font-size: 1.02rem;
+  font-weight: 620;
+  color: var(--color-ink-100);
+}
+.card-hint {
+  font-size: 11px;
+  color: var(--color-ink-500);
+}
+.card-find {
+  align-self: flex-start;
+  margin: 0 0.75rem 0.65rem;
+  border-radius: 5px;
+  padding: 0.1rem 0.3rem;
+  font-size: 11px;
+  color: var(--color-warm-500);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The call to action at the end of a lesson. */
+.cta {
+  position: relative;
+  margin-top: 2.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--accent-line);
+  background:
+    radial-gradient(500px 180px at 0% 0%, color-mix(in oklab, var(--accent) 22%, transparent), transparent 70%),
+    radial-gradient(400px 160px at 100% 100%, color-mix(in oklab, var(--color-good-500) 14%, transparent), transparent 70%),
+    var(--color-ink-900);
+  padding: 1.2rem 1.3rem;
+}
+.cta-kicker {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in oklab, var(--accent) 75%, white);
+}
+.cta-title {
+  margin-top: 0.25rem;
+  font-size: 1.08rem;
+  font-weight: 620;
+  color: var(--color-ink-100);
+}
+.cta-brief {
+  margin-top: 0.25rem;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--color-ink-300);
+}
+.cta-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 10px;
+  padding: 0.65rem 1.1rem;
+  font-size: 0.88rem;
+  font-weight: 620;
+  color: var(--color-ink-950);
+  background: linear-gradient(135deg, var(--color-good-500), color-mix(in oklab, var(--color-good-500) 60%, var(--accent)));
+  box-shadow: 0 8px 26px -10px color-mix(in oklab, var(--color-good-500) 70%, transparent);
+  transition: transform 150ms, box-shadow 150ms;
+}
+.cta-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 30px -10px color-mix(in oklab, var(--color-good-500) 85%, transparent);
+}
+.cta-arrow {
+  display: inline-block;
+  animation: nudge 1.6s ease-in-out infinite;
+}
+@keyframes nudge {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(4px); }
+}
+
+/* Monaco: the line a jump from the lesson lands on. */
+.monaco-editor .reveal-line {
+  background: color-mix(in oklab, var(--color-good-500) 18%, transparent);
+  animation: reveal-fade 1.8s ease-out forwards;
+}
+.monaco-editor .reveal-gutter {
+  background: var(--color-good-500);
+  width: 3px !important;
+  margin-left: 3px;
+}
+@keyframes reveal-fade {
+  0%, 55% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ------------------------------------------------------------------------
+   The dashboard.
+   ------------------------------------------------------------------------ */
+
+.continue {
+  border: 1px solid color-mix(in oklab, var(--accent) 38%, transparent);
+  background:
+    radial-gradient(600px 200px at 0% 0%, color-mix(in oklab, var(--accent) 20%, transparent), transparent 70%),
+    radial-gradient(400px 180px at 100% 100%, color-mix(in oklab, var(--color-good-500) 10%, transparent), transparent 70%),
+    var(--color-ink-900);
+}
+.continue:hover {
+  border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+  transform: translateY(-1px);
+}
+.continue-num {
+  display: none;
+  font-family: var(--font-mono);
+  font-size: 2.4rem;
+  font-weight: 600;
+  line-height: 1;
+  color: color-mix(in oklab, var(--accent) 60%, transparent);
+}
+@media (min-width: 640px) {
+  .continue-num {
+    display: block;
+  }
+}
+.continue-go {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 10px;
+  padding: 0.55rem 0.95rem;
+  font-size: 0.85rem;
+  font-weight: 620;
+  color: var(--color-ink-950);
+  background: linear-gradient(135deg, var(--color-good-500), color-mix(in oklab, var(--color-good-500) 55%, var(--accent)));
+}
+
+.part-badge {
+  display: inline-flex;
+  width: 1.7rem;
+  height: 1.7rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-ink-950);
+  background: var(--accent);
+}
+
+.lesson-card {
+  border: 1px solid var(--color-ink-800);
+  background: color-mix(in oklab, var(--color-ink-900) 75%, transparent);
+  transition: transform 150ms, border-color 150ms, background 150ms;
+}
+.lesson-card:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in oklab, var(--accent) 45%, var(--color-ink-800));
+  background: color-mix(in oklab, var(--accent) 6%, var(--color-ink-900));
+}
+.lesson-card-num {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: color-mix(in oklab, var(--accent) 75%, white);
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 30%, transparent);
+}
+.lesson-card[data-state="solved"] .lesson-card-num {
+  color: var(--color-ink-950);
+  background: var(--color-good-500);
+  box-shadow: none;
+  font-weight: 800;
+}
+.lesson-card[data-state="started"] .lesson-card-num {
+  background: color-mix(in oklab, var(--accent) 24%, transparent);
+}
+
+/* ------------------------------------------------------------------------
+   The check console: a solved banner with a little confetti.
+   ------------------------------------------------------------------------ */
+
+.solved {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklab, var(--color-good-500) 40%, transparent);
+  background:
+    radial-gradient(300px 100px at 0% 0%, color-mix(in oklab, var(--color-good-500) 22%, transparent), transparent 70%),
+    var(--color-ink-900);
+  padding: 0.75rem 0.9rem 0.85rem;
+}
+.solved-next {
+  margin-top: 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 8px;
+  padding: 0.35rem 0.75rem;
+  font-size: 12px;
+  font-weight: 620;
+  color: var(--color-ink-950);
+  background: var(--color-good-500);
+}
+.confetti {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+}
+.confetti > span {
+  position: absolute;
+  top: -8px;
+  left: calc(var(--i) * 7% + 3%);
+  width: 6px;
+  height: 10px;
+  border-radius: 2px;
+  opacity: 0;
+  background: hsl(calc(var(--i) * 47deg) 80% 62%);
+  animation: confetti-fall 1.4s ease-in calc(var(--i) * 45ms) 1 forwards;
+}
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(110px) rotate(calc(var(--i) * 70deg + 180deg));
+  }
 }

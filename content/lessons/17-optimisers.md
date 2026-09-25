@@ -139,6 +139,11 @@ On a narrow valley, the gradients across the valley flip sign each step and
 mostly cancel inside $v$. The gradients along the floor all point the same
 way and add up. The ball speeds up where it should.
 
+> [!KEY]
+> Momentum adds up gradients that agree from step to step and cancels gradients
+> that flip sign. On a steady slope, it makes each step $1 / (1 - \beta)$ times
+> larger than plain SGD's.
+
 Momentum does not remove the noise from stochastic gradients. It averages the
 noise over roughly $1 / (1 - \beta)$ steps, but the effective step also grows by
 the same factor. To settle at the bottom, you still need to shrink the learning
@@ -199,6 +204,10 @@ m_hat = m / (1 - beta1**t)
 v_hat = v / (1 - beta2**t)
 ```
 
+> [!WARNING]
+> Count $t$ from 1, not 0. With $t = 0$, the denominator $1 - \beta_1^0$ is zero,
+> and the first step divides by zero.
+
 ### The Adam update
 
 Adam then moves each weight by its corrected average gradient, divided by
@@ -233,6 +242,10 @@ Adam's step size depends on the learning rate, not on the scale of the
 gradient. SGD's step would have been a thousand times larger. The checks test
 this directly.
 
+> [!KEY]
+> Adam divides each weight's average gradient by its typical size. That makes
+> each step about $\eta$ long, whatever the scale of the gradient.
+
 ## AdamW: weight decay done right
 
 Weight decay shrinks every weight a little on each step, which keeps weights
@@ -262,6 +275,10 @@ new_w = new_w - lr * weight_decay * w
 ```
 
 With `weight_decay=0`, AdamW gives exactly the same result as Adam.
+
+> [!KEY]
+> AdamW applies weight decay outside Adam's averages. Every weight then shrinks by
+> the same fraction, $\eta \lambda$, on every step.
 
 ## Learning-rate schedules
 
@@ -312,6 +329,22 @@ Take `warmup=100`, `total=1000`, and `peak=0.01`:
 
 If `warmup` is greater than or equal to `total`, there is no decay phase, and
 dividing by `total - warmup` would fail. In that case, return `peak`.
+
+> [!TIP]
+> Test a schedule at four steps where you know the answer: step 0 gives 0, the
+> end of warmup gives the peak, halfway through decay gives half the peak, and
+> the last step gives 0.
+
+> [!RECAP]
+> - Every optimiser takes `(w, grad, state)` and returns `(new_w, new_state)`.
+>   A missing state entry means zeros.
+> - Momentum uses `v = beta * v + grad`, with no $(1 - \beta)$ factor.
+> - Adam keeps raw averages $m$ and $v$ plus a step count $t$. It
+>   bias-corrects them only to compute the step.
+> - AdamW is an Adam step followed by subtracting `lr * weight_decay * w`, using
+>   the old `w`.
+> - The schedule rises linearly during warmup, then follows half a cosine from
+>   the peak to 0.
 
 ## Build it step by step
 

@@ -72,6 +72,10 @@ W = rng.normal(scale=s, size=(n_in, n_out))
 print(np.mean((h @ W) ** 2), n_in * s**2)       # these agree
 ```
 
+> [!KEY]
+> Each linear layer multiplies the variance of the signal by $n_{\text{in}} s^2$.
+> Pick the weight scale $s$ so that this factor is 1.
+
 ### Xavier initialisation
 
 Xavier (also called Glorot) initialisation balances the forward and backward
@@ -122,6 +126,10 @@ Take a width of 100 at every layer:
   $2 / 2 = 1$. After 50 layers, the size is still about 1.
 
 Your `forward_variance` function runs this experiment for real.
+
+> [!KEY]
+> ReLU halves the signal at every layer. He initialisation doubles the weight
+> variance to cancel that, so the signal keeps its size through any depth.
 
 ### Measuring signal size
 
@@ -180,6 +188,11 @@ batch, $D$ features each.
 
 In both, $\gamma$ and $\beta$ have shape `(D,)`, one per feature.
 
+> [!KEY]
+> Batch norm and layer norm run the same arithmetic on different groups. Batch
+> norm normalises each column over `axis=0`. Layer norm normalises each row over
+> `axis=1`.
+
 ```python
 mean = x.mean(axis=axis, keepdims=True)
 var = x.var(axis=axis, keepdims=True)
@@ -190,6 +203,10 @@ out = gamma * xhat + beta
 
 The `keepdims=True` keeps the reduced axis with length 1, so broadcasting
 lines up the mean with the right rows or columns.
+
+> [!TIP]
+> Print `mean.shape` after the reduction. With `keepdims=True`, it is `(1, D)`
+> for batch norm and `(N, 1)` for layer norm. Both broadcast against `x`.
 
 ### Worked example: layer norm on one row
 
@@ -218,6 +235,10 @@ Layer norm uses only the features of the example itself. It behaves the same
 for any batch size, in training and at test time. That is why transformers and
 recurrent networks use it.
 
+> [!KEY]
+> Layer norm looks only at one example's own features. Its output doesn't change
+> with the batch size.
+
 ## The backward pass
 
 To train through a normalisation layer, you need the gradient of the loss with
@@ -232,6 +253,10 @@ axis. This is `axis=0` for both batch norm and layer norm:
 dbeta = dout.sum(axis=0)
 dgamma = (dout * xhat).sum(axis=0)
 ```
+
+> [!WARNING]
+> Sum `dgamma` and `dbeta` over `axis=0` for layer norm too. The normalised
+> axis, `axis=1` for layer norm, matters only for `dx`.
 
 The gradient for $x$ is harder, because each $x_i$ affects the output three
 ways: directly, through the mean, and through the variance. Let
@@ -255,6 +280,19 @@ dx = (istd / M) * (M * dxhat
 ```
 
 Batch norm and layer norm share this formula. Only `axis` and $M$ change.
+
+> [!RECAP]
+> - A layer multiplies variance by $n_{\text{in}} s^2$. Xavier uses
+>   $s = \sqrt{2 / (n_{\text{in}} + n_{\text{out}})}$, and He uses
+>   $s = \sqrt{2 / n_{\text{in}}}$ for ReLU.
+> - The simulation records $\text{mean}(h^2)$ for the input and after every
+>   layer, so it returns `depth + 1` numbers.
+> - Normalising subtracts the mean, divides by $\sqrt{\sigma^2 + \epsilon}$, then
+>   applies $\gamma$ and $\beta$. Use `keepdims=True` on each reduction.
+> - Batch norm reduces over `axis=0` and layer norm over `axis=1`. One helper
+>   that takes `axis` serves both.
+> - The backward pass for `dx` uses the group axis. `dgamma` and `dbeta` always
+>   sum over `axis=0`.
 
 ## Build it step by step
 

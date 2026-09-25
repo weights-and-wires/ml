@@ -83,6 +83,9 @@ out $y$ is. Since a variance is never negative, $A''$ is never negative,
 so $A$ curves upward everywhere. That upward curve is why every fit in this
 lesson is a bowl with a single bottom.
 
+> [!KEY]
+> Differentiate $A$ once to get the mean and twice to get the variance. Everything you need to fit a family comes from its $A$.
+
 You can check this numerically with a central difference. In numpy, for a
 small step `h`:
 
@@ -90,6 +93,9 @@ small step `h`:
 mean_estimate = (A(eta + h) - A(eta - h)) / (2 * h)
 var_estimate = (A(eta + h) - 2 * A(eta) + A(eta - h)) / h**2
 ```
+
+> [!TIP]
+> Use `h` near `1e-4` for the second difference. It divides by `h**2`, so a much smaller `h` lets rounding error swamp the estimate.
 
 The exercise checks do exactly this against your functions.
 
@@ -115,6 +121,9 @@ Read each row aloud:
 - **Poisson.** $A$ is $e^{\eta}$, which is its own derivative. So the mean
   and the variance are both $e^{\eta}$. A Poisson's variance always equals
   its mean.
+
+> [!KEY]
+> Gaussian, Bernoulli, and Poisson differ only in $A$: a parabola, the softplus, and $e^{\eta}$. Swap the $A$, and the rest of the fitting code stays the same.
 
 In numpy, each row is one or two lines. For the Bernoulli family, reuse the
 stable softplus and sigmoid from lesson 5:
@@ -164,6 +173,9 @@ lesson 5 loss without the ridge term.
 loss = np.sum(log_partition(family, eta) - y * eta)
 ```
 
+> [!WARNING]
+> This loss leaves out $h(y)$, so it won't match the log-likelihood from a library such as `scipy.stats`. For Poisson data the two differ by $\sum \log y_i!$. Compare your losses with each other, not with a library value.
+
 Its gradient has the same shape for every family:
 
 $$
@@ -195,6 +207,9 @@ This neat result depends on the canonical link. With the canonical link, the
 score equals $\eta$ directly, so the chain rule adds no extra factors. With
 any other link, such as the probit link for yes-or-no data, extra terms
 appear in both the gradient and the Hessian.
+
+> [!KEY]
+> With the canonical link, every family has gradient $X^{\top}(\mu - y)$ and Fisher information $X^{\top} D X$, with the variances on the diagonal of $D$. Only the formulas for $\mu$ and the variance change.
 
 ## Fisher scoring
 
@@ -249,6 +264,13 @@ At $w_1$ the scores are $[-0.1667, 0.3333, 0.8333]$ and the means are
 $[0.8465, 1.3956, 2.3010]$. The loss drops to $2.7097$. One more step gives
 $w_2 = [-0.1481, 0.3954]$ with loss $2.6599$. Use these values to check your
 code.
+
+> [!RECAP]
+> - Each family is set by its $A$. The mean is $A'(\eta)$ and the variance is $A''(\eta)$.
+> - $A$ is $\eta^2/2$ for the Gaussian, the stable softplus for Bernoulli, and $e^{\eta}$ for Poisson. The Poisson mean and variance are also $e^{\eta}$.
+> - A GLM with the canonical link sets $\eta = Xw$ and predicts $\mu = A'(\eta)$.
+> - The gradient is $X^{\top}(\mu - y)$, shape `(d,)`. The Fisher information scales the rows of $X$ by the variances, shape `(d, d)`.
+> - Fisher scoring solves $I(w)\,\delta = \nabla L(w)$, subtracts $\delta$, and records the loss before each step.
 
 ## Build it step by step
 

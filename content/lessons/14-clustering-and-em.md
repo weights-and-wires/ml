@@ -78,6 +78,9 @@ update step picks the mean, which is the point with the smallest total squared
 distance to a group. So $J$ never goes up, and because there are finitely
 many ways to split the points, the loop eventually stops changing.
 
+> [!KEY]
+> Each Lloyd step, assign then update, lowers $J$ or leaves it the same. That is why the history your code returns never goes up.
+
 To find the nearest center fast, expand the squared distance:
 
 $$
@@ -93,6 +96,9 @@ wins. You can drop it and compare only the other two terms:
 scores = np.sum(centers**2, axis=1)[None, :] - 2 * X @ centers.T   # (n, k)
 assignments = np.argmin(scores, axis=1)                             # (n,)
 ```
+
+> [!WARNING]
+> `scores` leaves out $\lVert x \rVert^2$, so it is not a squared distance and can be negative. Use it only to pick the `argmin`, and compute $J$ from real distances.
 
 ### Worked example by hand
 
@@ -187,6 +193,9 @@ Read it aloud: take blob $j$'s weight times its density at $x_i$. Divide by the
 same quantity added up over all blobs. The top is "how well blob $j$ explains
 this point", and the bottom makes the row sum to 1.
 
+> [!KEY]
+> The E-step shares each point among the blobs in proportion to weight times density. Those shares are the responsibilities.
+
 The bottom of that fraction is also the mixture's density at $x_i$. The
 **log-likelihood** is the sum of its log over all points:
 
@@ -220,6 +229,9 @@ row_sums = shifted.sum(axis=1, keepdims=True)
 resp = shifted / row_sums                 # rows sum to 1
 log_lik = np.sum(m[:, 0] + np.log(row_sums[:, 0]))
 ```
+
+> [!TIP]
+> `keepdims=True` keeps `m` at shape `(n, 1)`, so `s - m` subtracts each row's own maximum. With shape `(n,)`, numpy raises an error, or, when $n = k$, silently subtracts the wrong numbers.
 
 ### Worked example by hand
 
@@ -279,6 +291,9 @@ at the current parameters. The M-step pushes that bound up. Since the true
 curve sits above the bound, it rises at least as much. Your `fit_gmm` history
 should never decrease.
 
+> [!KEY]
+> A round of E-step then M-step never lowers the log-likelihood. If your history ever drops, you have a bug.
+
 ## k-means is EM with tiny blobs
 
 Give every blob the same weight and the same covariance $\sigma^2 I$, a round
@@ -290,6 +305,16 @@ center, which is the k-means assign step. The M-step with 0-or-1
 responsibilities is the k-means update step. One of the checks runs your
 E-step with $\sigma^2 = 10^{-6}$ and compares the `argmax` of each row to
 Lloyd's assignments.
+
+> [!KEY]
+> k-means is EM with equal weights and round blobs whose variance shrinks to 0. Soft responsibilities then become hard, nearest-center assignments.
+
+> [!RECAP]
+> - $J$ adds up the squared distance from each point to its own center, found with `centers[assignments]`.
+> - Lloyd's algorithm alternates assign and update, keeps the old center for an empty group, and stops when $J$ stops changing.
+> - k-means++ picks each new center with probability $D(x)^2 / \sum_j D(x_j)^2$, and shrinks `sq_dist` with `np.minimum`.
+> - The E-step builds $s_{ij} = \log \pi_j + \log \mathrm{N}(x_i; \mu_j, \Sigma_j)$ and applies log-sum-exp to each row.
+> - The M-step sets $\pi_j = N_j / n$, the weighted means, and the weighted covariances around the new means, plus `reg_covar` on the diagonal.
 
 ## Build it step by step
 

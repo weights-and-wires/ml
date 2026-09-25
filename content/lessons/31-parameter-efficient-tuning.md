@@ -63,8 +63,12 @@ keeping a careful 32-bit copy for updates. Skipping it doesn't save memory:
 32-bit weight, gradient, and two averages also add up to 16 bytes. So a
 7-billion-parameter model needs $7 \times 10^9 \times 16 = 112$ GB.
 
-The only way to shrink this is to train fewer parameters. The code is one
-line: `16 * params`, whether you're charging a full model or an adapter.
+The code is one line: `16 * params`, whether you're charging a full model or
+an adapter.
+
+> [!KEY]
+> Adam in mixed precision costs about 16 bytes per trained parameter. The only
+> way to shrink that bill is to train fewer parameters.
 
 ## Build a low-rank adapter
 
@@ -105,6 +109,10 @@ scaled. In numpy:
 base = x @ W.T                       # (n, d_out)
 update = (x @ A.T) @ B.T             # (n, r) then (n, d_out)
 ```
+
+> [!WARNING]
+> `W` has shape `(d_out, d_in)`, so the layer is `x @ W.T`. With a square `W`,
+> `x @ W` runs without an error and gives the wrong numbers.
 
 **Start at zero.** Initialise $B$ to all zeros and $A$ to small random
 numbers. Then $BA = 0$, so at step zero the adapted layer gives exactly the
@@ -155,12 +163,20 @@ $W_{\text{eff}}$ once and store it in place of $W$:
 W_merged = W + (alpha / r) * (B @ A)   # (d_out, d_in), same as W
 ```
 
+> [!WARNING]
+> Multiply `B @ A`, which has the shape of `W`. `A @ B` also runs, but it gives
+> an `(r, r)` matrix.
+
 Every forward pass then uses one matrix, at the same speed as the original
 model. In the worked example, $BA = \begin{bmatrix} 1 & 2 \\ 0 & 0
 \end{bmatrix}$, so $W_{\text{eff}} = \begin{bmatrix} 3 & 4 \\ 0 & 1
 \end{bmatrix}$. Then $x W_{\text{eff}}^{\top} = [3 + 4, 0 + 1] = [7, 1]$, the
 same answer as before. Matrix multiplication distributes over addition, so
 the two routes always agree, up to rounding.
+
+> [!KEY]
+> After training, fold the adapter into one matrix, $W + \frac{\alpha}{r} BA$.
+> The merged layer gives the same outputs and runs as fast as the original.
 
 The catch comes when one server hosts many adapters on one base model.
 Merging bakes in a single adapter. To switch per request, you either re-merge
@@ -180,16 +196,24 @@ $$
 $$
 
 Read it as: the error is built from exactly the singular values you threw
-away. If those are small, a low-rank update loses almost nothing. In numpy:
+away. In numpy:
 
 ```python
 U, s, Vt = np.linalg.svd(M, full_matrices=False)
 # keep the first r columns of U, the first r values of s, the first r rows of Vt
 ```
 
+> [!TIP]
+> `U[:, :r] * s[:r]` scales each column of `U` by its singular value through
+> broadcasting. You never need to build `np.diag(s)`.
+
 Worked example: $M = \begin{bmatrix} 3 & 0 \\ 0 & 1 \end{bmatrix}$ has
 singular values 3 and 1. The best rank-1 approximation is $\begin{bmatrix} 3
 & 0 \\ 0 & 0 \end{bmatrix}$. The error is $\sqrt{1^2} = 1$.
+
+> [!KEY]
+> The best rank-$r$ approximation keeps the $r$ largest singular values. If the
+> ones you drop are small, a low-rank update loses almost nothing.
 
 ## See where the gradient goes
 
@@ -224,6 +248,10 @@ $A^{\top} A$ keeps only the input directions $A$ already covers. $B B^{\top}$
 keeps only the output directions $B$ already covers. Directions outside what
 $A$ and $B$ span get no update. A larger $r$ widens the filter.
 
+> [!KEY]
+> LoRA still moves downhill along the full gradient $G$, but only in the
+> directions that $A$ and $B$ already cover.
+
 ## Other adapter methods
 
 A few relatives are worth knowing by name:
@@ -237,6 +265,15 @@ A few relatives are worth knowing by name:
 
 Quality rises fast as $r$ grows from 1, then levels off. Most tasks get close
 to full fine-tuning at a rank somewhere from single digits to the low tens.
+
+> [!RECAP]
+> - Training costs 16 bytes per trained parameter, for a full model or an
+>   adapter.
+> - The forward pass is `x @ W.T` plus `(alpha / r)` times
+>   `(x @ A.T) @ B.T`. With $B = 0$, it matches the base layer exactly.
+> - LoRA trains $r (d_{\text{in}} + d_{\text{out}})$ numbers.
+> - Merging gives $W + \frac{\alpha}{r} BA$, the same shape as $W$.
+> - The best rank-$r$ approximation keeps the first $r$ pieces of the SVD.
 
 ## Build it step by step
 

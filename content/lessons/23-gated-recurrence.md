@@ -68,6 +68,10 @@ convention. In numpy:
 f = sigmoid(x @ params["Wf"] + h @ params["Uf"] + params["bf"])
 ```
 
+> [!WARNING]
+> Lesson 22 wrote `x_t @ W_xh.T`. This lesson writes `x @ W` with no transpose,
+> because each $W$ here has shape `(d_x, d_h)`. Don't carry the `.T` across.
+
 The starter file gives you a `_sigmoid` that doesn't overflow for large
 negative inputs.
 
@@ -103,6 +107,10 @@ as the new hidden state. In numpy:
 c_new = f * c + i * g
 h_new = o * np.tanh(c_new)
 ```
+
+> [!KEY]
+> The LSTM updates its cell state by keeping a share of the old belt and adding
+> new content. No weight matrix ever multiplies $c$.
 
 ### Work one LSTM step by hand
 
@@ -151,6 +159,10 @@ numbers over 200 steps:
 | Plain RNN, $\tanh$ slope 0.5 times $\rho$ 0.9 | $0.45^{200} \approx 4 \times 10^{-70}$ |
 
 The LSTM keeps about a third of its gradient. The plain RNN keeps nothing.
+
+> [!KEY]
+> Going backward, the belt multiplies the gradient only by the forget gate. When
+> $f$ stays near 1, the gradient survives hundreds of steps.
 
 The gates themselves depend on $h$, so the full gradient also has other paths.
 The belt path is the one a plain RNN doesn't have, and it's the one that
@@ -225,6 +237,11 @@ dparams["Wf"] = x.T @ d_pre_f
 dx_part = d_pre_f @ params["Wf"].T
 ```
 
+> [!TIP]
+> The four gates follow the same three lines. Put the four pre-activation
+> gradients in a dict keyed by `"f"`, `"i"`, `"o"`, and `"g"`, then loop over it
+> to fill `dparams` and add up `dx` and `dh_prev`.
+
 ## The GRU cell
 
 The GRU is a slimmer design. It drops the separate belt and uses only $h$,
@@ -250,6 +267,11 @@ cand = np.tanh(x @ Wh + (r * h) @ Uh + bh)
 h_new = (1.0 - z) * h + z * cand
 ```
 
+> [!KEY]
+> The GRU's update gate blends two states: $1 - z$ of the old state plus $z$ of
+> the candidate. One gate does the jobs of both the LSTM's forget and input
+> gates.
+
 For a hand example, take one unit with $x = 1$, $h = 0.5$, $W_z = 1$,
 $W_h = 1$, $U_h = 1$, and all else zero. Then $z = \sigma(1) = 0.7311$,
 $r = \sigma(0) = 0.5$, and $\tilde{h} = \tanh(1 + 0.5 \times 0.5) =
@@ -271,6 +293,18 @@ Read it aloud: count one gate, then multiply by four or three. With
 $d_x = d_h = 512$, one gate has $262{,}144 + 262{,}144 + 512 = 524{,}800$
 numbers. The LSTM has $2{,}099{,}200$ and the GRU has $1{,}574{,}400$, a
 quarter fewer.
+
+> [!RECAP]
+> - Every gate is $\sigma(xW + hU + b)$, with $W$ of shape `(d_x, d_h)` and no
+>   transpose. The LSTM candidate uses $\tanh$ instead.
+> - The LSTM computes $c_{\text{new}} = f \odot c + i \odot g$ and
+>   $h_{\text{new}} = o \odot \tanh(c_{\text{new}})$.
+> - The backward pass starts with $dc_{\text{total}}$, which adds the gradient
+>   arriving through $h_{\text{new}}$ to $dc_{\text{new}}$.
+> - The GRU candidate uses `(r * h) @ Uh`, and
+>   $h_{\text{new}} = (1 - z) \odot h + z \odot \tilde{h}$.
+> - One gate has $d_x d_h + d_h^2 + d_h$ parameters. The LSTM has four and the
+>   GRU has three.
 
 ## Build it step by step
 

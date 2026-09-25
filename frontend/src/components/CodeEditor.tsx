@@ -1,6 +1,7 @@
 import Editor, { type OnMount } from "@monaco-editor/react";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
+import { REVEAL_EVENT, type RevealDetail } from "../lib/events";
 import { EDITOR_OPTIONS, THEME } from "../lib/monaco";
 import { WIDE, useMediaQuery } from "../lib/useMediaQuery";
 
@@ -34,7 +35,49 @@ export default function CodeEditor({
   run.current = onRun;
   check.current = onCheck;
 
+  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const flash = useRef<{ clear: () => void } | null>(null);
+
+  // A click on a function name in the lesson, or on "Start coding", lands
+  // here: find the line, scroll it to the middle, and light it up briefly.
+  useEffect(() => {
+    function onReveal(event: Event) {
+      const { symbol } = (event as CustomEvent<RevealDetail>).detail ?? {};
+      // On a phone the editor was hidden until this event switched tabs, so
+      // wait a frame for it to have a size.
+      window.setTimeout(() => {
+        const editor = editorRef.current;
+        const model = editor?.getModel();
+        if (!editor || !model) return;
+        editor.layout();
+        const lines = model.getLinesContent();
+        const pattern = symbol
+          ? new RegExp(`^\\s*(?:def|class)\\s+${symbol}\\b`)
+          : /raise NotImplementedError/;
+        let index = lines.findIndex((line) => pattern.test(line));
+        if (index < 0 && !symbol) index = 0;
+        if (index < 0) return;
+        const line = index + 1;
+        editor.revealLineInCenter(line);
+        editor.setPosition({ lineNumber: line, column: lines[index].search(/\S|$/) + 1 });
+        editor.focus();
+        flash.current?.clear();
+        const decorations = editor.createDecorationsCollection([
+          {
+            range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
+            options: { isWholeLine: true, className: "reveal-line", linesDecorationsClassName: "reveal-gutter" },
+          },
+        ]);
+        flash.current = decorations;
+        window.setTimeout(() => decorations.clear(), 1800);
+      }, 60);
+    }
+    window.addEventListener(REVEAL_EVENT, onReveal);
+    return () => window.removeEventListener(REVEAL_EVENT, onReveal);
+  }, []);
+
   const mount: OnMount = (editor, monaco) => {
+    editorRef.current = editor;
     monaco.editor.setTheme(THEME);
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () =>
       run.current(),

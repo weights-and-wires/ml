@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import ExercisePane from "../components/ExercisePane";
-import Markdown from "../components/Markdown";
+import LessonReader from "../components/LessonReader";
 import SplitPane from "../components/SplitPane";
 import { api, ApiError, type Lesson } from "../lib/api";
+import { REVEAL_EVENT, revealInEditor } from "../lib/events";
 import { WIDE, useMediaQuery } from "../lib/useMediaQuery";
 
 type Props = {
@@ -67,6 +68,14 @@ export default function LessonPage({ gpuAvailable, onProgress }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [lesson, navigate]);
 
+  // On a narrow screen, a jump to the editor has to show the exercise tab
+  // first. The editor itself handles the jump.
+  useEffect(() => {
+    const onReveal = () => setTab("second");
+    window.addEventListener(REVEAL_EVENT, onReveal);
+    return () => window.removeEventListener(REVEAL_EVENT, onReveal);
+  }, []);
+
   const onSolved = useCallback(() => {
     onProgress();
   }, [onProgress]);
@@ -96,94 +105,10 @@ export default function LessonPage({ gpuAvailable, onProgress }: Props) {
   }
 
   const reading = (
-    <article className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-      <div className="mx-auto max-w-[68ch] px-6 py-7 lg:px-9">
-        <div className="mb-5 flex flex-wrap items-center gap-2 text-[11px] text-ink-400">
-          <span className="uppercase tracking-[0.14em]">{lesson.part}</span>
-          <span className="text-ink-700">·</span>
-          <span className="font-mono">
-            {lesson.index} of {lesson.count}
-          </span>
-          {lesson.minutes ? (
-            <>
-              <span className="text-ink-700">·</span>
-              <span>{lesson.minutes} min</span>
-            </>
-          ) : null}
-        </div>
-
-        {lesson.objectives.length > 0 && (
-          <section className="mb-7 rounded-lg border border-ink-800 bg-ink-900 p-4">
-            <h2 className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-ink-400">
-              By the end you can
-            </h2>
-            <ul className="space-y-1.5">
-              {lesson.objectives.map((objective, index) => (
-                <li
-                  key={index}
-                  className="flex gap-2 text-[13px] leading-snug text-ink-300"
-                >
-                  <span className="mt-[7px] size-1 shrink-0 rounded-full bg-wire-500" />
-                  <span>{objective}</span>
-                </li>
-              ))}
-            </ul>
-            {lesson.prereqs.length > 0 && (
-              <p className="mt-3 border-t border-ink-800 pt-2.5 text-[12px] text-ink-400">
-                Builds on{" "}
-                {lesson.prereqs.map((prereq, index) => (
-                  <span key={prereq}>
-                    {index > 0 && ", "}
-                    <Link
-                      to={`/lessons/${prereq}`}
-                      className="text-wire-400 underline underline-offset-4"
-                    >
-                      {prereq.replace(/^\d+-/, "").replace(/-/g, " ")}
-                    </Link>
-                  </span>
-                ))}
-                .
-              </p>
-            )}
-          </section>
-        )}
-
-        <Markdown>{lesson.body}</Markdown>
-
-        <nav className="mt-10 flex items-stretch gap-3 border-t border-ink-800 pt-5">
-          {lesson.prev ? (
-            <Link
-              to={`/lessons/${lesson.prev}`}
-              className="flex-1 rounded-lg border border-ink-800 px-3.5 py-2.5 transition hover:border-ink-700 hover:bg-ink-900"
-            >
-              <span className="block text-[10px] uppercase tracking-[0.14em] text-ink-600">
-                Previous
-              </span>
-              <span className="mt-0.5 block truncate text-[13px] text-ink-200">
-                {lesson.prev.replace(/^\d+-/, "").replace(/-/g, " ")}
-              </span>
-            </Link>
-          ) : (
-            <span className="flex-1" />
-          )}
-          {lesson.next ? (
-            <Link
-              to={`/lessons/${lesson.next}`}
-              className="flex-1 rounded-lg border border-ink-800 px-3.5 py-2.5 text-right transition hover:border-ink-700 hover:bg-ink-900"
-            >
-              <span className="block text-[10px] uppercase tracking-[0.14em] text-ink-600">
-                Next
-              </span>
-              <span className="mt-0.5 block truncate text-[13px] text-ink-200">
-                {lesson.next.replace(/^\d+-/, "").replace(/-/g, " ")}
-              </span>
-            </Link>
-          ) : (
-            <span className="flex-1" />
-          )}
-        </nav>
-      </div>
-    </article>
+    <LessonReader
+      lesson={lesson}
+      onStartExercise={lesson.exercise_detail ? () => revealInEditor() : undefined}
+    />
   );
 
   if (!lesson.exercise_detail) {
@@ -228,6 +153,7 @@ export default function LessonPage({ gpuAvailable, onProgress }: Props) {
             initialCode={lesson.draft ?? lesson.exercise_detail.starter}
             gpuAvailable={gpuAvailable}
             gpuLesson={lesson.gpu}
+            next={lesson.next}
             onSolved={onSolved}
           />
         }

@@ -86,6 +86,10 @@ z = reward_chosen - reward_rejected
 loss = np.mean(np.log1p(np.exp(-z)))   # fine for moderate z; see step 1
 ```
 
+> [!WARNING]
+> When $z$ is large and negative, `np.exp(-z)` overflows to `inf`. For
+> `z < 0`, use the equal form $-z + \log(1 + e^{z})$ instead.
+
 ### The gradient
 
 The *gradient* tells you how the loss changes when you nudge each input. The
@@ -116,12 +120,20 @@ Two pairs: rewards chosen $[2, 0]$, rejected $[1, 1]$.
 
 The second pair, ranked wrong, gets the bigger push.
 
+> [!TIP]
+> Test the tied case first. Equal rewards give a gap of 0, so the loss should
+> be exactly $\log 2 \approx 0.6931$.
+
 ### Only gaps matter
 
 The loss sees rewards only through differences. Add the same number to both
 answers for one prompt, and nothing changes. So the reward is fixed only up
 to a constant per prompt. That slack looks like a flaw here. DPO turns it into
 a feature.
+
+> [!KEY]
+> The Bradley-Terry loss sees only the reward gap $r_w - r_l$. Adding the same
+> constant to both rewards for a prompt changes nothing.
 
 ## Find the best policy on a leash
 
@@ -170,6 +182,11 @@ $\beta$ is the length of the leash. When $\beta$ is huge, $r / \beta$ is near
 0 and $\pi^*$ equals the reference: the policy never moves. When $\beta$ is
 tiny, the best answer's boost dwarfs the rest and $\pi^*$ puts everything on
 the highest-reward answer: no leash at all.
+
+> [!KEY]
+> The best policy is the reference reweighted by $\exp(r / \beta)$. A large
+> $\beta$ keeps it close to the reference, and a small $\beta$ lets it chase
+> reward.
 
 ### Worked example
 
@@ -241,6 +258,11 @@ then apply the reward-model loss. There's no sampling, no reward model during
 training, and no value head. You need only the policy and a frozen copy of the
 reference.
 
+> [!KEY]
+> DPO is the Bradley-Terry loss applied to implicit rewards,
+> $\beta(\log \pi_\theta - \log \pi_{\text{ref}})$. The unknown $Z(x)$ cancels
+> in the gap, so you never sample and never need a reward model.
+
 ### The gradient
 
 The chain rule adds one factor. $\hat{r}$ changes by $\beta$ for every unit
@@ -269,6 +291,17 @@ Reference log-probs: both $-2$.
 - Loss: $-\log 0.5498 = 0.5981$
 - Gradient for chosen: $0.1 \times (0.5498 - 1) = -0.0450$. For rejected:
   $+0.0450$
+
+> [!RECAP]
+> - The Bradley-Terry loss is the mean of $-\log \sigma(r_w - r_l)$, and tied
+>   rewards give $\log 2$.
+> - Its gradient for the chosen reward is $(\sigma(z) - 1) / n$. The rejected
+>   reward gets the same value with the sign flipped.
+> - The best policy is a softmax of `ref_logprobs + rewards / beta` along each
+>   row.
+> - KL sums $p \log(p / q)$ over the last axis, with $p_i = 0$ terms set to 0.
+> - DPO applies the Bradley-Terry loss to the implicit rewards, and its
+>   gradient carries an extra factor of $\beta$.
 
 ## Build it step by step
 
