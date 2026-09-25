@@ -29,6 +29,7 @@ REQUIRED_FRONTMATTER = {
 }
 REQUIRED_SECTIONS = [
     "## What you already know",
+    "## Build it step by step",
     "## Cost and scaling",
     "## Where this breaks",
     "## The exercise",

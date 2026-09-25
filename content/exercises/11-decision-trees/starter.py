@@ -4,7 +4,7 @@ A tree is a `Node`. An internal node holds `feature` and `threshold` and
 routes a row to `left` when `row[feature] <= threshold`, else to `right`. A
 leaf has `is_leaf = True` and a scalar `value`, the prediction for every row
 that reaches it. `value` is always the mean of the training labels routed to
-that node — the mean for squared error, and the class-1 proportion for a
+that node: the mean for squared error, and the class-1 proportion for a
 binary 0/1 label under Gini or entropy, since the two coincide (see the
 lesson).
 

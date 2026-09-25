@@ -3,8 +3,9 @@
 Fill in the five functions below. The first four are the tools of empirical
 risk minimisation: a way to score predictions, a way to hold out data
 honestly, and a small hypothesis class (polynomials) to fit it with. The
-fifth runs the Monte Carlo experiment that turns equation (3) of the lesson
-from an algebraic identity into a number you can check.
+fifth runs a simulation that splits the expected squared error into
+squared bias, variance, and noise, as the lesson's "Bias, variance, and
+noise" section describes, so you can check the split with real numbers.
 """
 
 from __future__ import annotations

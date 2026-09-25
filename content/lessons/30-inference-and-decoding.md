@@ -2,14 +2,14 @@
 title: Inference and decoding
 slug: 30-inference-and-decoding
 part: "Part 6 — Large language models"
-summary: Why generation is memory bound, what the KV cache buys, and the sampling rules that turn logits into text.
-minutes: 50
+summary: Why generation is limited by memory speed, how a KV cache helps, and the rules that turn scores into text.
+minutes: 55
 gpu: false
 objectives:
-  - Show why decode is memory bound and prefill is compute bound, using the arithmetic-intensity argument.
-  - State the KV cache's size formula, and the quadratic-to-linear change it makes to generating a sequence.
-  - State the nucleus-sampling definition precisely, and give temperature's limiting behavior at zero and infinity.
-  - Prove that the speculative-decoding acceptance rule reproduces the target distribution exactly, for any draft model.
+  - Explain why generating one token at a time is limited by memory speed, not arithmetic.
+  - Compute the size of a KV cache, and build one that stores keys and values token by token.
+  - Build greedy, temperature, top-k, and nucleus decoding from a vector of scores.
+  - Build speculative decoding's accept-or-replace rule, and explain why it keeps the big model's output distribution.
 prereqs:
   - 25-self-attention
   - 27-training-a-transformer
@@ -18,241 +18,337 @@ exercise: 30-inference-and-decoding
 
 # Inference and decoding
 
-Training a transformer is one forward and one backward pass, batched as large
-as the accelerator allows, running until the loss stops falling. Serving one
-is a different computation: one token at a time, for one sequence a user is
-waiting on, with a cost dominated not by how many flops the chip can do but by
-how fast it can read its own weights from memory. Every serving system's
-design choice — the KV cache, the shape of attention, running a second,
-smaller model alongside the real one — follows from taking that cost
-seriously.
+Training a transformer runs huge batches forward and backward until the loss
+stops falling. Serving one is a different job. A user waits while the model
+writes one token at a time. Each step is small, and the chip spends most of
+its time reading weights from memory rather than doing arithmetic.
 
-The second half of this lesson asks a different question: given the model's
-next-token distribution, which token do you emit? Greedy decoding and
-sampling with temperature, top-k, or nucleus truncation are different
-answers, and none is correct outright — each trades off determinism,
-diversity, and a tendency toward repetition. Speculative decoding closes the
-lesson by showing that a cheap, inaccurate model can speed up an expensive,
-accurate one without changing the output distribution at all.
+Every trick in a serving system follows from that fact. The KV cache avoids
+repeating work. Sharing key and value heads shrinks memory. A small helper
+model can even speed up a big one.
+
+The second half of this lesson asks a simpler question. The model gives you a
+probability for every possible next token. Which one do you pick? You build
+four rules for that choice, and then speculative decoding, which gets a
+speedup without changing what the big model would have said.
 
 ## What you already know
 
-- Scaled dot-product attention, $\operatorname{softmax}(QK^{\top}/\sqrt{d_k})V$,
-  computes keys and values once per token and reuses them for every later
-  query.
-- A transformer block's forward pass costs $2N$ flops per token, from the flop
-  accounting of a dense matmul.
-- Autoregressive generation samples $y_t \sim p(\cdot \mid y_{<t})$ one token
-  at a time, conditioning on everything generated so far.
-- Softmax is shift invariant: $\operatorname{softmax}(z) =
-  \operatorname{softmax}(z - c)$ for any constant $c$.
-- A probability distribution is a nonnegative vector that sums to one.
+- Attention compares a query with every earlier key, then averages the values
+  using those weights.
+- A softmax turns a vector of scores into probabilities that are positive and
+  sum to one.
+- Subtracting the same number from every score doesn't change the softmax.
+- A language model generates text one token at a time, each conditioned on
+  everything before it.
+- A forward pass costs about two flops per parameter per token.
 
 ## Prefill and decode
 
-Serving a request has two phases. **Prefill** processes the whole prompt in
-one forward pass, producing the first output token and populating every
-layer's cache. **Decode** then produces one token at a time, each a forward
-pass over a sequence of length one, conditioned on everything cached so far.
+Serving a request has two phases:
 
-An accelerator has a peak compute rate $P$, in flops per second, and a peak
-memory bandwidth $M$, in bytes per second. A computation's arithmetic
-intensity is its flops divided by the bytes it reads from memory, and it's
-compute bound when that intensity exceeds $P/M$, memory bound when it falls
-short. High-end accelerators put $P/M$ at roughly 100 to 300 flops per byte
-moved.
+- **Prefill** reads the whole prompt in one forward pass. It produces the
+  first output token and fills the cache.
+- **Decode** then produces one token per forward pass.
 
-Take one dense weight matrix $W \in \mathbb{R}^{d \times d}$ at $b$ bytes per
-element. Passing a batch of $B$ tokens through it costs $2Bd^2$ flops and
-reads $W$ once, $bd^2$ bytes, so its arithmetic intensity is
+Think of a chef with a huge cookbook on a high shelf. Fetching the book is
+slow. Cooking from it is fast. If the chef fetches the book to make one dish,
+most of the time goes to fetching. If the chef makes a hundred dishes per
+fetch, the fetch cost is shared. The weights are the cookbook. Memory
+bandwidth is the ladder.
+
+A chip has a peak compute rate, in flops per second, and a peak memory speed,
+in bytes per second. *Arithmetic intensity* is the flops a job does per byte
+it reads. When intensity is low, the chip waits on memory. The job is *memory
+bound*. When intensity is high, it waits on arithmetic and is *compute bound*.
+Big accelerators need roughly 100 to 300 flops per byte to stay busy.
+
+Push a batch of $B$ tokens through one $d \times d$ weight matrix stored at
+$b$ bytes per number. That's $2Bd^2$ flops and one read of $bd^2$ bytes:
 
 $$
-I(B) = \frac{2Bd^2}{bd^2} = \frac{2B}{b} ,
+I = \frac{2Bd^2}{bd^2} = \frac{2B}{b}
 $$
 
-independent of $d$. Decode processes one token per sequence, $B = 1$, so its
-intensity is fixed at $2/b$ regardless of model size — in bf16, exactly one
-flop per byte, far below any accelerator's $P/M$. Decode is memory bound at
-every model scale. Prefill batches the whole prompt, $B = T_{\text{prompt}}$,
-so its intensity grows with prompt length and crosses into compute-bound
-territory past a few hundred tokens. That's why a long prompt's prefill costs
-noticeably more per token than a short one, while decode's per-token cost
-barely changes with model width — only with how much has to be read. Batching
-many concurrent requests' single-token steps together shares one weight read
-across all of them, which is why production serving systems batch requests
-rather than serving one sequence per accelerator.
+Read it as: intensity is twice the batch size divided by bytes per number. The
+matrix size cancels. Decode has $B = 1$, so in 16-bit numbers ($b = 2$) the
+intensity is one flop per byte. That's far below what any accelerator needs.
+Decode is memory bound at every model size. Prefill has $B$ equal to the
+prompt length, so a long prompt keeps the chip busy. Servers batch many users'
+decode steps together so one weight read serves them all.
 
 ## The KV cache
 
-Without caching, generating token $t$ means recomputing keys and values for
-every one of the $t$ tokens seen so far. Each projection over $t$ tokens costs
-$O(t \, d_{\text{model}}^2)$ flops, and summing over $t = 1, \dots, T$ gives
-$O(T^2 d_{\text{model}}^2)$ — quadratic in sequence length.
+In attention, every token produces a *key* and a *value*. Each later token
+compares its *query* with all earlier keys and averages the earlier values.
+Earlier keys and values never change. Without a cache, step $t$ would
+recompute keys and values for all $t$ earlier tokens. Over $T$ steps that work
+grows with $T^2$.
 
-The fix is to keep every key and value vector computed so far. At step $t$,
-the model computes $Q$, $K$, and $V$ only for the new token, appends the new
-$K$ and $V$ to a per-layer cache, and attends the new query against
-everything cached. The projections now cost $O(d_{\text{model}}^2)$ per step,
-$O(T d_{\text{model}}^2)$ in total — linear instead of quadratic.
+The cache is a notebook. At each step you compute the key and value for the
+new token only, append them to a per-layer list, and attend against the whole
+list. The work per step stays constant, so the total grows with $T$ instead of
+$T^2$.
 
-The price is memory. Caching keys and values for $n_{\text{kv}}$ heads of
-width $d_{\text{head}}$, across $n_{\text{layer}}$ layers and $T$ cached
-positions, at `bytes` bytes per element, costs
-
-$$
-\text{cache bytes} = 2 \cdot n_{\text{layer}} \cdot n_{\text{kv}} \cdot
-d_{\text{head}} \cdot T \cdot \text{bytes} ,
-$$
-
-the factor of two for keys and values. A 24-layer model with 8 key-value
-heads of width 64, caching a 2,048-token context in bf16, needs
-$2 \times 24 \times 8 \times 64 \times 2048 \times 2 = 96$ MiB per sequence —
-growing linearly with every token generated and every concurrent request
-served.
-
-## Fewer key-value heads
-
-The cache formula scales with $n_{\text{kv}}$, the number of key-value heads,
-not $n_{\text{head}}$, the number of query heads — the two need not match.
-**Multi-query attention** sets $n_{\text{kv}} = 1$: every query head attends
-against one shared key and value projection. **Grouped-query attention**
-generalizes this, partitioning the query heads into $n_{\text{kv}}$ groups
-that each share one key-value head, recovering ordinary multi-head attention
-at $n_{\text{kv}} = n_{\text{head}}$. Because the cache formula is linear in
-$n_{\text{kv}}$, grouping into $g = n_{\text{head}} / n_{\text{kv}}$ groups
-shrinks the cache by exactly $g$, at the cost of every query in a group
-sharing keys and values instead of learning its own.
-
-## Choosing a token
-
-Every decoding rule starts from the same distribution, $p(\cdot \mid
-y_{<t})$, and differs only in what it does with it. **Greedy decoding** takes
-$\operatorname*{arg\,max}_y p(y \mid y_{<t})$ at every step. It's cheap and
-deterministic, and it doesn't maximize the sequence's overall probability:
-committing to the best token at step one can rule out a continuation whose
-joint probability would have been higher.
-
-**Temperature** rescales the logits before the softmax:
-$\operatorname{softmax}(z/\tau)$. As $\tau \to 0^{+}$, every non-maximal
-logit's exponent diverges to $-\infty$, so the distribution collapses onto
-the argmax — temperature zero is greedy decoding. As $\tau \to \infty$, every
-scaled logit goes to zero and the softmax converges to uniform — sampling
-with no regard for the model at all.
-
-**Top-k sampling** keeps the $k$ highest-probability tokens and renormalizes
-them to sum to one before sampling. **Nucleus, or top-p, sampling** instead
-keeps the smallest set $S$ of tokens, taken in decreasing order of
-probability, whose cumulative probability reaches a threshold $p$:
+The price is memory. The cache stores keys and values for $n_{\text{kv}}$
+heads of width $d_{\text{head}}$, in each of $n_{\text{layer}}$ layers, for
+$T$ tokens:
 
 $$
-S = \{ y_{(1)}, \dots, y_{(m)} \}, \quad
-m = \min \Big\{ j : \textstyle\sum_{i=1}^{j} p_{(i)} \geq p \Big\} ,
+\text{bytes} = 2 \cdot n_{\text{layer}} \cdot n_{\text{kv}} \cdot
+d_{\text{head}} \cdot T \cdot \text{bytes per number}
 $$
 
-then renormalizes over $S$. Unlike top-k, the size of $S$ adapts to how
-peaked the distribution is: a confident prediction gets a small nucleus, a
-uniform-looking one gets a large one.
+Read it left to right: 2 because you store both keys and values, times
+layers, times heads, times numbers per head, times tokens, times bytes per
+number. In code it's one multiplication:
 
-**Repetition** is the failure mode the rules above are patched against: once
-a phrase has occurred, attending back to it makes continuing it look
-probable, and low-temperature decoding can loop forever. A repetition
-penalty divides the logit of any already-generated token by a factor greater
-than one before the softmax, damping the tokens a loop would reinforce.
+```python
+size = 2 * n_layer * n_kv * d_head * seq_len * bytes_per_elt
+```
+
+### Worked example
+
+A 24-layer model with 8 key-value heads of width 64, a 2,048-token context,
+and 2-byte numbers:
+
+- $2 \times 24 = 48$
+- $48 \times 8 = 384$
+- $384 \times 64 = 24{,}576$
+- $24{,}576 \times 2048 = 50{,}331{,}648$
+- $50{,}331{,}648 \times 2 = 100{,}663{,}296$ bytes, which is 96 MiB
+
+That's for one sequence. A hundred users need a hundred caches.
+
+For the exercise's `KVCache`, the stored shapes matter. Each call to `append`
+adds a `k` and a `v` of shape `(n_kv, d_head)` for one token. After $T$
+appends, `get` returns `K` and `V` of shape `(T, n_kv, d_head)`, one row per
+token in the order you appended them. `np.stack(list_of_arrays, axis=0)`
+builds exactly that.
+
+## Share key and value heads
+
+The cache formula counts key-value heads, $n_{\text{kv}}$, not query heads.
+The two don't have to match:
+
+- **Multi-query attention** uses one key-value head that every query head
+  shares, so $n_{\text{kv}} = 1$.
+- **Grouped-query attention** splits the query heads into $n_{\text{kv}}$
+  groups. Each group shares one key-value head.
+
+Because the formula is a plain product, going from 8 key-value heads to 1
+shrinks the cache by exactly 8. The cost is that queries in a group can't
+learn their own keys and values.
+
+## Choose the next token
+
+The model's last layer produces *logits*: one raw score per token in the
+vocabulary. Every decoding rule starts from those scores.
+
+### Greedy
+
+Pick the token with the highest score. That's `np.argmax(logits)`. It's fast
+and always gives the same answer. It isn't guaranteed to find the most likely
+sentence, because the best first word can lead to worse later words.
+
+### Temperature
+
+Temperature $\tau$ is a dial for how adventurous the model is. Divide the
+logits by $\tau$ before the softmax:
+
+$$
+p_i = \frac{\exp(z_i / \tau)}{\sum_j \exp(z_j / \tau)}
+$$
+
+Read it as: scale every score $z_i$ by $1/\tau$, exponentiate, and divide by
+the total so the results sum to one. A small $\tau$ stretches the gaps between
+scores, so the top token takes almost all the probability. As $\tau$
+approaches 0, this becomes greedy decoding. A large $\tau$ squashes the gaps,
+and as $\tau$ grows without limit the probabilities become equal. For
+stability, subtract the largest scaled score before calling `np.exp`:
+
+```python
+s = logits / temperature
+e = np.exp(s - s.max())
+probs = e / e.sum()
+```
+
+Worked example with logits $[2, 1, 0]$:
+
+| $\tau$ | Scaled scores | Probabilities |
+|---|---|---|
+| 1 | $[2, 1, 0]$ | $[0.6652, 0.2447, 0.0900]$ |
+| 2 | $[1, 0.5, 0]$ | $[0.5065, 0.3072, 0.1863]$ |
+| 0.5 | $[4, 2, 0]$ | $[0.8668, 0.1173, 0.0159]$ |
+
+At $\tau = 1$: after subtracting the max you get $[0, -1, -2]$. Exponentials
+are $[1, 0.3679, 0.1353]$, summing to $1.5032$. Dividing gives the first row.
+
+### Top-k
+
+Keep the $k$ most likely tokens, set the rest to zero, and divide by the kept
+total so it sums to one again. With probabilities $[0.4, 0.3, 0.2, 0.1]$ and
+$k = 2$, you keep $0.4$ and $0.3$, whose total is $0.7$. The result is
+$[0.5714, 0.4286, 0, 0]$.
+
+### Nucleus, or top-p
+
+Top-k keeps the same number of tokens whether the model is sure or unsure.
+Nucleus sampling adapts. Sort the tokens from most to least likely. Keep the
+shortest run from the top whose running total reaches $p$. Then renormalise.
+
+Worked example with probabilities $[0.1, 0.5, 0.05, 0.2, 0.15]$ and $p = 0.7$:
+
+- Sorted largest first: $0.5$ (index 1), $0.2$ (index 3), $0.15$, $0.1$,
+  $0.05$
+- Running totals: $0.5, 0.7, 0.85, 0.95, 1.0$
+- The first total that reaches $0.7$ is the second one, so keep indices 1
+  and 3
+- Renormalise: $0.5 / 0.7 = 0.7143$ and $0.2 / 0.7 = 0.2857$
+
+The numpy tools are `np.argsort(-probs)` for the order, `np.cumsum` for the
+running totals, and `np.searchsorted(cumulative, p)` for the first position
+that reaches $p$.
+
+### Repetition
+
+Once a phrase appears, attention makes repeating it look likely, and
+low-temperature decoding can loop forever. A *repetition penalty* shrinks the
+score of any token already generated before the softmax.
 
 ## Speculative decoding
 
-Decode is memory bound, so a small draft model $q$ is nearly as slow, per
-token, as the large target model $p$ it's meant to accelerate — both spend
-most of their time waiting on memory bandwidth. Speculative decoding exploits
-that: let $q$ generate several tokens cheaply, then run $p$ once, in
-parallel, over the whole draft continuation — a compute-bound, prefill-shaped
-batch — and accept or reject each drafted token against $p$'s judgment.
+Decode is memory bound, so a small *draft* model is almost free next to the
+big *target* model. Speculative decoding uses that. The draft model guesses a
+few tokens. The target model then checks all of them in one pass, which is
+shaped like prefill and keeps the chip busy. Each guess is accepted or
+replaced.
 
-For a drafted token $x$, accept it with probability $\min(1, p(x)/q(x))$. On
-rejection, discard every draft token from this point on and sample instead
-from the residual distribution $r(y) = \max(0, p(y) - q(y)) / Z$, where
-$Z = \sum_z \max(0, p(z) - q(z))$.
-
-This reproduces $p$ exactly, for any $q$ with full support, however badly $q$
-approximates $p$. The probability that a fixed token $x$ is the one that
-ultimately emerges is the probability it's drafted and accepted, plus the
-probability rejection happens and $x$ is then drawn from the residual:
+Call the target's probabilities $p$ and the draft's $q$. For a drafted token
+$x$, accept it with probability
 
 $$
-P(\text{output} = x) = q(x) \min\!\left(1, \frac{p(x)}{q(x)}\right)
-+ \max(0, p(x) - q(x)) .
+\min\left(1, \frac{p(x)}{q(x)}\right)
 $$
 
-The first term simplifies to $\min(q(x), p(x))$. The identity $\min(p, q) +
-\max(p - q, 0) = p$ holds for any two reals — check the two cases $p \geq q$
-and $p < q$ directly — so the sum above equals $p(x)$ exactly, for every $x$.
-A worse draft model only lowers the acceptance rate, forcing more residual
-sampling and giving up more of the speedup, never the correctness of the
-output distribution.
+Read it as: if the target likes $x$ at least as much as the draft did, always
+accept. Otherwise accept with the ratio of the two. On rejection, draw a
+replacement from the *residual*: take $\max(0, p - q)$ for every token and
+divide by its total. That's the probability the target wanted but the draft
+didn't give.
+
+```python
+accept = rng.uniform() < min(1.0, p[x] / q[x])
+residual = np.maximum(p - q, 0); residual /= residual.sum()
+```
+
+Why is this safe? The chance of emitting $x$ is the chance it was drafted and
+kept, $\min(q(x), p(x))$, plus the chance of a rejection that lands on $x$,
+which works out to $\max(0, p(x) - q(x))$. For any two numbers, the minimum
+plus the positive part of their difference equals the first one. So the total
+is exactly $p(x)$. A bad draft model makes you reject more and lose the
+speedup. It never changes the output distribution.
+
+### Worked example
+
+Take $p = [0.7, 0.2, 0.1]$ and $q = [0.1, 0.1, 0.8]$:
+
+- Acceptance chances: token 0 gets $\min(1, 7) = 1$, token 1 gets $\min(1, 2)
+  = 1$, token 2 gets $\min(1, 0.125) = 0.125$.
+- Accepted mass is $\min(p, q) = [0.1, 0.1, 0.1]$, totaling $0.3$. So you
+  reject 70% of the time.
+- Residual: $\max(0, p - q) = [0.6, 0.1, 0]$, normalised to $[0.857, 0.143,
+  0]$.
+- Output chance of token 0: $0.1 + 0.7 \times 0.857 = 0.7$. Token 1: $0.1 +
+  0.7 \times 0.143 = 0.2$. Token 2: $0.1 + 0 = 0.1$. That's $p$ exactly.
+
+## Build it step by step
+
+The checks test the pieces in this order.
+
+1. **`kv_cache_bytes(n_layer, n_kv, d_head, seq_len, bytes_per_elt=2)`.**
+   Returns an integer. It's the product from the cache formula. Common
+   mistake: forgetting the 2 for keys and values. Check against 100,663,296.
+2. **`greedy_decode(logits)`.** Takes shape `(vocab,)`, returns a plain
+   `int`. Use `np.argmax` and wrap it in `int()`.
+3. **`apply_temperature(logits, temperature)`.** Takes shape `(vocab,)`,
+   returns probabilities of the same shape. Divide, subtract the max,
+   exponentiate, normalise. Common mistake: skipping the max subtraction.
+   At $\tau = 0.001$ the scaled scores reach the thousands and `np.exp`
+   overflows to `inf`.
+4. **`top_k_filter(probs, k)`.** Returns shape `(vocab,)`. Get the top
+   indices with `np.argsort(-probs)[:k]`, copy those entries into
+   `np.zeros_like(probs)`, then divide by the sum. Common mistake: forgetting
+   to renormalise.
+5. **`nucleus_filter(probs, p)`.** Returns shape `(vocab,)`. Sort, take
+   `np.cumsum`, find the cutoff with `np.searchsorted(..., side="left")`, keep
+   indices up to and including it, renormalise. Common mistake: an
+   off-by-one that drops the token that pushes the total past $p$. The input
+   isn't sorted, so sort it yourself.
+6. **`KVCache`.** In `__init__`, make one empty list of keys and one of values
+   per layer. `append(layer, k, v)` adds the `(n_kv, d_head)` arrays to that
+   layer's lists. `get(layer)` returns `(K, V)`, each `(T, n_kv, d_head)`,
+   from `np.stack(..., axis=0)`. Common mistake: using `np.concatenate`, which
+   gives `(T * n_kv, d_head)`. The checks compare cached attention against a
+   full recompute.
+7. **`speculative_accept(p, q, draft_token, rng)`.** Returns a plain `int`.
+   Draw one `rng.uniform()`, compare with the acceptance chance, and on
+   rejection sample with `rng.choice(len(p), p=residual)`. Common mistake:
+   using `np.random` instead of the given `rng`, or sampling from $p$ instead
+   of the residual on rejection. Both break the distribution check.
 
 ## Cost and scaling
 
-The KV cache grows linearly in every dimension of the formula that defines
-it, which is what makes long contexts expensive to serve rather than merely
-slow to compute.
+The cache grows in direct proportion to every term in its formula. That makes
+long contexts expensive to serve, not only slow.
 
 | Model shape | Context | Cache per sequence |
 |---|---|---|
-| 12 layers, 8 kv heads, $d_{\text{head}}=64$ | 2,048 tokens | 48 MiB |
-| 24 layers, 8 kv heads, $d_{\text{head}}=64$ | 8,192 tokens | 384 MiB |
-| 32 layers, 8 kv heads, $d_{\text{head}}=128$ | 32,768 tokens | 4.0 GiB |
-| 32 layers, 1 kv head (MQA), $d_{\text{head}}=128$ | 32,768 tokens | 0.5 GiB |
+| 12 layers, 8 kv heads, head width 64 | 2,048 tokens | 48 MiB |
+| 24 layers, 8 kv heads, head width 64 | 8,192 tokens | 384 MiB |
+| 32 layers, 8 kv heads, head width 128 | 32,768 tokens | 4.0 GiB |
+| 32 layers, 1 kv head, head width 128 | 32,768 tokens | 0.5 GiB |
 
-The last two rows are the same model and context, differing only in
-$n_{\text{kv}}$: multi-query attention cuts the cache by the factor of eight
-that dropping from eight key-value heads to one predicts exactly. Serving a
-hundred concurrent long-context sequences on the third row already asks for
-400 GiB of cache alone, before a single weight is loaded.
+The last two rows differ only in key-value heads, and the cache shrinks by
+exactly 8. A hundred users on the third row need 400 GiB of cache before a
+single weight is loaded.
+
+The decoding rules cost little. Greedy and temperature take one pass over the
+vocabulary. Top-k and nucleus sort it once, which takes about $V \log V$ steps
+for a vocabulary of $V$ tokens.
 
 ## Where this breaks
 
-**Cache growth outruns memory.** Past some context length, the KV cache no
-longer fits alongside the weights, forcing eviction policies, cache
-quantization, or a hard context limit that has nothing to do with what the
-model could otherwise attend to.
+**The cache outgrows memory.** Past some context length, the cache no longer
+fits beside the weights. Servers then evict old entries, store the cache in
+fewer bits, or cap the context.
 
-**Speculative decoding without a bandwidth gap.** The technique pays off only
-because decode is memory bound. At a large enough serving batch, decode is
-already compute bound, the draft model's extra forward passes stop being
-free, and speculative decoding can slow generation down instead of speeding
-it up.
+**No memory gap to exploit.** Speculative decoding helps only because decode
+is memory bound. With a very large serving batch, decode becomes compute
+bound, the draft's extra work stops being free, and speculation can slow
+things down.
 
-**A weak or slow draft model.** If $q$ rarely agrees with $p$, acceptance is
-rare and most tokens fall through to residual sampling, which costs as much
-as not drafting at all; if $q$ itself isn't cheap relative to $p$, there's no
-bandwidth slack left to exploit.
+**A weak or slow draft.** If the draft rarely agrees with the target, most
+tokens are rejected and you gain nothing. If the draft isn't much cheaper
+than the target, there's no slack to use.
 
-**Sampling without a repetition penalty.** Nucleus and top-k sampling reduce
-repetition but don't eliminate it: a peaked distribution can put almost all
-of its nucleus mass on the token that continues a loop, and only an explicit
-penalty on already-used tokens breaks it reliably.
+**Loops.** Top-k and nucleus sampling reduce repetition but don't stop it. A
+peaked distribution can put nearly all its nucleus on the token that
+continues a loop. An explicit repetition penalty breaks it reliably.
 
 ## The exercise
 
-You build the memory model and the decoding rules this lesson derived.
+You build the memory model and the decoding rules from this lesson. Write
+`kv_cache_bytes`, and a `KVCache` class whose `append(layer, k, v)` stores one
+token's keys and values and whose `get(layer)` returns everything stored so
+far, stacked in order. Write `greedy_decode`, `apply_temperature`,
+`top_k_filter`, and `nucleus_filter`. Finish with `speculative_accept(p, q,
+draft_token, rng)`.
 
-Write `kv_cache_bytes(n_layer, n_kv, d_head, seq_len, bytes_per_elt)` from the
-formula above, and a `KVCache` class with `append(layer, k, v)`, storing one
-new token's key and value for a given layer, and `get(layer)`, returning
-every cached key and value for that layer so far. Write
-`apply_temperature(logits, temperature)`, returning the tempered softmax
-distribution; `top_k_filter(probs, k)` and `nucleus_filter(probs, p)`, each
-zeroing out the excluded probability mass and renormalizing what remains to
-sum to one; `greedy_decode(logits)`, returning the index of the largest
-logit; and `speculative_accept(p, q, draft_token, rng)`, implementing the
-accept-or-resample rule and returning the token that rule selects.
-
-The checks verify the cache formula against a hand-computed value and against
-the exact reduction multi-query attention predicts, that nucleus filtering
-keeps precisely the smallest set reaching $p$ with its kept mass renormalized
-to one, that temperature at a small value converges to greedy's choice, that
-incremental decoding through `KVCache` produces the same attention output as
-a full recompute over the whole sequence at once, and — the one this lesson's
-proof was for — that `speculative_accept`, run many times with a draft
-distribution deliberately built to disagree with the target, reproduces the
-target distribution to within sampling error regardless.
+The checks verify the cache size against a hand count and that it shrinks
+exactly 8 times with one key-value head instead of 8. They check greedy
+choice, temperature against a manual softmax and its greedy limit, and the
+exact tokens top-k and nucleus keep. They check that token-by-token attention
+through your `KVCache` matches a full recompute, and that
+`speculative_accept` reproduces the target distribution over 20,000 draws
+even with a badly matched draft.

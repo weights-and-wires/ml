@@ -8,29 +8,38 @@ depend on it.
 
 ## Audience
 
-Readers hold a working background in calculus, linear algebra, and probability.
-They know what a derivative, a matrix, and a probability distribution are. They
-read a lesson to learn what a method does, why it works, and when it fails --
-not to reconstruct its proofs. Write for them:
+Readers are undergraduates who are new to machine learning. They have taken a
+first course in calculus, linear algebra, and probability, but they are rusty,
+and dense notation stops them cold. They can write Python and have used numpy a
+little. They read a lesson to understand an idea well enough to build it, and
+they learn by building. Write for them:
 
-- Lead with the result and what it means. State the gradient, the bound, or the
-  update rule, then say in one sentence what it tells you.
-- Keep the mathematics the exercise needs, and cut the rest. Every formula the
-  reader implements has to appear in the lesson. A derivation that no check
-  depends on belongs in a linked reference, or nowhere.
-- Replace a long derivation with the one step that carries the idea. When a
-  result takes six lines to prove, give the line that explains why it holds and
-  state the rest as fact. Say where the full derivation can be found.
-- Define every symbol you use, including ones a graduate course would assume.
-- Prefer the concrete to the general. A worked two-by-two example beats an
-  index expression that covers every case.
-- State assumptions precisely: when a result needs convexity, full rank, i.i.d.
-  sampling, or a bounded second moment, say so. Reducing the mathematics does
-  not mean hiding the conditions a result depends on.
-- Connect each result to what it costs to compute: flops, memory, and how the
-  cost scales.
+- Start with the intuition in plain words. Before any formula, say what the
+  method does, in one or two sentences a first-year student could repeat to a
+  friend. Use an everyday analogy when one fits.
+- Make every formula earn its place. Include a formula only when the exercise
+  implements it or the reader needs it to follow the next step. Everything else
+  is stated in words.
+- Read each formula aloud. After every display equation, say in plain English
+  what each piece is and what the whole thing computes. Then show the same
+  formula as one or two lines of numpy.
+- Work one small example by hand. Use tiny numbers, two or three data points or
+  a two-by-two matrix, and show every intermediate value, so the reader can
+  check their code against it.
+- Define every symbol and every term the first time it appears, including ones
+  that feel basic, such as "gradient", "i.i.d.", or "norm". Prefer an ordinary
+  word to jargon when both mean the same thing.
+- Avoid heavy notation. No `\mathcal` sets, no measure-theoretic language, no
+  proofs. Prefer `x`, `w`, and `y` with plain subscripts. A sum over data
+  points is better written once as a loop in words than as nested indices.
+- Keep the conditions honest. When a result needs an assumption, such as data
+  drawn independently from the same distribution, say so in plain words and say
+  what goes wrong without it.
+- Connect ideas to code. The reader should finish every section knowing which
+  numpy operations they will write.
 
-Do not pad. Cutting a derivation is not licence to fill the space with prose.
+Every result on the page must still be correct. Simpler wording must never
+change what a result says.
 
 ## Prose style
 
@@ -64,9 +73,9 @@ summary: One sentence, under 140 characters, that says what the lesson delivers.
 minutes: 55
 gpu: false
 objectives:
-  - Derive the gradient and Hessian of the logistic negative log-likelihood.
-  - Prove the loss is convex, and say when it is strictly convex.
-  - Explain why separable data sends the MLE to infinity.
+  - Turn a score into a probability with the sigmoid, and compute it without overflow.
+  - Write the loss and its gradient, and check the gradient numerically.
+  - Explain why perfectly separable data makes the weights grow without limit.
 prereqs:
   - 02-linear-regression
   - 03-gradient-descent
@@ -96,22 +105,28 @@ The body is Markdown with these conventions:
 
 Every lesson body includes, in this order:
 
-1. An opening that states the problem the lesson solves and why the previous
-   lesson is not enough. Two or three paragraphs. No heading.
-2. `## What you already know` — a short list of the results the lesson builds on,
-   stated as facts rather than explained. Keep it to five bullets.
-3. The substance, in as many `##` sections as the material needs. State each
-   result, explain what it means, and show only the mathematics the reader
-   needs to implement it.
-4. `## Cost and scaling` — flops, memory, and how both scale with the relevant
-   dimensions. A table works well.
-5. `## Where this breaks` — the failure modes, and what practitioners do about
-   them.
-6. `## The exercise` — two or three paragraphs describing what the reader
-   implements and what the checks verify. Name the functions by their exact
-   identifiers.
+1. An opening that says, in plain words, what problem the lesson solves and why
+   it matters. Two or three short paragraphs. No heading, and no formulas.
+2. `## What you already know` — a short list of the ideas the lesson builds on,
+   each in one plain sentence. Keep it to five bullets.
+3. The substance, in as many `##` sections as the material needs. Each section
+   leads with intuition, then gives the formula, reads it aloud, and shows it
+   as numpy. Include at least one small example worked by hand with real
+   numbers.
+4. `## Build it step by step` — a numbered walkthrough of the exercise, one
+   step per function in the order the checks test them. Each step says what the
+   function takes and returns, the numpy operations it needs, and the mistake
+   people most often make. It gives the shape of the code, never the full
+   answer.
+5. `## Cost and scaling` — how the running time and memory grow as the data or
+   the model gets bigger, in plain words. A short table works well.
+6. `## Where this breaks` — the common ways the method fails in practice, and
+   what people do about each one.
+7. `## The exercise` — one or two paragraphs that say what the reader builds
+   and what the checks verify. Name the functions by their exact identifiers.
 
-Aim for 1000 to 1800 words of body, plus math.
+Aim for 1200 to 2200 words of body, plus math. Short sentences and short
+paragraphs matter more than the word count.
 
 ## Exercise directory
 

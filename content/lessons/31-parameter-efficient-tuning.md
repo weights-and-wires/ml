@@ -2,14 +2,15 @@
 title: Parameter-efficient fine-tuning
 slug: 31-parameter-efficient-tuning
 part: "Part 6 — Large language models"
-summary: Why full fine-tuning's memory cost is prohibitive, and how a low-rank update gets almost all the benefit for a fraction of the parameters.
-minutes: 45
+summary: Why full fine-tuning needs so much memory, and how a small low-rank update gets most of the benefit.
+minutes: 50
 gpu: false
 objectives:
-  - Count full fine-tuning's memory cost per parameter, and identify where each byte goes.
-  - Derive LoRA's parameter and memory saving from the rank r and the layer's shape.
-  - Show that merging BA into W reproduces the adapted layer's output exactly, at zero inference cost.
-  - Show that a gradient step on A and B moves the effective weight along the full fine-tuning gradient, projected onto what the current factorization can reach.
+  - Count the memory full fine-tuning needs per parameter, and where each byte goes.
+  - Build a LoRA layer and count how many parameters it trains.
+  - Merge a LoRA update into the base weight and check the outputs match exactly.
+  - Compute the best rank-r approximation of a matrix with the SVD.
+  - Compute LoRA's gradients for A and B, and explain which direction they move the weight.
 prereqs:
   - 27-training-a-transformer
 exercise: 31-parameter-efficient-tuning
@@ -17,222 +18,304 @@ exercise: 31-parameter-efficient-tuning
 
 # Parameter-efficient fine-tuning
 
-Fine-tuning a seven-billion-parameter model by updating every weight needs,
-by the accounting this lesson opens with, on the order of a hundred gigabytes
-of optimizer state alone, before a single activation is stored. That figure
-doesn't fall no matter how cleverly you schedule the computation, because
-it's a count of bytes per trainable parameter, and full fine-tuning makes
-every parameter trainable.
+Fine-tuning means taking a model that's already trained and training it a
+little more on your own data. The simple way updates every weight. For a
+seven-billion-parameter model, that needs over a hundred gigabytes of memory
+for the optimiser alone. Most people don't have that hardware.
 
-Parameter-efficient fine-tuning asks whether every parameter needs to move at
-all. An empirical observation from outside this literature — that
-fine-tuning's useful update often lives in a much lower-dimensional space
-than the full parameter count suggests — turns into a method once you
-represent the update itself as a low-rank matrix instead of searching for
-one. That method, LoRA, is this lesson's center. It derives the saving in
-parameters and memory, shows why the adapted model matches the base model
-exactly before training starts, and shows that the update it converges to is
-the specific projection a full fine-tuning gradient would produce if
-restricted to what a rank-$r$ factorization can express.
+Parameter-efficient fine-tuning asks a practical question. Does every weight
+need to move? Experiments say no. The useful change is usually simple, and a
+small number of new parameters can describe it.
+
+This lesson builds LoRA, short for low-rank adaptation, the most widely used
+method of this kind. You count what it saves, show that it starts out
+identical to the original model, merge it away at the end so it costs nothing
+to run, and see how its gradient relates to ordinary fine-tuning.
 
 ## What you already know
 
-- A dense layer $y = xW^{\top}$ backpropagates a gradient $\nabla_W L =
-  (\nabla_y L)^{\top} x$, one outer product per example.
-- Adam keeps two running moments per parameter, a mean and an uncentered
-  variance of the gradient, both updated every step.
-- Mixed-precision training keeps a fast fp16 or bf16 copy of each weight
-  alongside an fp32 master copy that absorbs small updates without rounding
-  them away.
-- The best rank-$r$ approximation of a matrix in Frobenius norm is its
-  truncated SVD, with squared error equal to the sum of the discarded
-  squared singular values — the Eckart-Young theorem.
-- The chain rule for a bilinear map: for $f(A, B) = BA$, a small change
-  $dA, dB$ gives $d(BA) = B\, dA + dB\, A$.
+- A linear layer computes `y = x @ W.T`, where `W` has shape
+  `(d_out, d_in)`.
+- The Adam optimiser keeps two running averages for every parameter it
+  trains.
+- The *rank* of a matrix is the number of independent directions it can
+  produce. An outer product of two vectors has rank 1.
+- The singular value decomposition, or SVD, writes a matrix as
+  `U @ diag(s) @ Vt`, with the singular values `s` sorted from largest to
+  smallest.
+- The chain rule lets you pass a gradient back through a matrix product.
 
-## Full fine-tuning's memory, counted
+## Count full fine-tuning's memory
 
-Training a matrix $W$ with Adam under mixed precision keeps five quantities
-per parameter: an fp16 copy of $W$ for the forward and backward matmuls (2
-bytes), an fp16 gradient (2 bytes), an fp32 master copy of $W$ that the
-optimizer updates (4 bytes), and Adam's two fp32 running moments (4 bytes
-each), for $2+2+4+4+4=16$ bytes per trainable parameter. Skipping mixed
-precision doesn't help: an fp32 copy, its fp32 gradient, and the two fp32
-moments sum to the same 16 bytes. Mixed precision buys faster matrix
-multiplication on hardware built for low-precision arithmetic — it doesn't
-reduce the memory the optimizer needs. The only way to shrink this number is
-to shrink the count of parameters it applies to.
+Training one parameter with Adam in mixed precision stores five numbers:
 
-## Low-rank adapters
+| What | Precision | Bytes |
+|---|---|---|
+| Working copy of the weight | 16-bit | 2 |
+| Gradient | 16-bit | 2 |
+| Master copy of the weight | 32-bit | 4 |
+| Adam's first running average | 32-bit | 4 |
+| Adam's second running average | 32-bit | 4 |
+| **Total** | | **16** |
 
-The intuition behind LoRA: many pretrained models can be fine-tuned to near
-full performance while optimizing within a low-dimensional subspace of the
-full parameter space, so the useful update has a low **intrinsic dimension**.
-Rather than search for that subspace, LoRA constrains the *shape* of the
-update directly. Freeze a pretrained weight matrix $W \in
-\mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$ and replace the fine-tuned
-weight with
+*Mixed precision* means doing the fast matrix math in 16-bit numbers while
+keeping a careful 32-bit copy for updates. Skipping it doesn't save memory:
+32-bit weight, gradient, and two averages also add up to 16 bytes. So a
+7-billion-parameter model needs $7 \times 10^9 \times 16 = 112$ GB.
 
-$$
-W_{\text{eff}} = W + \frac{\alpha}{r} BA , \qquad
-B \in \mathbb{R}^{d_{\text{out}} \times r}, \;\; A \in \mathbb{R}^{r \times
-d_{\text{in}}}, \;\; r \ll \min(d_{\text{in}}, d_{\text{out}}) .
-$$
+The only way to shrink this is to train fewer parameters. The code is one
+line: `16 * params`, whether you're charging a full model or an adapter.
 
-Only $A$ and $B$ are trained; $W$ never receives a gradient. The scalar
-$\alpha/r$ rescales the update so its magnitude stays roughly constant as $r$
-changes, letting a learning rate tuned at one rank carry over to another
-without retuning. Initializing $B$ to zero, with $A$ drawn from an ordinary
-random initialization, makes $BA = 0$ at step zero, so $W_{\text{eff}} = W$:
-the adapted model computes the same function the pretrained model did before
-a single gradient step.
+## Build a low-rank adapter
 
-The saving is direct. A full fine-tune of $W$ trains $d_{\text{in}}
-d_{\text{out}}$ parameters; a LoRA adapter trains $r(d_{\text{in}} +
-d_{\text{out}})$ parameters, for $A$ and $B$ together. For $d_{\text{in}} =
-d_{\text{out}} = 4096$ and $r = 8$ — one attention projection in a
-seven-billion-parameter Llama-class transformer — full fine-tuning trains
-$4096^2 = 16{,}777{,}216$ parameters against LoRA's $8 \times 8192 =
-65{,}536$, a factor of exactly 256 fewer. At 16 bytes per trainable
-parameter, that one matrix's optimizer state falls from 256 MiB to 1 MiB. The
-frozen base weight still has to sit in memory to run the forward and
-backward pass through it, but it needs no gradient and no optimizer state.
+Picture the pretrained weight as a large printed map. Fine-tuning redraws
+the whole map. LoRA leaves the map alone and lays a thin transparent sheet on
+top with a few corrections. The sheet is cheap because it's built from a small
+number of directions.
 
-LoRA can adapt any weight matrix in the network. Given a fixed parameter
-budget, spreading a small rank across more matrices — all four attention
-projections, and often the feed-forward matrices too — consistently
-outperforms concentrating a large rank on one or two matrix types.
-
-## Merging at inference
-
-Because $\alpha A / r$ and $B$ are ordinary matrices once training finishes,
-the adapted weight $W_{\text{eff}} = W + (\alpha/r) BA$ can be computed once
-and stored in place of $W$. Every later forward pass runs through
-$W_{\text{eff}}$ directly, at the same latency, with no trace an adapter was
-ever there. The cost shows up when a serving system supports many adapters
-on one base model: merging bakes in a single adapter, so switching per
-request means re-merging before every request, an $O(d_{\text{in}}
-d_{\text{out}})$ matmul, or keeping $W$ unmerged and adding each request's
-own $(\alpha/r) x A^{\top} B^{\top}$ term at serving time, at
-$O(r(d_{\text{in}} + d_{\text{out}}))$ extra flops per token instead of
-nothing.
-
-## Why the gradient still points the right way
-
-LoRA doesn't train an arbitrary rank-$r$ update — gradient descent on $A$ and
-$B$ moves $W_{\text{eff}}$ in a specific, structured direction. With loss
-$L$ and $G = \partial L / \partial W_{\text{eff}}$ the gradient a full
-fine-tune of $W$ would receive, the chain rule through $BA$ gives
+Freeze the pretrained weight $W$, of shape $d_{\text{out}} \times d_{\text{in}}$.
+Add two small trainable matrices: $B$ of shape $d_{\text{out}} \times r$ and
+$A$ of shape $r \times d_{\text{in}}$. The rank $r$ is small, often 4 to 16.
+The layer now uses
 
 $$
-\frac{\partial L}{\partial A} = \frac{\alpha}{r} B^{\top} G , \qquad
-\frac{\partial L}{\partial B} = \frac{\alpha}{r} G A^{\top} .
+W_{\text{eff}} = W + \frac{\alpha}{r} BA
 $$
 
-A gradient step on $A$ and $B$ changes $W_{\text{eff}}$ by $-\eta
-(\alpha/r)^2 \big(G A^{\top} A + B B^{\top} G\big)$, to first order in the
-step size $\eta$. That's the full gradient $G$, acted on by $A^{\top} A$ on
-the right and $B B^{\top}$ on the left — projection-like operators built
-from the current factorization. LoRA's update follows $G$ exactly where the
-current $A$ and $B$ already span, and none of it where they don't; widening
-$r$ only widens what "where they span" means.
+Read it piece by piece:
 
-## Quantized and other adapters
+- $W$ is the frozen original weight. It never changes.
+- $BA$ is the correction. It has the same shape as $W$ but rank at most $r$.
+- $\alpha / r$ is a fixed scale. $\alpha$ is a number you choose. Dividing by
+  $r$ keeps the size of the update steady when you change $r$, so the same
+  learning rate keeps working.
 
-**QLoRA** freezes the base model in 4-bit precision and trains LoRA adapters
-in higher precision on top of it, backpropagating through the frozen,
-dequantized weights without updating them. Its NF4 data type places
-quantization levels at the quantiles of a standard normal distribution, so
-weights that are approximately normally distributed after pretraining are
-quantized with roughly equal expected error in every bin. Because the
-per-block scale factors needed for accurate quantization are numerous enough
-to cost real memory, QLoRA quantizes them a second time too.
+You never need to build $W_{\text{eff}}$ during training. Apply each piece to
+the input $x$, of shape `(n, d_in)`, in turn:
 
-**Adapters** insert a small bottleneck feed-forward module into the
-computation graph after each sublayer, training only the new modules. Unlike
-LoRA's parallel, additive update, an adapter sits in series with existing
-computation, so it can't be merged away — every inference pass pays its
-extra layers. **Prefix tuning** prepends trainable vectors to the keys and
-values at every attention layer, changing what each layer attends over
-rather than what any weight computes, at the cost of extra context length
-and attention compute on every call. **$(IA)^3$** learns a per-channel vector
-that rescales keys, values, and feed-forward activations, adding only
-$O(d)$ parameters per rescaled activation and folding into the surrounding
-weights just as cleanly as LoRA.
+$$
+\hat{y} = xW^{\top} + \frac{\alpha}{r} (xA^{\top}) B^{\top}
+$$
 
-Downstream task performance rises quickly as $r$ grows from one, then
-flattens: most tasks reach performance close to full fine-tuning at a rank in
-the single digits to the low tens. Pushing $r$ further buys almost nothing,
-because the saving was never about approximating $W$ — it was about
-supplying enough directions to reach the low-dimensional update that was
-there all along.
+In words: the usual layer output, plus the input squeezed down to $r$
+numbers by $A$, then expanded back up to $d_{\text{out}}$ by $B$, then
+scaled. In numpy:
+
+```python
+base = x @ W.T                       # (n, d_out)
+update = (x @ A.T) @ B.T             # (n, r) then (n, d_out)
+```
+
+**Start at zero.** Initialise $B$ to all zeros and $A$ to small random
+numbers. Then $BA = 0$, so at step zero the adapted layer gives exactly the
+same output as the original. Training starts from the pretrained model, not
+from a damaged copy. (If both were zero, neither would ever get a gradient.)
+
+**Count the savings.** Full fine-tuning of $W$ trains $d_{\text{in}}
+d_{\text{out}}$ numbers. LoRA trains the entries of $A$ and $B$:
+
+$$
+\text{LoRA parameters} = r (d_{\text{in}} + d_{\text{out}})
+$$
+
+For one $4096 \times 4096$ attention matrix with $r = 8$, full training is
+$4096^2 = 16{,}777{,}216$ parameters. LoRA is $8 \times (4096 + 4096) =
+65{,}536$. That's 256 times fewer. At 16 bytes each, optimiser memory for that
+matrix falls from 256 MiB to 1 MiB. The frozen $W$ still sits in memory, but
+it needs no gradient and no optimiser state.
+
+### Worked example
+
+Take $d_{\text{in}} = d_{\text{out}} = 2$, $r = 1$, and $\alpha = 2$, so the
+scale is $\alpha / r = 2$. Let
+
+$$
+W = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}, \quad
+A = \begin{bmatrix} 1 & 2 \end{bmatrix}, \quad
+B = \begin{bmatrix} 1 \\ 0 \end{bmatrix}, \quad
+x = \begin{bmatrix} 1 & 1 \end{bmatrix}
+$$
+
+- Base output: $xW^{\top} = [1, 1]$
+- Squeeze: $xA^{\top} = 1 \cdot 1 + 1 \cdot 2 = 3$
+- Expand: $3 \cdot B^{\top} = [3, 0]$
+- Scale: $2 \times [3, 0] = [6, 0]$
+- Output: $[1, 1] + [6, 0] = [7, 1]$
+
+LoRA here trains $1 \times (2 + 2) = 4$ numbers, the same as the full $2
+\times 2$ matrix. The saving only appears when $r$ is much smaller than the
+layer's width.
+
+## Merge at inference
+
+After training, $A$ and $B$ are ordinary fixed matrices. So you can compute
+$W_{\text{eff}}$ once and store it in place of $W$:
+
+```python
+W_merged = W + (alpha / r) * (B @ A)   # (d_out, d_in), same as W
+```
+
+Every forward pass then uses one matrix, at the same speed as the original
+model. In the worked example, $BA = \begin{bmatrix} 1 & 2 \\ 0 & 0
+\end{bmatrix}$, so $W_{\text{eff}} = \begin{bmatrix} 3 & 4 \\ 0 & 1
+\end{bmatrix}$. Then $x W_{\text{eff}}^{\top} = [3 + 4, 0 + 1] = [7, 1]$, the
+same answer as before. Matrix multiplication distributes over addition, so
+the two routes always agree, up to rounding.
+
+The catch comes when one server hosts many adapters on one base model.
+Merging bakes in a single adapter. To switch per request, you either re-merge
+or keep $W$ unmerged and pay for the small extra term on every token.
+
+## Find the best low-rank approximation
+
+Why should a rank-$r$ correction be enough? Any matrix can be written with
+the SVD as a sum of rank-1 pieces, each weighted by a singular value. The
+singular values are sorted, so the first pieces matter most. The best rank-$r$
+approximation keeps the first $r$ pieces and drops the rest. This is the
+Eckart-Young theorem. The leftover error, measured as the square root of the
+sum of squared entries (the *Frobenius norm*), is
+
+$$
+\text{error} = \sqrt{s_{r+1}^2 + s_{r+2}^2 + \cdots}
+$$
+
+Read it as: the error is built from exactly the singular values you threw
+away. If those are small, a low-rank update loses almost nothing. In numpy:
+
+```python
+U, s, Vt = np.linalg.svd(M, full_matrices=False)
+# keep the first r columns of U, the first r values of s, the first r rows of Vt
+```
+
+Worked example: $M = \begin{bmatrix} 3 & 0 \\ 0 & 1 \end{bmatrix}$ has
+singular values 3 and 1. The best rank-1 approximation is $\begin{bmatrix} 3
+& 0 \\ 0 & 0 \end{bmatrix}$. The error is $\sqrt{1^2} = 1$.
+
+## See where the gradient goes
+
+Let $G$ be the gradient that ordinary full fine-tuning would give for
+$W_{\text{eff}}$. It has the same shape as $W$. The chain rule through $BA$
+gives the gradients for the two small matrices:
+
+$$
+\frac{\partial L}{\partial A} = \frac{\alpha}{r} B^{\top} G, \qquad
+\frac{\partial L}{\partial B} = \frac{\alpha}{r} G A^{\top}
+$$
+
+Read it as: to get $A$'s gradient, pass $G$ back through $B$. To get $B$'s,
+pass it back through $A$. Both carry the same scale $\alpha / r$. Shapes
+check out: $B^{\top} G$ is $(r, d_{\text{out}}) \times (d_{\text{out}},
+d_{\text{in}}) = (r, d_{\text{in}})$, the shape of $A$.
+
+```python
+dA = (alpha / r) * (B.T @ G)   # (r, d_in)
+dB = (alpha / r) * (G @ A.T)   # (d_out, r)
+```
+
+Take one small step of size $\eta$ on both. To first order, $W_{\text{eff}}$
+changes by
+
+$$
+\Delta W_{\text{eff}} \approx -\eta \left(\frac{\alpha}{r}\right)^2 \left(G A^{\top} A + B B^{\top} G\right)
+$$
+
+In words: LoRA still moves downhill along the full gradient $G$, but filtered.
+$A^{\top} A$ keeps only the input directions $A$ already covers. $B B^{\top}$
+keeps only the output directions $B$ already covers. Directions outside what
+$A$ and $B$ span get no update. A larger $r$ widens the filter.
+
+## Other adapter methods
+
+A few relatives are worth knowing by name:
+
+- **QLoRA** stores the frozen base model in 4-bit numbers and trains LoRA on
+  top. That cuts the memory for $W$ itself by about four times.
+- **Adapters** insert small extra layers after each sublayer. They can't be
+  merged away, so every inference pays for them.
+- **Prefix tuning** adds trainable vectors to the keys and values in every
+  attention layer. It costs extra context length on every call.
+
+Quality rises fast as $r$ grows from 1, then levels off. Most tasks get close
+to full fine-tuning at a rank somewhere from single digits to the low tens.
+
+## Build it step by step
+
+The checks test the functions in this order. `x` is `(n, d_in)`, `W` is
+`(d_out, d_in)`, `A` is `(r, d_in)`, and `B` is `(d_out, r)`.
+
+1. **`lora_forward(x, W, A, B, alpha, r)`.** Returns `(n, d_out)`. Compute the
+   base output, the squeeze-then-expand update, and add them with the
+   `alpha / r` scale. Common mistake: writing `x @ W` instead of `x @ W.T`.
+   The first check sets `B` to zero and demands an exact match with the base
+   layer.
+2. **`lora_parameter_count(d_in, d_out, r)`.** Returns an integer. It's the
+   formula above. Common mistake: returning `d_in * d_out`, the full count.
+3. **`optimiser_memory_bytes(params, mode)`.** Returns `16 * params` for
+   `mode` equal to `"full"` or `"lora"`. The rate is the same in both. Raise a
+   `ValueError` for any other mode. Common mistake: charging LoRA a different
+   rate per parameter.
+4. **`merge_lora(W, A, B, alpha, r)`.** Returns a `(d_out, d_in)` matrix. Use
+   `B @ A`, not `A @ B`, which has shape `(r, r)`. The checks compare `x @
+   merged.T` with `lora_forward` and run finite differences through your
+   merge to confirm the gradient formulas.
+5. **`best_rank_approximation(delta_w, r)`.** Returns a matrix the same shape
+   as `delta_w`. Call `np.linalg.svd` with `full_matrices=False`, keep the
+   first `r` pieces, and multiply them back together. `U[:, :r] * s[:r]`
+   scales each column without building a diagonal matrix. Common mistake:
+   keeping the last `r` singular values instead of the first.
 
 ## Cost and scaling
 
-The saving compounds: more matrices worth adapting hold the same ratio
-between full and LoRA training cost.
+The saving holds at every scope, because every matrix in the table has the
+same shape.
 
-| Quantity | Full fine-tuning | LoRA ($r=8$) |
+| Quantity | Full fine-tuning | LoRA ($r = 8$) |
 |---|---|---|
 | Trainable parameters, one $4096 \times 4096$ matrix | 16,777,216 | 65,536 |
-| Optimizer memory (16 bytes/parameter) | 256 MiB | 1 MiB |
-| Trainable parameters, all attention projections, 32 layers | 2,147,483,648 | 8,388,608 |
-| Optimizer memory, same scope | 32 GiB | 128 MiB |
+| Optimiser memory, one matrix | 256 MiB | 1 MiB |
+| Trainable parameters, all attention matrices, 32 layers | 2,147,483,648 | 8,388,608 |
+| Optimiser memory, same scope | 32 GiB | 128 MiB |
 
-The ratio is exactly 256 at every scope, because every matrix involved has
-the same shape: adapting more layers multiplies both sides by the same
-factor. The frozen base weights still have to be loaded to run forward and
-backward passes — LoRA doesn't touch that cost — but the optimizer memory
-that scales with trainable parameters falls by close to three orders of
-magnitude, the difference between needing a cluster and needing one
-accelerator.
+The frozen base weights still need memory, and the forward and backward
+passes still run through them. LoRA doesn't change that. It cuts only the
+part that scales with trainable parameters, but that's the difference between
+a cluster and one accelerator.
+
+The extra compute during training is small: the update path costs about $r
+(d_{\text{in}} + d_{\text{out}})$ multiplies per example, against
+$d_{\text{in}} d_{\text{out}}$ for the base layer. After merging, it's zero.
 
 ## Where this breaks
 
-**Serving many adapters at once.** The free-at-inference property belongs to
-one merged adapter; a system serving hundreds of customer-specific adapters
-off a shared base model gives that property up for flexibility, and must
-budget the extra per-request flops.
+**Many adapters at once.** A server running hundreds of customer adapters
+on one base model can't merge them all. It pays the small extra term for
+every request instead.
 
-**Very small ranks on hard tasks.** The rank-quality plateau is task
-dependent: tasks that need the model to acquire genuinely new capability,
-rather than recombine what pretraining already encoded, can need a rank
-large enough that the parameter saving becomes far less dramatic.
+**Hard tasks at tiny ranks.** If a task needs a genuinely new skill rather
+than a recombination of what the model already knows, it may need a larger
+rank, and the saving shrinks.
 
-**Quantization error compounds with adaptation error.** QLoRA's 4-bit base
-model already discards information the full-precision model had, so a LoRA
-adapter trained against that quantized base fits a slightly different
-function than one trained against full precision, and the two errors don't
-add in a way that's easy to bound in advance.
+**Errors that stack.** QLoRA's 4-bit base already loses some information.
+An adapter trained on top fits that slightly different model, and the two
+errors are hard to predict together.
 
-**Catastrophic forgetting isn't solved by fewer parameters.** Fine-tuning any
-subset of parameters, however small, can still overwrite pretrained behavior
-the fine-tuning data never exercised; a small trainable footprint bounds how
-much can change, not what changes.
+**Forgetting.** Training few parameters limits how much the model can change,
+not what changes. Fine-tuning can still overwrite skills your data never
+tested. Mixing some general data into fine-tuning helps.
 
 ## The exercise
 
-You build LoRA's forward pass, its parameter and memory accounting, its
-inference-time merge, and the low-rank approximation result the whole method
-leans on.
+You build a LoRA layer and its accounting. Write `lora_forward(x, W, A, B,
+alpha, r)` for the adapted forward pass, `lora_parameter_count(d_in, d_out,
+r)` for $r(d_{\text{in}} + d_{\text{out}})$, and
+`optimiser_memory_bytes(params, mode)` for the 16-bytes-per-parameter rule.
+Write `merge_lora(W, A, B, alpha, r)` for $W + (\alpha / r) BA$, and
+`best_rank_approximation(delta_w, r)` for the truncated SVD.
 
-Write `lora_forward(x, W, A, B, alpha, r)`, computing $xW^{\top} +
-(\alpha/r)\, x A^{\top} B^{\top}$, and `lora_parameter_count(d_in, d_out,
-r)`, returning $r(d_{\text{in}} + d_{\text{out}})$. Write `merge_lora(W, A, B,
-alpha, r)`, returning $W + (\alpha/r) BA$, and `optimiser_memory_bytes(params,
-mode)`, applying the 16-bytes-per-parameter figure derived above for `mode`
-in `"full"` or `"lora"` — the same rate in both cases, since the saving comes
-entirely from the parameter count. Write `best_rank_approximation(delta_w,
-r)`, returning the closest rank-$r$ matrix to `delta_w` in Frobenius norm by
-truncated SVD.
-
-The checks verify that a zero-initialized $B$ makes `lora_forward` exactly
-reproduce the base layer, that `merge_lora` gives outputs identical to
-`lora_forward` to machine precision, that the parameter count matches the
-hand-computed $r(d_{\text{in}} + d_{\text{out}})$ and the saving against full
-fine-tuning matches the formula, that `best_rank_approximation` achieves the
-Eckart-Young error for the chosen rank, and, tying the exercise back to this
-lesson's central claim, that a gradient step on $A$ and $B$ moves
-$W_{\text{eff}}$ in exactly the direction the full gradient with respect to
-$W_{\text{eff}}$ would, projected onto the tangent space the current
-factorization can reach.
+The checks verify that a zero `B` reproduces the base layer exactly, the
+parameter count and memory ratio, and that the merged weight matches
+`lora_forward` to machine precision. They check that your rank-$r$
+approximation reaches the Eckart-Young error. Finally, they run finite
+differences through `merge_lora` to confirm the gradients for $A$ and $B$,
+and confirm that one small step moves $W_{\text{eff}}$ in the filtered
+direction from the last formula.

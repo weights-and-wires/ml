@@ -2,14 +2,14 @@
 title: Linear regression
 slug: 02-linear-regression
 part: "Part 1 — Foundations"
-summary: Least squares as an orthogonal projection, three ways to compute it, and why the textbook formula loses digits the others don't.
-minutes: 50
+summary: Fit a straight line (or plane) to data by least squares, three ways, and see why the textbook formula loses accuracy.
+minutes: 60
 gpu: false
 objectives:
-  - State the normal equations, and read them as an orthogonality condition on the residual.
-  - Explain why forming X^T X squares the condition number, and what that costs in digits.
-  - Solve least squares through QR and through the SVD, and state when each is the right choice.
-  - Describe the solution set when X is rank deficient, and identify the minimum-norm element.
+  - Compute least squares weights with the normal equations, QR, and the SVD.
+  - Check a fit by confirming the leftover errors are at right angles to every feature column.
+  - Explain why forming X^T X loses about twice as many digits as QR or the SVD.
+  - Build the smallest-size solution when some features repeat information from others.
 prereqs:
   - 01-the-learning-problem
 exercise: 02-linear-regression
@@ -17,116 +17,182 @@ exercise: 02-linear-regression
 
 # Linear regression
 
-Least squares has a closed-form answer, and that answer is a projection. Almost every idea in the rest of this course responds to the fact that once the hypothesis class stops being a linear subspace, the projection is gone and you need something else.
+Linear regression draws the best straight line through a cloud of points. With more than one input feature, the line becomes a flat plane, but the idea is the same. You pick weights so that a weighted sum of the features lands as close as possible to each target.
 
-The formula most textbooks print, $\hat{w} = (X^{\top}X)^{-1}X^{\top}y$, is also the one you must not implement. It throws away roughly twice as many digits as the problem itself requires. On the design matrices you meet in practice — correlated features, a column of ones, wildly different units — that difference decides whether your coefficients mean anything at all.
+"As close as possible" has a precise meaning here. You square each error and add the squares up, then choose the weights that make that total smallest. This is called least squares, and it has an exact answer you can compute in one go, without any trial and error.
 
-This lesson states the solution, reads it geometrically, and builds the two factorisations that compute it without the digit loss.
+The catch is that the formula printed in most textbooks is a poor way to compute that answer on a real computer. It loses accuracy when features are similar to each other. In this lesson, you build that formula anyway, then two better methods, and you measure the difference.
 
 ## What you already know
 
-- Empirical risk minimisation, and that a held-out estimate is the only honest measure of risk.
-- The gradient of a quadratic form: $\nabla_w \, w^{\top}Aw = (A + A^{\top})w$.
-- Orthogonal matrices preserve the Euclidean norm, and $Q^{\top}Q = I$.
-- Every real matrix has a singular value decomposition, and its singular values are the square roots of the eigenvalues of $X^{\top}X$.
-- Floating-point arithmetic carries about 16 decimal digits in double precision.
+- A model makes a prediction from features, and a loss measures how wrong the prediction is (lesson 1).
+- A matrix times a vector is a weighted sum of the matrix's columns.
+- The transpose $X^\top$ swaps rows and columns of $X$.
+- Solving $Aw = c$ for $w$ is a standard numpy call, `np.linalg.solve(A, c)`.
+- A derivative equal to zero marks the bottom of a bowl-shaped function.
+
+## The model and the loss
+
+Think of predicting a flat's rent from its size and its distance to the station. Each flat is one example. Each measured property is one feature. You guess the rent as a weighted sum of the features.
+
+You have $n$ examples and $d$ features. Stack them into the data matrix $X$, which has shape $n \times d$: one row per example, one column per feature. The targets go into a vector $y$ of length $n$. The weights $w$ form a vector of length $d$.
+
+The predictions for every example at once are
+
+$$\hat{y} = Xw$$
+
+Read it aloud: for each row of $X$, multiply each feature by its weight and add them up. That sum is the prediction $\hat{y}$ for that row.
+
+```python
+y_hat = X @ w        # shape (n,)
+```
+
+This lesson has no separate bias $b$. To get one, add a column of ones to $X$. The weight on that column plays the role of $b$.
+
+The loss is half the sum of squared errors:
+
+$$L(w) = \tfrac{1}{2} \lVert Xw - y \rVert^2$$
+
+Read it aloud: take the error vector $Xw - y$, one error per example. Square each error and add them. The symbol $\lVert v \rVert$ is the norm, or length, of a vector $v$, so $\lVert v \rVert^2$ is the sum of its squared entries. The $\tfrac{1}{2}$ only tidies up the derivative.
+
+```python
+loss = 0.5 * np.sum((X @ w - y) ** 2)
+```
 
 ## The normal equations
 
-Take $X \in \mathbb{R}^{n \times d}$ with rows $x_i^{\top}$, and $y \in \mathbb{R}^n$. The empirical risk under squared loss is $L(w) = \tfrac{1}{2}\lVert Xw - y \rVert_2^2$, with gradient $\nabla L(w) = X^{\top}Xw - X^{\top}y$ and constant Hessian $X^{\top}X \succeq 0$. A constant, positive semidefinite Hessian means $L$ is convex, so every stationary point is a global minimum. Setting the gradient to zero gives the **normal equations**:
+The loss is a bowl in weight space. Its lowest point is where the gradient is zero. The gradient is the vector of partial derivatives, one per weight, and it points uphill. For this loss the gradient is $X^\top(Xw - y)$. Setting it to zero gives the normal equations:
 
-$$
-X^{\top} X \hat{w} = X^{\top} y .
-$$
+$$X^\top X \, w = X^\top y$$
 
-They have a solution for every $X$ and $y$, because $X^{\top}y$ always lies in the range of $X^{\top}X$. When $X$ has full column rank, $X^{\top}X$ is positive definite and that solution is unique.
+Read it aloud: on the left, $X^\top X$ is a $d \times d$ matrix, sometimes called the Gram matrix. Each entry measures how much two features overlap. On the right, $X^\top y$ is a length-$d$ vector that measures how much each feature lines up with the targets. The best $w$ solves this square system.
 
-### The projection reading
+```python
+w = np.linalg.solve(X.T @ X, X.T @ y)
+```
 
-Rewrite the normal equations as $X^{\top}(y - X\hat{w}) = 0$. The residual $r = y - X\hat{w}$ is orthogonal to every column of $X$, hence to the whole column space of $X$. That single fact is the geometry of least squares: $X\hat{w}$ is the orthogonal projection of $y$ onto the column space of $X$, and $\hat{w}$ is the coordinate vector of that projection in the basis the columns give you.
+The textbook writes the answer as $w = (X^\top X)^{-1} X^\top y$. Never compute an explicit inverse. A solve is faster and more accurate.
 
-Take a two-column example to see it directly. If $X$'s two columns are already orthogonal, projecting $y$ onto their span decomposes into two independent one-dimensional projections, one per column, and $\hat w$ is just the pair of those two dot products divided by the column norms squared. Correlated columns lose that independence, which is exactly why the rest of this lesson exists.
+### The residual is at right angles to the features
 
-This reading also explains a fact you can otherwise find surprising: adding a feature that is already a linear combination of existing features never improves the fit, because the column space does not grow, so the projection does not move.
+The residual is the leftover error, $r = y - Xw$. The normal equations say $X^\top r = 0$. In words, the residual has zero dot product with every feature column. Two vectors with zero dot product are orthogonal: they meet at a right angle.
 
-## Why not to invert
+This gives you a free check on any solver. Compute $X^\top(y - Xw)$ and look at its largest absolute entry. At the least squares answer, it is zero up to rounding.
 
-Define the condition number of a full-rank $X$ as $\kappa_2(X) = \sigma_{\max}(X) / \sigma_{\min}(X)$, the ratio of its extreme singular values. It bounds how much a relative perturbation of the data can change the answer: a large $\kappa_2(X)$ means a design matrix where small measurement noise can swing the fitted coefficients by a lot.
+```python
+check = np.abs(X.T @ (y - X @ w)).max()
+```
 
-Because the singular values of $X^{\top}X$ are $\sigma_i^2$,
+Geometrically, $Xw$ is the point in the space of all possible predictions that sits closest to $y$. Closest means the line from it to $y$ drops straight down, at a right angle. This is called a projection.
 
-$$
-\kappa_2(X^{\top}X) = \kappa_2(X)^2 .
-$$
+## A worked example by hand
 
-Forming the Gram matrix $X^\top X$ squares the conditioning, before you have even started solving anything. In double precision you begin with about 16 digits, and solving through $X^{\top}X$ leaves roughly $16 - 2\log_{10}\kappa_2(X)$ of them. A design matrix with $\kappa_2(X) = 10^{8}$ — unremarkable when one feature is measured in metres and another in micrometres — leaves nothing at all. Two columns that differ only in the last representable digit become numerically identical inside $X^{\top}X$, and Cholesky factorisation can fail outright on a matrix that is mathematically positive definite.
+Fit a line $\hat{y} = w_1 + w_2 x$ to three points: $(1, 1)$, $(2, 2)$, and $(3, 2)$. The first column of ones gives the intercept $w_1$.
 
-The fix is to never form the Gram matrix, and both alternatives below work on $X$ directly.
+The data matrix and targets are:
 
-### QR
+$$X = \begin{bmatrix} 1 & 1 \\ 1 & 2 \\ 1 & 3 \end{bmatrix}, \quad y = \begin{bmatrix} 1 \\ 2 \\ 2 \end{bmatrix}$$
 
-Factor $X = QR$, the thin factorisation with $Q \in \mathbb{R}^{n \times d}$ having orthonormal columns and $R \in \mathbb{R}^{d \times d}$ upper triangular. Because $Q$ preserves norms on its range, minimising $\lVert Xw - y \rVert_2^2$ is the same as minimising $\lVert Rw - Q^{\top}y \rVert_2^2$ plus a constant that does not involve $w$. That means solving one triangular system by back substitution:
+The two sides of the normal equations are:
 
-$$
-R \hat{w} = Q^{\top} y .
-$$
+$$X^\top X = \begin{bmatrix} 3 & 6 \\ 6 & 14 \end{bmatrix}, \quad X^\top y = \begin{bmatrix} 5 \\ 11 \end{bmatrix}$$
 
-Back substitution costs $O(d^2)$. The Householder factorisation that produces $Q$ and $R$ costs $2nd^2 - \tfrac{2}{3}d^3$ flops, and it is backward stable: the computed $\hat{w}$ solves a nearby problem exactly, with error governed by $\kappa_2(X)$ itself rather than its square.
+The determinant of $X^\top X$ is $3 \cdot 14 - 6 \cdot 6 = 6$. Solving gives $w_1 = (14 \cdot 5 - 6 \cdot 11)/6 = 4/6 \approx 0.6667$ and $w_2 = (3 \cdot 11 - 6 \cdot 5)/6 = 3/6 = 0.5$.
 
-### The SVD
+The predictions are $\hat{y} = (1.1667, 1.6667, 2.1667)$. The residuals are $r = (-0.1667, 0.3333, -0.1667)$. Check them: they add to $0$, and $1(-0.1667) + 2(0.3333) + 3(-0.1667) = 0$. So $X^\top r = 0$, as promised.
 
-Factor $X = U \Sigma V^{\top}$, with $U \in \mathbb{R}^{n \times r}$ and $V \in \mathbb{R}^{d \times r}$ having orthonormal columns, $\Sigma$ diagonal and positive, and $r = \operatorname{rank}(X)$. The least squares solution is
+The singular values of this $X$ are about $4.079$ and $0.600$, so its condition number (defined below) is about $6.79$.
 
-$$
-\hat{w} = V \Sigma^{-1} U^{\top} y = X^{+} y ,
-$$
+## Why the textbook formula loses digits
 
-where $X^{+}$ is the Moore-Penrose pseudoinverse. Writing the sum out term by term makes the conditioning visible directly:
+The condition number of $X$ measures how close its columns are to repeating each other. It is the ratio of the largest to the smallest singular value, written $\kappa = \sigma_{\max}/\sigma_{\min}$. Singular values are defined in the SVD section below. For now, think of them as the stretch factors of $X$ along its main directions.
 
-$$
-\hat{w} = \sum_{i=1}^{r} \frac{u_i^{\top} y}{\sigma_i} \, v_i .
-$$
+```python
+s = np.linalg.svd(X, compute_uv=False)   # sorted largest first
+kappa = s[0] / s[-1]
+```
 
-Each direction $v_i$ carries a weight of $1/\sigma_i$. A small singular value multiplies whatever noise lands on $u_i$ by a large factor — the same instability the condition number predicts, and the instability that ridge regression will damp in lesson 4 by replacing $1/\sigma_i$ with $\sigma_i / (\sigma_i^2 + \lambda)$.
+A rule of thumb: solving a problem with condition number $10^k$ loses about $k$ decimal digits. A computer double carries about 16 digits.
 
-### Rank deficiency
+Here is the problem. The condition number of $X^\top X$ is $\kappa^2$, the square of the condition number of $X$. So the normal equations lose about $2k$ digits, while a method that works on $X$ directly loses only $k$. In the worked example, $\kappa(X) \approx 6.79$ and $\kappa(X^\top X) \approx 46.1$. If $\kappa = 10^7$, the normal equations keep about 2 digits and a good method keeps about 9.
 
-When $\operatorname{rank}(X) = r < d$, the normal equations still hold, but they no longer pin down a unique $\hat{w}$. The solution set is an affine subspace of dimension $d - r$: one particular solution plus anything in $X$'s null space. Every element of that set gives the same fitted values and the same training loss, so the data cannot tell them apart.
+The two methods below never form $X^\top X$.
 
-The pseudoinverse picks one of them: $X^{+}y$ is the element of smallest Euclidean norm, because by construction it puts zero weight on every null-space direction. That is a choice, not a consequence forced by the data — and it is the same choice that gradient descent makes on its own when started from $w_0 = 0$, the first implicit-regularisation result you meet in this course.
+## Solve with QR
 
-Numerically, rank is a judgment call rather than a fact: singular values at or below $\max(n, d) \cdot \varepsilon \cdot \sigma_{\max}$ get treated as zero, and that threshold is a modelling decision wearing a numerical disguise.
+The QR factorisation splits $X$ into $X = QR$. Here $Q$ has shape $n \times d$ and orthonormal columns: each column has length 1, and every pair is at right angles, so $Q^\top Q = I$. $R$ is $d \times d$ and upper triangular, meaning every entry below the diagonal is zero.
+
+Substitute $X = QR$ into the normal equations and cancel. You get
+
+$$R \, w = Q^\top y$$
+
+Read it aloud: rotate the targets into the $Q$ coordinates, then solve a triangular system. A triangular system is solved one unknown at a time from the bottom row up. This is called back substitution.
+
+```python
+Q, R = np.linalg.qr(X, mode="reduced")
+w = solve_triangular(R, Q.T @ y, lower=False)   # from scipy.linalg
+```
+
+## Solve with the SVD
+
+The singular value decomposition (SVD) splits $X$ into $X = U \Sigma V^\top$. $U$ is $n \times r$ with orthonormal columns. $\Sigma$ is a diagonal matrix of singular values $s_1 \geq s_2 \geq \dots \geq 0$. $V^\top$ is $r \times d$ with orthonormal rows. numpy returns $s$ as a vector and $V^\top$ as `vt`.
+
+The least squares weights are
+
+$$w = V \, \Sigma^{-1} \, U^\top y$$
+
+Read it aloud from right to left: rotate $y$ into the $U$ coordinates, divide each coordinate by its singular value, then rotate back with $V$.
+
+```python
+U, s, vt = np.linalg.svd(X, full_matrices=False)
+w = vt.T @ ((U.T @ y) / s)
+```
+
+### When features repeat each other
+
+Sometimes one column of $X$ is a combination of others. Say one column holds a length in metres and another the same length in centimetres. Then many different $w$ give exactly the same predictions, because you can shift weight between the two columns. $X$ is called rank deficient, and at least one singular value is zero.
+
+Dividing by a zero singular value blows up. The fix is to drop every singular value at or below a small tolerance, `rcond * s.max()`, and keep only the rest. The result is the minimum-norm solution: of all the $w$ that fit equally well, it is the shortest one. It puts no weight at all in the directions that don't change the predictions.
+
+```python
+keep = s > rcond * s[0]
+w = vt[keep].T @ ((U[:, keep].T @ y) / s[keep])
+```
+
+## Build it step by step
+
+The checks test the functions in this order. Each one takes `X` with shape `(n, d)` and, where needed, `y` with shape `(n,)`.
+
+1. **`condition_number(X)`** returns a float. Call `np.linalg.svd(X, compute_uv=False)` to get the singular values, sorted largest first, and divide the first by the last. Return `float("inf")` when the smallest is exactly zero. Common mistake: dividing the last by the first, which gives a number below 1.
+2. **`residual_orthogonality(X, y, w)`** returns a float, the largest absolute entry of $X^\top(y - Xw)$. Use `X @ w`, `X.T @ ...`, `np.abs`, and `.max()`. Common mistake: returning the array instead of one number.
+3. **`fit_qr(X, y)`** returns `w` with shape `(d,)`. Call `np.linalg.qr(X, mode="reduced")`, then `solve_triangular(R, Q.T @ y, lower=False)`. Common mistake: using the full QR, which makes `Q` shape `(n, n)` and breaks the shapes.
+4. **`fit_normal_equations(X, y)`** returns `w` with shape `(d,)`. Form `X.T @ X` and `X.T @ y`. Factor the Gram matrix with `np.linalg.cholesky`, which returns a lower-triangular `L` with `L @ L.T` equal to the Gram matrix. Then do two triangular solves: first `L z = X^T y` with `lower=True`, then `L^T w = z` with `lower=False`. Common mistake: forgetting the transpose in the second solve.
+5. **`fit_svd(X, y, rcond)`** returns `w` with shape `(d,)`. Call `np.linalg.svd(X, full_matrices=False)`. Build a boolean mask `keep` for singular values above `rcond * s[0]`, and use only those columns of `U`, entries of `s`, and rows of `vt`. Common mistake: dividing by every singular value, which puts huge weights in the directions that don't matter.
+
+Don't call `np.linalg.lstsq` or `np.linalg.pinv` in the three solvers. They solve the whole problem for you, and a check rejects them.
 
 ## Cost and scaling
 
-The three routes agree in exact arithmetic and differ in flops and in the digits they keep. The following table assumes $n \geq d$ and counts leading terms.
+All three methods cost about the same when $n$ is much bigger than $d$. The table compares them.
 
-| Route | Flops | Extra memory | Digits lost |
+| Method | Rough work | Digits lost | Handles repeated features |
 |---|---|---|---|
-| Normal equations with Cholesky | $nd^2 + \tfrac{1}{3}d^3$ | $d^2$ | $2\log_{10}\kappa_2(X)$ |
-| Householder QR | $2nd^2 - \tfrac{2}{3}d^3$ | $d^2$ | $\log_{10}\kappa_2(X)$ |
-| SVD | $\approx 6nd^2 + 20d^3$ | $nd$ | $\log_{10}\kappa_2(X)$ |
+| Normal equations | $nd^2$ to form $X^\top X$, then $d^3$ | about $2k$ | No, Cholesky fails |
+| QR | about $2nd^2$ | about $k$ | No, $R$ has a zero on its diagonal |
+| SVD | a few times $nd^2$ | about $k$ | Yes |
 
-Cholesky on the Gram matrix is the cheapest route by about a factor of two, and the only one that never needs $X$ again once $X^\top X$ and $X^\top y$ are formed — useful when $n$ is large enough that $X$ does not fit in memory, since you can accumulate both in a single streaming pass using $O(d^2)$ space. That is why the Gram route survives in practice, for well-conditioned, low-dimensional problems where you also standardise the columns first.
-
-For $n \gg d$, every route costs $O(nd^2)$, so the constant in front is what separates them. As $d$ approaches $n$, the $d^3$ terms start to dominate, and the SVD grows expensive enough that iterative methods take over — the subject of lesson 3.
+Here $k$ is the number of digits in the condition number. Memory is dominated by storing $X$ itself, $n \times d$ numbers. Doubling the number of examples roughly doubles the time. Doubling the number of features roughly quadruples it.
 
 ## Where this breaks
 
-**Correlated features.** Near-collinearity makes $\sigma_{\min}$ small without making it zero. The fit stays fine and the coefficients turn meaningless: their variance is $\operatorname{Var}(\hat{w}) = \sigma^2 (X^{\top}X)^{-1}$, with a trace of $\sigma^2 \sum_i \sigma_i^{-2}$. Two features that measure almost the same thing typically produce one large positive coefficient and one large negative one that cancel. Ridge regression, in lesson 4, is the standard response.
-
-**Unscaled columns.** A column measured in different units changes $\kappa_2(X)$ without changing the model at all. Standardise before fitting, and exclude the intercept from any penalty you add later.
-
-**More features than samples.** With $d > n$ the problem is always rank deficient, the training residual is zero, and the choice among the many exact-fitting solutions carries the entire modelling content. Modern models live in this regime routinely, and the minimum-norm solution is a large part of why gradient descent generalises there at all.
-
-**Heavy-tailed noise.** Squared loss is the maximum-likelihood estimator under Gaussian noise, and only under Gaussian noise. A single outlier can move $\hat{w}$ without bound, because a point's influence on the fit grows linearly with its residual. Huber loss bounds that influence, at the cost of the closed form.
+- **Features on wildly different scales.** A feature in millimetres next to one in kilometres inflates the condition number. Standardise each column to mean 0 and standard deviation 1 before fitting.
+- **Nearly repeated features.** The weights become huge and swing wildly with small changes in the data. The SVD with a tolerance helps. Ridge regression, in lesson 4, is the standard fix.
+- **More features than examples.** With $d > n$ there are infinitely many perfect fits. The minimum-norm solution picks one, but it may not predict new data well.
+- **Outliers.** Squaring errors makes one far-off point pull the whole line toward it. Look at your residuals, and consider a loss that grows more slowly.
+- **A curved relationship.** A straight line can't fit a curve. Add features such as $x^2$, and the method still works, because it is linear in the weights.
 
 ## The exercise
 
-You implement least squares three times, and measure the difference the factorisation makes.
+You build five functions: `condition_number`, `residual_orthogonality`, `fit_qr`, `fit_normal_equations`, and `fit_svd`. The three solvers must give the same answer on a well-behaved problem, and each must leave a residual at right angles to the columns of `X`.
 
-Write `fit_normal_equations`, `fit_qr`, and `fit_svd`, each taking a design matrix `X` and targets `y` and returning the coefficient vector. Build them from `numpy.linalg` primitives — `cholesky`, `qr`, `svd`, and a triangular solve — rather than calling `numpy.linalg.lstsq`, which would do the whole exercise for you. `fit_svd` takes an `rcond` tolerance, and must return the minimum-norm solution when the design matrix is rank deficient.
-
-Then write `residual_orthogonality`, which returns $\lVert X^{\top}(y - X\hat{w}) \rVert_\infty$ for a fitted `w`, and `condition_number`, which returns $\kappa_2(X)$ computed from the singular values.
-
-The checks verify that the three routes agree to high precision on a well-conditioned problem, that the residual is orthogonal to the column space, and that `fit_svd` returns the minimum-norm element on a deliberately rank-deficient design. The last check is the point of the lesson: on a Hilbert-like matrix with $\kappa_2 \approx 10^{9}$, it confirms that the normal-equations route loses the digits the table above predicts while QR and the SVD keep them — and it fails if your `fit_normal_equations` is secretly calling something stable.
+The checks then push harder. `fit_svd` must return the minimum-norm solution when two columns repeat information from others. On a matrix with condition number $10^7$, `fit_qr` and `fit_svd` must keep about nine digits, while `fit_normal_equations` must visibly lose more. A final check confirms that none of the solvers calls `lstsq` or `pinv`.

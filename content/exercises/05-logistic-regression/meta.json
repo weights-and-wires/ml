@@ -1,15 +1,17 @@
 {
   "id": "05-logistic-regression",
   "title": "Fit a logistic regression two ways",
-  "brief": "Implement the stable loss, its gradient and Hessian, then watch Newton's method finish in single digits while gradient descent needs hundreds of steps.",
+  "brief": "Build a stable sigmoid and log loss, their gradient and Hessian, then see Newton's method finish in a few steps where gradient descent needs hundreds.",
   "needs_gpu": false,
   "timeout": 60,
-  "packages": ["numpy"],
+  "packages": [
+    "numpy"
+  ],
   "hints": [
-    "log(1 + exp(z)) is np.maximum(z, 0) + np.log1p(np.exp(-np.abs(z))); the argument to exp is always at most 0, so it can only underflow to 0, never overflow.",
-    "sigmoid needs the same trick as log_loss: branch on the sign of z and evaluate exp on the negative branch only, so exp never sees a large positive argument.",
-    "The gradient is X.T @ (sigmoid(X @ w) - y) + ridge * w; no explicit loop over samples is needed.",
-    "The Hessian is (X * d[:, None]).T @ X + ridge * np.eye(d), where d = p * (1 - p) and p = sigmoid(X @ w). Scaling the rows of X by d before the matrix product avoids building the full diagonal matrix.",
-    "Newton's step solves hessian(w, X, y, ridge) @ delta = gradient(w, X, y, ridge) with numpy.linalg.solve, then sets w -= delta. Keep the ridge argument: it is what keeps the solve well posed once the data is close to separable."
+    "For softplus, use np.maximum(z, 0) + np.log1p(np.exp(-np.abs(z))). The value inside np.exp is never positive, so it can't overflow.",
+    "For sigmoid, build a mask pos = z >= 0. Use 1 / (1 + np.exp(-z)) on the positive part and np.exp(z) / (1 + np.exp(z)) on the rest.",
+    "The gradient is X.T @ (sigmoid(X @ w) - y) + ridge * w. No loop over examples is needed.",
+    "For the Hessian, let s = p * (1 - p). Then (X * s[:, None]).T @ X + ridge * np.eye(d) scales the rows of X without building a diagonal matrix.",
+    "A Newton step is delta = np.linalg.solve(hessian(...), gradient(...)), then w = w - delta. Keep the small ridge: it keeps the solve well posed on nearly separable data."
   ]
 }

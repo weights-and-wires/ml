@@ -1,10 +1,18 @@
 """Cross-validation, the leave-one-out shortcut, learning curves, and Rademacher
 complexity by sampling.
 
-Implement five functions. `fit` and `predict`, wherever they appear as
-arguments, follow the convention `model = fit(X_train, y_train)` and
-`y_pred = predict(model, X_test)`, so the same `cross_val_score` and
-`learning_curve` work for any estimator, not only ridge regression.
+You write five functions, in this order:
+
+1. `k_fold_indices`: shuffle the indices and cut them into k folds.
+2. `cross_val_score`: fit on k - 1 folds, score the held-out one, k times.
+3. `loo_linear_smoother`: leave-one-out error for ridge from one fit.
+4. `learning_curve`: training and validation error at growing sizes.
+5. `empirical_rademacher`: how well a set of models matches random signs.
+
+Wherever `fit` and `predict` appear as arguments, they follow the pattern
+`model = fit(X_train, y_train)` and `y_pred = predict(model, X_test)`, so
+the same functions work for any model, not only ridge regression.
+Shapes: X is (n, d), one row per example; y is (n,).
 """
 
 import numpy as np
@@ -54,6 +62,11 @@ def loo_linear_smoother(X: np.ndarray, y: np.ndarray, lam: float) -> float:
     the full data to get the hat matrix H = X (X^T X + lam I)^{-1} X^T and
     the in-sample residual r = y - H y, then each leave-one-out residual is
     r_i / (1 - H_ii).
+
+    Steps:
+        1. Build H, shape (n, n), and read its diagonal, the leverages.
+        2. Compute the residuals of the full fit.
+        3. Divide by one minus the leverage, square, and average.
 
     Args:
         X: Design matrix, shape (n, d).
@@ -108,6 +121,11 @@ def empirical_rademacher(
     Draw `num_draws` independent Rademacher vectors sigma in {-1, 1}^n, and
     for each one compute the supremum over hypotheses of
     (1 / n) * sigma . f_j, then average over draws.
+
+    Steps:
+        1. Draw all sign vectors at once, shape (num_draws, n).
+        2. Get every dot product with one matrix product.
+        3. Take the largest over hypotheses, average over draws, divide by n.
 
     Args:
         losses_matrix: Array of shape (num_hypotheses, n).

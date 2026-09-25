@@ -40,5 +40,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
         working-directory: frontend
 
+      - name: Compile every lesson's math with KaTeX
+        run: node scripts/check_math.mjs
+
       - run: npm run build
         working-directory: frontend

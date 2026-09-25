@@ -2,14 +2,14 @@
 title: Ridge, lasso, and the proximal view
 slug: 04-regularisation
 part: "Part 1 — Foundations"
-summary: Ridge as shrinkage in the SVD basis, the lasso's kink at zero, and soft thresholding as the operation that makes both fast to solve.
-minutes: 55
+summary: Stop weights from growing wild with ridge and lasso penalties, and solve the lasso with soft thresholding.
+minutes: 65
 gpu: false
 objectives:
-  - State the ridge estimator, read it as shrinkage in the SVD basis, and compute its effective degrees of freedom.
-  - State the subdifferential of the l1 norm, and the KKT condition that makes the lasso solution exactly sparse.
-  - State soft thresholding as the proximal operator of the l1 norm, and the rates O(1/k) and O(1/k^2) for ISTA and FISTA.
-  - Explain why the penalised and constrained forms of ridge and lasso are equivalent, and what each buys over unregularised least squares.
+  - Compute ridge regression with one linear solve, and for many penalties at once from one SVD.
+  - Compute the effective degrees of freedom and explain what it measures.
+  - Build soft thresholding and explain why the lasso sets some weights to exactly zero.
+  - Build ISTA and FISTA, and compare how fast they reduce the lasso loss.
 exercise: 04-regularisation
 prereqs:
   - 02-linear-regression
@@ -18,133 +18,188 @@ prereqs:
 
 # Ridge, lasso, and the proximal view
 
-Lesson 2 ended on the case where $X$ is close to rank deficient, and least squares stops pinning down a unique answer — the pseudoinverse's minimum-norm choice was doing all the work silently. Regularisation makes that choice explicit, and it helps even when $X$ has full rank, by trading a controlled amount of bias for a large reduction in variance: the exact trade the bias-variance decomposition in lesson 1 quantified.
+Lesson 2 ended with a warning. When features repeat each other, least squares weights become huge and swing wildly with tiny changes in the data. The model fits the training set well and predicts new data badly. That is overfitting, which you met in lesson 1.
 
-Ridge and the lasso both penalise the size of $w$, with two different norms, and the difference is not cosmetic. Ridge stays a linear system, solvable in the SVD basis lesson 2 already built. The lasso's penalty is not differentiable at zero — which is exactly the point, since that kink is what drives coefficients to land at exactly zero rather than merely small. Handling the kink correctly needs one new operation, the proximal operator, and a new family of algorithms built on it.
+Regularisation fixes this by charging a fee for large weights. You still minimise the squared error, but you add a penalty that grows with the size of $w$. The model now has to balance fitting the data against keeping its weights small. It gives up a little accuracy on the training set and gains a lot of stability.
+
+You build two penalties. Ridge charges for the squared size of the weights and still has an exact formula. The lasso charges for their absolute size, which pushes some weights to exactly zero. That makes the lasso a feature selector, but it needs a new tool, soft thresholding, and a gradient-style solver built on it.
 
 ## What you already know
 
-- The SVD $X = U\Sigma V^\top$ from lesson 2, and the pseudoinverse $\hat{w} = V\Sigma^{-1}U^\top y$ it gives for unregularised least squares.
-- $L$-smoothness and the descent lemma from lesson 3: $f(v) \leq f(u) + \nabla f(u)^\top(v-u) + \tfrac{L}{2}\lVert v-u\rVert^2$.
-- A convex function's subdifferential at $w$ is the set of vectors $g$ with $f(v) \geq f(w) + g^\top(v-w)$ for every $v$; at a differentiable point it is the singleton $\{\nabla f(w)\}$.
-- The maximum a posteriori (MAP) estimate maximises $p(w \mid y) \propto p(y \mid w)\, p(w)$ over $w$.
-- Minimising $f(w)$ subject to $g(w) \leq t$ is, for convex $f$ and $g$, equivalent for some $\lambda \geq 0$ to minimising $f(w) + \lambda g(w)$ unconstrained.
+- The least squares loss $\tfrac{1}{2}\lVert Xw - y\rVert^2$ and its gradient $X^\top(Xw - y)$ (lesson 2).
+- The SVD $X = U \Sigma V^\top$, with singular values in a vector `s` (lesson 2).
+- Gradient descent with step $1/L$, where $L$ is the largest eigenvalue of $X^\top X$ (lesson 3).
+- Nesterov's look-ahead momentum (lesson 3).
+- Overfitting: a model that is too flexible fits noise (lesson 1).
 
-## Ridge as MAP under a Gaussian prior
+## Ridge regression
 
-Ridge regression solves
+Think of each weight as held near zero by a spring. The data pulls the weight toward the value that fits best. The spring pulls it back. A stiffer spring keeps weights smaller. Ridge adds that spring to the loss:
 
-$$
-\hat{w}_{\text{ridge}} = \operatorname*{arg\,min}_{w} \; \tfrac{1}{2}\lVert Xw - y \rVert^2 + \frac{\lambda}{2}\lVert w \rVert^2 .
-$$
+$$L(w) = \tfrac{1}{2}\lVert Xw - y\rVert^2 + \tfrac{\lambda}{2}\lVert w\rVert^2$$
 
-This is a posterior mode, not an arbitrary penalty. Model $y = Xw + \varepsilon$ with $\varepsilon \sim \mathcal{N}(0, \sigma^2 I)$, and place a prior $w \sim \mathcal{N}(0, \tau^2 I)$. Maximising the log posterior over $w$ is minimising $\tfrac{1}{2}\lVert Xw-y\rVert^2 + \tfrac{\sigma^2}{2\tau^2}\lVert w\rVert^2$, the ridge objective with $\lambda = \sigma^2/\tau^2$. A tighter prior — smaller $\tau^2$, more confidence that $w$ sits near zero — is a larger $\lambda$, and $\lambda$ is a ratio of two variances, not a free knob.
+Read it aloud: the first term is the usual squared error. The second is the penalty. $\lVert w\rVert^2$ is the sum of the squared weights, and $\lambda$ (lambda) is a number you choose, at least 0, that sets how stiff the spring is. $\lambda = 0$ gives back plain least squares.
 
-Setting the gradient to zero gives $(X^\top X + \lambda I)\hat{w}_{\text{ridge}} = X^\top y$. Unlike the unregularised normal equations, $X^\top X + \lambda I$ is positive definite for any $\lambda > 0$ regardless of the rank of $X$, so the solution is always unique — the first thing ridge buys you.
+Setting the gradient to zero gives a linear system, like the normal equations with one extra term:
 
-## The SVD-basis solution and shrinkage
+$$(X^\top X + \lambda I)\, w = X^\top y$$
 
-Substituting $X = U\Sigma V^\top$ into the ridge normal equations and solving the resulting diagonal system gives the solution directly in the SVD basis:
+Read it aloud: add $\lambda$ to every diagonal entry of $X^\top X$, then solve. $I$ is the $d \times d$ identity matrix. Adding $\lambda$ to the diagonal also makes the system solvable even when features repeat.
 
-$$
-\hat{w}_{\text{ridge}} = \sum_{i=1}^{r} \frac{\sigma_i}{\sigma_i^2 + \lambda} (u_i^\top y)\, v_i .
-$$
+```python
+w = np.linalg.solve(X.T @ X + lam * np.eye(d), X.T @ y)
+```
 
-Compare this to the unregularised $\hat{w} = \sum_i \sigma_i^{-1}(u_i^\top y) v_i$ from lesson 2: every coefficient along $v_i$ is shrunk by the factor $\sigma_i^2/(\sigma_i^2+\lambda) \in (0, 1)$. Take a direction with $\sigma_i = 10$ against $\lambda = 1$: the factor is $100/101 \approx 0.99$, barely any shrinkage. Take $\sigma_i = 0.1$ against the same $\lambda$: the factor drops to about $0.01$, almost all the way to zero. Ridge damps exactly the directions that made $1/\sigma_i$ explode in lesson 2.
+### Ridge for many penalties at once
 
-Summing the shrinkage factors gives the **effective degrees of freedom**,
+You rarely know the right $\lambda$, so you try many. Re-solving each time is wasteful. The SVD gives every answer cheaply. With $X = U \Sigma V^\top$, the ridge weights are
 
-$$
-\operatorname{df}(\lambda) = \sum_{i=1}^r \frac{\sigma_i^2}{\sigma_i^2+\lambda} ,
-$$
+$$w = V \, \operatorname{diag}\!\left(\frac{s_i}{s_i^2 + \lambda}\right) U^\top y$$
 
-which decreases continuously from $r$ at $\lambda=0$ to $0$ as $\lambda \to \infty$. It plays the role the integer parameter count $d$ played in lesson 1's bias-variance trade-off, except the model's effective complexity is now continuous in $\lambda$ and reads directly off the singular values, with no refitting needed.
+Read it aloud from right to left: rotate $y$ into the $U$ coordinates, which you do once. Multiply coordinate $i$ by $s_i/(s_i^2 + \lambda)$. Rotate back with $V$. Only the middle step depends on $\lambda$.
 
-## The lasso and its subdifferential
+Compare this with plain least squares, which multiplies by $1/s_i$. When $s_i$ is large, $\lambda$ barely matters. When $s_i$ is small, the factor shrinks toward zero instead of exploding. Ridge shrinks most in the directions the data pins down least.
 
-Replace the squared penalty with the $\ell_1$ norm, $\lVert w \rVert_1 = \sum_j \lvert w_j \rvert$:
+```python
+u_dot_y = U.T @ y                                   # shape (r,), once
+shrink = s[None, :] / (s[None, :] ** 2 + lambdas[:, None])   # shape (m, r)
+path = (shrink * u_dot_y[None, :]) @ Vt             # shape (m, d)
+```
 
-$$
-\hat{w}_{\text{lasso}} = \operatorname*{arg\,min}_{w} \; \tfrac{1}{2}\lVert Xw-y \rVert^2 + \lambda \lVert w \rVert_1 .
-$$
+The `[None, :]` and `[:, None]` add an axis so numpy broadcasts: each row of `shrink` holds the factors for one $\lambda$.
 
-$\lVert w \rVert_1$ is convex but not differentiable where any $w_j = 0$. Its subdifferential at a scalar $w_j$ is $\{\operatorname{sign}(w_j)\}$ when $w_j \neq 0$, and the whole interval $[-1, 1]$ when $w_j = 0$ — a flat corner has room for many supporting lines, not just one. The objective is convex, so $\hat{w}$ minimises it exactly when, for every coordinate $j$,
+### Effective degrees of freedom
 
-$$
-X_j^\top (X\hat{w} - y) = -\lambda\, \operatorname{sign}(\hat{w}_j) \quad \text{if } \hat{w}_j \neq 0, \qquad
-\lvert X_j^\top(X\hat{w}-y)\rvert \leq \lambda \quad \text{if } \hat{w}_j = 0 ,
-$$
+How flexible is a ridge model? Plain least squares with $r$ independent features has $r$ degrees of freedom, one per weight. Ridge has fewer, because the spring holds the weights back. The effective degrees of freedom counts this:
 
-where $X_j$ is the $j$th column. That second line is an inequality, not an equality, and it is the entire mechanism behind sparsity: a coordinate whose correlation with the residual has magnitude below $\lambda$ can sit at exactly zero and still be optimal, because the subdifferential of $\lvert \cdot \rvert$ at zero has room to absorb any gradient up to $\lambda$. Ridge's smooth penalty has no such room, since its stationarity condition is an equality everywhere — which is why ridge shrinks every coefficient without ever zeroing one out exactly.
+$$\text{df}(\lambda) = \sum_i \frac{s_i^2}{s_i^2 + \lambda}$$
 
-## Soft thresholding as a proximal operator
+Read it aloud: each singular direction contributes a number between 0 and 1. It is close to 1 when $s_i^2$ is much bigger than $\lambda$, and close to 0 when it is much smaller. At $\lambda = 0$, df equals the number of nonzero singular values. As $\lambda$ grows huge, df falls to 0.
 
-Split the lasso objective into a smooth term $g(w) = \tfrac{1}{2}\lVert Xw-y\rVert^2$, with $L = \lambda_{\max}(X^\top X)$ as in lesson 3, and a nonsmooth term $h(w) = \lambda \lVert w \rVert_1$. The **proximal operator** of $h$ with step $\eta$ is
+```python
+dof = np.sum(s ** 2 / (s ** 2 + lam))
+```
 
-$$
-\operatorname{prox}_{\eta h}(v) = \operatorname*{arg\,min}_{w} \; \frac{1}{2\eta}\lVert w - v \rVert^2 + h(w) .
-$$
+## The lasso
 
-For $h(w) = \lambda\lVert w\rVert_1$ this separates coordinate by coordinate, and balancing the pull of $(w_j - v_j)^2$ toward $v_j$ against the pull of $\lambda\lvert w_j\rvert$ toward zero gives
+The lasso swaps the squared penalty for the sum of absolute values:
 
-$$
-\operatorname{prox}_{\eta \lambda \lVert \cdot \rVert_1}(v)_j
-= \operatorname{sign}(v_j) \max(\lvert v_j \rvert - \eta\lambda,\, 0) =: S_{\eta\lambda}(v_j) .
-$$
+$$L(w) = \tfrac{1}{2}\lVert Xw - y\rVert^2 + \lambda \lVert w\rVert_1$$
 
-$S_t$ is the **soft-thresholding operator**: it moves every value toward zero by $t$, and clips anything that would cross zero to exactly zero. With $t = 1$, an input of $3$ maps to $2$, an input of $0.5$ maps to $0$, and an input of $-3$ maps to $-2$. It is the lasso's analogue of ridge's shrinkage factor $\sigma_i^2/(\sigma_i^2+\lambda)$: both shrink, but soft thresholding also zeros out, because it is the proximal operator of a norm with a corner at the origin rather than a smooth quadratic.
+Read it aloud: squared error, plus $\lambda$ times $\lVert w\rVert_1$, the sum of the absolute values of the weights. This is called the $\ell_1$ norm.
 
-## ISTA and FISTA
+```python
+objective = 0.5 * np.sum((X @ w - y) ** 2) + lam * np.sum(np.abs(w))
+```
 
-Proximal gradient descent minimises $g(w) + h(w)$ by alternating a gradient step on the smooth part with a proximal step on the rest:
+Why does this zero out weights? Look at the cost of moving one weight away from zero. With ridge, the penalty $\tfrac{\lambda}{2}w^2$ is almost flat near zero, so a tiny weight costs almost nothing, and weights rarely land at exactly zero. With the lasso, the penalty $\lambda|w|$ has a sharp corner at zero. Moving off zero costs $\lambda$ per unit right away. If the data can't pay that price, the weight stays at exactly zero.
 
-$$
-w_{k+1} = \operatorname{prox}_{\eta h}\big(w_k - \eta \nabla g(w_k)\big) .
-$$
+That corner is also the trouble. $|w|$ has no derivative at zero, so plain gradient descent doesn't apply.
 
-For the lasso this is $w_{k+1} = S_{\eta\lambda}\big(w_k - \eta X^\top(Xw_k - y)\big)$, called **ISTA**, the iterative shrinkage-thresholding algorithm. Whenever $\eta \leq 1/L$, the gradient step alone cannot increase $g$ by more than the proximal step can decrease $h$, so ISTA's objective never increases, and it inherits gradient descent's $O(1/k)$ convergence in objective value.
+### The condition at the answer
 
-**FISTA** applies Nesterov's extrapolation from lesson 3 to the same update, evaluating the gradient step at an extrapolated point $z_k$ instead of at $w_k$:
+At the lasso answer, one rule holds for each weight $w_i$. Let $g_i$ be entry $i$ of the squared-error gradient $X^\top(Xw - y)$.
 
-$$
-z_{k+1} = w_{k+1} + \frac{t_k - 1}{t_{k+1}}(w_{k+1} - w_k), \qquad
-t_{k+1} = \frac{1 + \sqrt{1+4t_k^2}}{2}, \qquad t_0 = 1 ,
-$$
+- If $w_i$ is not zero, then $g_i + \lambda \, \text{sign}(w_i) = 0$. The data's pull exactly balances the penalty.
+- If $w_i$ is zero, then $|g_i| \leq \lambda$. The data's pull is too weak to pay the price of moving off zero.
 
-with $w_{k+1} = S_{\eta\lambda}(z_k - \eta\nabla g(z_k))$. The sequence $t_k$ grows like $k/2$, and Nesterov's estimate-sequence argument, extended from the smooth case to this composite objective, gives $O(1/k^2)$ convergence — the same jump from linear to accelerated rates that momentum bought in lesson 3, now for a nonsmooth objective. Unlike ISTA, FISTA is not guaranteed to decrease every single step; the extrapolation can overshoot locally even while the overall rate is faster.
+These are called the KKT conditions. You can test any lasso solver against them.
 
-**Coordinate descent** offers a third route specific to the lasso: cycle through coordinates, holding every other one fixed, and solve each one-dimensional problem exactly. That one-dimensional problem is itself a soft-thresholding operation, applied to a partial residual rather than a full gradient step, with no step size to tune.
+## Soft thresholding
 
-## Constrained and penalised forms
+Soft thresholding is the one-number version of the lasso. Given a value $x$ and a threshold $t \geq 0$, it finds the $z$ that minimises $\tfrac{1}{2}(z - x)^2 + t|z|$. In words: stay close to $x$, but pay $t$ per unit of size. The answer is
 
-The penalised problem $\min_w \tfrac{1}{2}\lVert Xw-y\rVert^2 + \lambda \lVert w \rVert_p$ and the constrained problem $\min_{\lVert w \rVert_p \leq t} \tfrac{1}{2}\lVert Xw-y\rVert^2$ trace out the same curve of solutions as $\lambda$ or $t$ vary, for $p \in \{1, 2\}$: every $t$ on the constraint boundary corresponds to some $\lambda \geq 0$ giving the same minimiser, and conversely, though the correspondence has no closed form. Both stay in use because $\lambda$ is what an optimiser tunes, while $t$ reads directly as a budget on coefficient size.
+$$S_t(x) = \text{sign}(x) \, \max(|x| - t, \, 0)$$
+
+Read it aloud: move $x$ toward zero by $t$. If that would cross zero, stop at zero. Values with $|x| \leq t$ become exactly zero. This operation is called the proximal operator of $t|\cdot|$.
+
+```python
+z = np.sign(x) * np.maximum(np.abs(x) - t, 0.0)
+```
+
+With $t = 1$: $3 \to 2$, $-3 \to -2$, $0.5 \to 0$, $-0.5 \to 0$, $0 \to 0$, and $2 \to 1$.
+
+## ISTA: gradient step, then threshold
+
+ISTA handles the two parts of the lasso one at a time. It takes an ordinary gradient step on the squared error, then applies soft thresholding for the penalty:
+
+$$w_{k+1} = S_{\alpha\lambda}\!\left(w_k - \alpha \, X^\top(Xw_k - y)\right)$$
+
+Read it aloud: compute the gradient of the squared error, step downhill by $\alpha$ times it, then soft threshold every entry with threshold $\alpha\lambda$. Use step $\alpha = 1/L$, with $L$ the largest eigenvalue of $X^\top X$. With that step, the lasso loss never goes up.
+
+```python
+grad = X.T @ (X @ w - y)
+w = soft_threshold(w - step * grad, step * lam)
+```
+
+ISTA stands for iterative shrinkage-thresholding algorithm.
+
+## FISTA: ISTA with momentum
+
+FISTA adds Nesterov's look-ahead from lesson 3. It keeps a look-ahead point $z$, takes the ISTA step from $z$, and updates a momentum counter $t$ that starts at $t_0 = 1$:
+
+$$t_{k+1} = \frac{1 + \sqrt{1 + 4t_k^2}}{2}, \qquad z_{k+1} = w_{k+1} + \frac{t_k - 1}{t_{k+1}}\,(w_{k+1} - w_k)$$
+
+Read it aloud: $t$ grows by about one half each step. The fraction $(t_k - 1)/t_{k+1}$ is the momentum. It starts at 0 and creeps toward 1. The look-ahead point $z$ is the new point plus that fraction of the last move. The ISTA step at each iteration uses the gradient at $z$, not at $w$. Start with $z_0 = w_0$.
+
+```python
+w_new = soft_threshold(z - step * X.T @ (X @ z - y), step * lam)
+t_new = (1 + np.sqrt(1 + 4 * t ** 2)) / 2
+z = w_new + ((t - 1) / t_new) * (w_new - w)
+```
+
+After $k$ steps, ISTA's gap to the best loss shrinks like $1/k$. FISTA's shrinks like $1/k^2$, which is much faster. Unlike ISTA, FISTA's loss can tick up now and then.
+
+## A worked example by hand
+
+Use one feature and two examples: $X = \begin{bmatrix} 1 \\ 2 \end{bmatrix}$ and $y = (1, 2)$. Then $X^\top X = 5$ and $X^\top y = 5$, and the least squares weight is $1$.
+
+**Ridge with $\lambda = 1$.** Solve $(5 + 1)\,w = 5$, so $w = 5/6 \approx 0.8333$. The SVD route agrees: $s = \sqrt{5}$, $U^\top y = 5/\sqrt{5} = \sqrt{5}$, and $\sqrt{5} \cdot \sqrt{5}/(5 + 1) = 5/6$. The effective degrees of freedom is $5/(5 + 1) \approx 0.8333$.
+
+**One ISTA step with $\lambda = 1$.** Here $L = 5$, so the step is $\alpha = 0.2$. Start at $w_0 = 0$.
+
+1. The loss at $w_0$ is $\tfrac{1}{2}(1^2 + 2^2) + 0 = 2.5$.
+2. The gradient is $X^\top(Xw_0 - y) = 1 \cdot (-1) + 2 \cdot (-2) = -5$.
+3. The gradient step gives $0 - 0.2 \cdot (-5) = 1$.
+4. Soft threshold with $\alpha\lambda = 0.2$ gives $w_1 = 0.8$.
+5. The residuals are $(0.8 - 1, 1.6 - 2) = (-0.2, -0.4)$, so the loss is $\tfrac{1}{2}(0.04 + 0.16) + 0.8 = 0.9$.
+
+Check the KKT rule: the gradient at $0.8$ is $1(-0.2) + 2(-0.4) = -1$, and $-1 + 1 \cdot \text{sign}(0.8) = 0$. So $0.8$ is the exact lasso answer. For FISTA's first step, $t_1 = (1 + \sqrt{5})/2 \approx 1.618$ and the momentum is $(1 - 1)/1.618 = 0$, so it matches ISTA.
+
+## Build it step by step
+
+The checks test the functions in this order.
+
+1. **`soft_threshold(x, thresh)`** returns an array the same shape as `x`. Use `np.sign`, `np.abs`, and `np.maximum`. Common mistake: using `np.max`, which returns one number for the whole array.
+2. **`ridge_closed_form(X, y, lam)`** returns `w` with shape `(d,)`. Build `X.T @ X + lam * np.eye(d)` and call `np.linalg.solve`. Common mistake: using `np.linalg.inv`, which is slower and less accurate.
+3. **`effective_degrees_of_freedom(s, lam)`** returns a float when `lam` is a single number, and an array of shape `(m,)` when it is an array. Convert with `np.asarray(lam, dtype=float)` and branch on `.ndim == 0`. For the array case, broadcast to shape `(m, r)` and `.sum(axis=-1)`. Common mistake: summing over the wrong axis, which gives one value per singular value.
+4. **`ridge_svd_path(U, s, Vt, y, lambdas)`** returns an array of shape `(m, d)`, one row of weights per penalty. Compute `U.T @ y` once, build the `(m, r)` shrinkage factors by broadcasting, multiply, then `@ Vt`. Common mistake: dividing by `s` alone and forgetting the `+ lambda`.
+5. **`ista(X, y, lam, step, iters, w0=None)`** returns `(w, history)`. `w` has shape `(d,)`. `history` has shape `(iters + 1,)`, where `history[k]` is the lasso loss after `k` steps and `history[0]` is the loss at the start. Start from `np.zeros(d)` when `w0` is `None`. Common mistake: thresholding with `lam` instead of `step * lam`.
+6. **`fista(X, y, lam, step, iters, w0=None)`** returns `(w, history)` in the same format. Keep `w`, `z`, and `t`. Record the loss at `w`, not at `z`. Common mistake: taking the gradient at `w` instead of `z`.
 
 ## Cost and scaling
 
-| Method | Per-iteration cost | Iterations for objective accuracy $\varepsilon$ |
-|---|---|---|
-| Ridge, closed form | One $d \times d$ solve, $O(nd^2 + d^3)$ | Exact, one solve |
-| Ridge path over $m$ values of $\lambda$, from one SVD | $O(nd^2)$ once, then $O(dr)$ per $\lambda$ | Exact, $m$ cheap evaluations |
-| ISTA | One matrix-vector product each way, $O(nd)$ | $O(1/\varepsilon)$ |
-| FISTA | One matrix-vector product each way, $O(nd)$ | $O(1/\sqrt{\varepsilon})$ |
-| Coordinate descent, one pass | $O(nd)$ for the full pass | Problem-dependent, often a small constant number of passes |
+The table summarises the work each piece needs, for $X$ of shape $n \times d$.
 
-`ridge_svd_path` exists separately from `ridge_closed_form` because of the second row: the SVD costs the same $O(nd^2)$ as one closed-form solve, and every additional $\lambda$ after that costs only $O(dr)$, a rescaling by singular value rather than a fresh solve. Cross-validating over fifty values of $\lambda$ is fifty cheap rescalings, not fifty solves.
+| Task | Rough work |
+|---|---|
+| Ridge, one $\lambda$ | $nd^2$ to form $X^\top X$, plus $d^3$ to solve |
+| Ridge, $m$ values of $\lambda$ | one SVD (a few times $nd^2$), plus about $m \cdot d \cdot r$ |
+| One ISTA or FISTA step | about $2nd$ for the gradient |
+| Soft thresholding | $d$, one pass over the weights |
+
+The SVD path pays off as soon as you try more than a handful of penalties. ISTA and FISTA never form $X^\top X$, so they scale to large $d$. FISTA needs far fewer steps when the features are correlated.
 
 ## Where this breaks
 
-**Correlated features split the credit arbitrarily.** When two columns of $X$ are highly correlated, the lasso's optimum is not unique in which one receives the nonzero coefficient — the KKT condition can be satisfied by either, or by a split. Ridge's strictly convex penalty spreads the coefficient evenly between them instead. The elastic net, a mix of both penalties, is the standard response.
-
-**The lasso's variable selection is not automatically consistent.** Recovering the exact support of a sparse true $w$ needs an incoherence condition on $X$ beyond what makes least squares well posed. Without it, the lasso can include irrelevant variables or exclude relevant ones even as $n \to \infty$.
-
-**A fixed step size needs $L$.** Both ISTA and FISTA need $\eta \leq 1/L$ with $L = \lambda_{\max}(X^\top X)$. Computing $L$ exactly for large $d$ costs as much as the SVD path above, so practical implementations estimate it with a few power-iteration steps instead.
-
-**Neither penalty is scale-invariant.** Both $\lVert w \rVert_2^2$ and $\lVert w \rVert_1$ treat every coordinate identically, so a feature's units determine how much penalty it absorbs. Standardising columns before fitting, already necessary for conditioning in lesson 2, is required here too.
+- **Features on different scales.** The penalty treats every weight the same, so a feature in small units gets punished unfairly. Standardise every column first.
+- **Penalising the intercept.** You usually don't want to shrink the bias. Centre $X$ and $y$ so the model needs no intercept, or leave it out of the penalty.
+- **Choosing $\lambda$.** Too small and you overfit, too large and every weight goes to zero. Pick it on held-out data, as in lesson 1.
+- **Correlated features and the lasso.** Among several near-copies, the lasso tends to keep one at random and zero the rest. Ridge spreads weight across all of them.
+- **Step too big.** ISTA with a step above $1/L$ can let the loss rise. Estimate $L$ with `np.linalg.eigvalsh(X.T @ X).max()`.
 
 ## The exercise
 
-You build both regularisers along the two axes this lesson opened: the ridge path computed cheaply from one factorisation, and the lasso solved by proximal gradient descent with and without acceleration.
+You build six functions. `ridge_closed_form`, `ridge_svd_path`, and `effective_degrees_of_freedom` cover ridge. `soft_threshold`, `ista`, and `fista` cover the lasso.
 
-Write `ridge_closed_form(X, y, lam)` as a direct solve, then `ridge_svd_path(U, s, Vt, y, lambdas)`, which reuses one SVD to return the ridge solution at every requested $\lambda$, and `effective_degrees_of_freedom(s, lam)`. Write `soft_threshold(x, thresh)`, the proximal operator derived above, then `ista(X, y, lam, step, iters, w0)` and `fista(X, y, lam, step, iters, w0)`, each returning the final coefficient vector alongside the objective value at every iteration.
-
-The checks confirm `ridge_closed_form` against an independently constructed augmented least-squares solve, and confirm `ridge_svd_path` reproduces it at every $\lambda$ in a path rather than only at one. They confirm `soft_threshold` is the exact proximal operator by comparing it against a fine grid search over the scalar objective it minimises, and confirm ISTA's objective never increases while FISTA's falls faster than ISTA's over the same number of steps on an ill-conditioned design — the $O(1/k)$ versus $O(1/k^2)$ gap made visible on one specific problem. The last check verifies the point of the lasso section: that the coefficient vector `fista` returns satisfies the KKT stationarity condition derived above, at every coordinate, zero or not.
+The checks confirm that `soft_threshold` gives the values in the example above and truly minimises $\tfrac{1}{2}(z - x)^2 + t|z|$. `ridge_closed_form` must match an independent solve, and `ridge_svd_path` must match `ridge_closed_form` at every $\lambda$. `effective_degrees_of_freedom` must equal the rank at $\lambda = 0$ and fall near 0 for huge $\lambda$. ISTA's loss must never go up. FISTA must reach a clearly lower loss than ISTA in 80 steps on correlated data, and its answer must satisfy the KKT conditions.

@@ -2,14 +2,14 @@
 title: Self-attention
 slug: 25-self-attention
 part: "Part 5 — Transformers"
-summary: Scaled dot-product attention, multi-head projection, and causal masking, with the reasoning behind each.
-minutes: 45
+summary: Build scaled dot-product attention, multi-head attention, and a causal mask in numpy, then backpropagate through them.
+minutes: 60
 gpu: false
 objectives:
-  - Explain why dividing by the square root of the key dimension keeps attention scores from saturating the softmax.
-  - Write multi-head attention as per-head projection and concatenation, and explain why splitting into heads leaves the flop count unchanged.
-  - Explain why causal masking must happen before the softmax rather than after.
-  - State the time and memory cost of self-attention and why it treats a sequence as an unordered set.
+  - Compute scaled dot-product attention and explain why the scores are divided by the square root of the key width.
+  - Build multi-head attention by slicing the projections into heads and joining the results.
+  - Build a causal mask and explain why it is added before the softmax.
+  - Compute the flop count of one attention layer and explain why it grows with the square of the sequence length.
 prereqs:
   - 24-seq2seq-attention
 exercise: 25-self-attention
@@ -17,189 +17,304 @@ exercise: 25-self-attention
 
 # Self-attention
 
-The previous lesson let a decoder query a separate encoder's states. Self-attention
-removes that separation: the query, the keys, and the values all come from the
-same sequence, so every position can look at every other position, including
-itself, using the same machinery. That single change removes the sequential
-dependency of a recurrent cell. A recurrent cell's state at time $t$ needs the
-state at time $t-1$ to exist first, but self-attention computes every
-position's output from the same fixed set of keys and values, so every
-position's output is computable in parallel once the projections are done.
+In the previous lesson, a decoder looked back at a separate encoder. Self-attention
+uses the same lookup, but every word in a sentence looks at every other word in
+the same sentence. Each word asks a question, every word offers an answer, and
+each word collects a blend of the answers that fit its question best.
 
-Running attention over a whole sequence exposes two problems. The score
-$q_i^\top k_j$ grows with the dimension of $q$ and $k$, and an oversized score
-pushes the softmax toward a near one-hot output with no useful gradient — one
-rescaling fixes it. And a self-attending sequence carries no notion of order:
-permute the input and the output permutes the same way, a limitation the
-mechanism itself cannot fix. This lesson derives the scale, builds multi-head
-attention on top of single-head attention, and works out what masking future
-positions costs.
+This matters because a recurrent network reads one word at a time. It can't
+start word 10 until it has finished word 9. Self-attention has no such chain.
+Every position does its lookup at the same moment, so a GPU can compute the
+whole sentence in parallel.
+
+In this lesson you build that lookup in numpy, step by step. You add a fix that
+keeps the numbers well behaved, split the work into several heads, hide the
+future from each word, and count what it all costs.
 
 ## What you already know
 
-- Attention as a query, keys, and values: scores between a query and every
-  key, a softmax over those scores, and a context vector as the resulting
-  weighted average of the values.
-- For independent, mean-zero random variables $X$ and $Y$,
-  $\operatorname{Var}(XY) = \mathbb{E}[X^2]\mathbb{E}[Y^2]$.
-- The softmax Jacobian is $\operatorname{diag}(p) - pp^{\top}$ for
-  $p = \operatorname{softmax}(z)$.
-- A matrix product $AB$ with $A \in \mathbb{R}^{p \times q}$,
-  $B \in \mathbb{R}^{q \times r}$ costs $2pqr$ flops.
-- Concatenating vectors is linear whenever each concatenated block's own
-  transform is linear.
+- Attention scores a query against every key, turns the scores into weights
+  with a softmax, and returns the weighted average of the values.
+- The softmax turns a list of numbers into positive weights that sum to one.
+- A matrix product `A @ B` multiplies rows of `A` by columns of `B`.
+- The backward pass pushes a gradient from a layer's output back to its inputs.
+- A gradient is the list of slopes of the loss with respect to each input.
 
 ## Scaled dot-product attention
 
-For a query $q \in \mathbb{R}^{d_k}$ against keys $k_1, \dots, k_T \in
-\mathbb{R}^{d_k}$ and values $v_1, \dots, v_T \in \mathbb{R}^{d_v}$, stack the
-keys and values as rows of $K \in \mathbb{R}^{T \times d_k}$ and
-$V \in \mathbb{R}^{T \times d_v}$, and define
+Think of a library. Your query is what you're looking for. Each book has a key,
+its label on the spine, and a value, its contents. You compare your query with
+every label, and you take more from the books whose labels match best.
+
+In self-attention the sequence has $T$ positions (tokens). Each position is a
+row of $X$, a $T \times d$ matrix, where $d$ is the model width. Three learned
+weight matrices turn each row into a query, a key, and a value:
 
 $$
-\operatorname{Attention}(Q, K, V) = \operatorname{softmax}\!\left(
-\frac{QK^{\top}}{\sqrt{d_k}}
-\right) V ,
+Q = X W_Q, \qquad K = X W_K, \qquad V = X W_V
 $$
 
-applying the softmax along each row so every query's weights sum to one.
-Self-attention sets $Q$, $K$, and $V$ to three learned linear projections of
-the same sequence $X \in \mathbb{R}^{T \times d}$: $Q = XW_Q$, $K = XW_K$,
-$V = XW_V$.
+Read aloud: the query matrix $Q$ is the input $X$ times the weight matrix
+$W_Q$, and the same for keys and values. Each result has one row per position.
 
-The $\sqrt{d_k}$ divides out a size effect, not a modelling choice. Suppose
-the entries of $q$ and $k$ are independent, mean zero, and unit variance, a
-reasonable model for freshly initialised projections of normalised inputs.
-Each of the $d_k$ terms in $q^{\top}k = \sum_l q_l k_l$ then has variance one,
-so the dot product itself has variance $d_k$, and its typical magnitude grows
-with $\sqrt{d_k}$. Feed scores that large into a softmax and the output
-saturates near a one-hot vector, where the softmax Jacobian
-$\operatorname{diag}(p) - pp^{\top}$ is close to zero and gradients stop
-flowing. Dividing every score by $\sqrt{d_k}$ restores unit variance
-regardless of $d_k$, which keeps the softmax's gradient away from zero no
-matter how wide the projections are.
+```python
+Q = X @ Wq   # (T, d_k)
+K = X @ Wk   # (T, d_k)
+V = X @ Wv   # (T, d_v)
+```
+
+Then attention itself is one line of maths:
+
+$$
+\operatorname{Attention}(Q, K, V) = \operatorname{softmax}\!\left(\frac{Q K^{\top}}{\sqrt{d_k}}\right) V
+$$
+
+Read it piece by piece:
+
+- $Q K^{\top}$ is a $T \times T$ table of scores. Entry $(i, j)$ is the dot
+  product of query $i$ with key $j$: how well position $j$ matches what
+  position $i$ is looking for.
+- $d_k$ is the width of each query and key. You divide every score by
+  $\sqrt{d_k}$.
+- The softmax runs along each row, so each position's weights are positive and
+  sum to one.
+- Multiplying by $V$ gives each position a weighted average of the value rows.
+
+```python
+scores = Q @ K.T / np.sqrt(Q.shape[-1])   # (T, T)
+weights = softmax(scores, axis=-1)        # each row sums to 1
+output = weights @ V                      # (T, d_v)
+```
+
+### Why divide by the square root of d_k
+
+A dot product adds up $d_k$ products. If each query and key entry is a random
+number with average 0 and spread 1, the sum has a variance of $d_k$. Variance
+measures how spread out a number is, so the typical size of a score grows like
+$\sqrt{d_k}$. With $d_k = 64$, scores of size 8 are common.
+
+Large scores are bad for the softmax. One score wins by a mile, its weight
+goes to almost 1, and every other weight goes to almost 0. At that point the
+softmax is flat: nudging a score barely changes the output, so the gradient is
+close to zero and learning stalls. Dividing by $\sqrt{d_k}$ brings the typical
+score back to size 1, whatever the width.
+
+### The softmax, safely
+
+The softmax of a row $z$ is $e^{z_j}$ divided by the sum of $e^{z}$ over the
+row. Computing $e^{900}$ overflows to infinity. The fix: subtract the row's
+largest value first. That doesn't change the answer, because the same factor
+cancels from top and bottom, but now the biggest exponent is $e^0 = 1$.
+
+```python
+shifted = z - z.max(axis=axis, keepdims=True)
+e = np.exp(shifted)
+p = e / e.sum(axis=axis, keepdims=True)
+```
+
+### A worked example
+
+Take $T = 2$ positions with $d_k = 2$, and let $Q = K = V = X$, where
+
+$$
+X = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}
+$$
+
+1. Scores: $Q K^{\top}$ is the identity matrix. Divide by $\sqrt{2} \approx 1.4142$
+   to get $\begin{bmatrix} 0.7071 & 0 \\ 0 & 0.7071 \end{bmatrix}$.
+2. Softmax of row 0, $[0.7071, 0]$: $e^{0.7071} = 2.0281$ and $e^0 = 1$. The
+   sum is $3.0281$, so the weights are $[0.6698, 0.3302]$. Row 1 is the mirror
+   image, $[0.3302, 0.6698]$.
+3. Output: row 0 is $0.6698 \cdot [1, 0] + 0.3302 \cdot [0, 1] = [0.6698, 0.3302]$.
+   Row 1 is $[0.3302, 0.6698]$.
+
+Each position mostly keeps itself, but blends in a third of its neighbour.
 
 ## Multi-head attention
 
-A single attention operation computes one weighted average per query, using
-one notion of similarity. Multi-head attention runs $h$ independent copies of
-scaled dot-product attention on lower-dimensional projections, letting each
-head specialise:
+One attention step has one idea of "similar". A word might care about several
+things at once: which word is its subject, which word came right before it,
+which words share its topic. Multi-head attention runs $h$ smaller attentions,
+called heads, side by side. Each head can learn a different idea of similarity.
+
+Here is the recipe. Project the whole input once with $(d, d)$ matrices. Cut
+the columns of $Q$, $K$, and $V$ into $h$ equal slices of width $d_k = d / h$.
+Run attention on each slice. Glue the $h$ outputs back together along the
+columns, and multiply by one more matrix, $W_O$, which mixes the heads:
 
 $$
-\begin{aligned}
-\text{head}_i &= \operatorname{Attention}(XW_Q^{(i)}, XW_K^{(i)}, XW_V^{(i)}), \\
-\operatorname{MultiHead}(X) &= \operatorname{Concat}(\text{head}_1, \dots, \text{head}_h)\, W_O ,
-\end{aligned}
+\operatorname{MultiHead}(X) = \operatorname{Concat}(\text{head}_1, \dots, \text{head}_h)\, W_O
 $$
 
-with each $W_Q^{(i)}, W_K^{(i)}, W_V^{(i)} \in \mathbb{R}^{d \times d_k}$ using
-$d_k = d/h$, so the concatenated heads have total width $h d_k = d$ again,
-and $W_O \in \mathbb{R}^{d \times d}$ mixes the heads back together. An
-implementation folds the $h$ per-role projections into one $(d, d)$ matrix and
-reshapes the result into $h$ blocks of width $d_k$, which is the identical
-arithmetic to running the heads separately.
+Read aloud: head $i$ is ordinary attention on the $i$-th slice of columns.
+Concatenate means placing the head outputs side by side, which gives a
+$T \times d$ matrix again. $W_O$ is $d \times d$.
 
-Splitting one wide head into $h$ narrow ones changes nothing about the
-compute budget: $h \cdot d \cdot d_k = d^2$ regardless of $h$, so the four
-projections still cost $8Td^2$ flops between them, and the per-head score
-computation still totals $4T^2d$ flops summed over every head. Doubling the
-head count buys each head a narrower, more specialised notion of similarity
-at no extra cost — only the representation changes, never the flop count.
+```python
+d_k = d // heads
+lo, hi = i * d_k, (i + 1) * d_k
+out_i, _ = scaled_dot_product_attention(Q[:, lo:hi], K[:, lo:hi], V[:, lo:hi], mask)
+out = np.concatenate(head_outputs, axis=-1) @ Wo
+```
+
+Each head divides its scores by $\sqrt{d_k}$ using its own slice width, not the
+full $d$. With one head, the slice is the whole matrix, so multi-head attention
+with `heads=1` equals single-head attention followed by $W_O$.
+
+Splitting into heads costs nothing extra. You do the same projections, and the
+$h$ narrow score tables together take the same work as one wide one.
 
 ## Causal masking
 
-Autoregressive models must not let position $t$ see positions
-$t+1, \dots, T$, because those positions do not exist yet at generation time.
-Add a mask to the scores before the softmax:
+A language model predicts the next word. When it writes word 3, words 4 and
+onward don't exist yet. So in training, position $t$ must not peek at any
+position after $t$. It's like a test where you cover the answers below the
+line you're on.
+
+You block the future by adding a mask $M$ to the scores before the softmax:
 
 $$
-\operatorname{Attention}(Q,K,V,\text{mask}) = \operatorname{softmax}\!\left(
-\frac{QK^{\top}}{\sqrt{d_k}} + M
-\right) V, \qquad
-M_{t,j} = \begin{cases} 0 & j \le t \\ -\infty & j > t \end{cases} .
+\operatorname{softmax}\!\left(\frac{Q K^{\top}}{\sqrt{d_k}} + M\right) V,
+\qquad
+M_{t,j} = \begin{cases} 0 & j \le t \\ -\infty & j > t \end{cases}
 $$
 
-Adding $-\infty$ before the exponential sends $e^{-\infty} = 0$, so the
-softmax renormalises over only the allowed positions. Masking has to happen
-before the softmax, not after: the softmax's denominator would otherwise sum
-over every position, including the ones a later step zeros out, leaving the
-surviving weights summing to less than one and understating every attended
-position's true share.
+Read aloud: the mask is 0 wherever position $t$ may look (itself and
+everything before it) and minus infinity wherever it looks ahead. Since
+$e^{-\infty} = 0$, a forbidden position gets weight exactly 0, and the softmax
+shares the full weight of 1 among the allowed positions.
 
-## Order and permutation equivariance
+```python
+mask = np.zeros((T, T))
+mask[np.triu_indices(T, k=1)] = -np.inf   # strictly above the diagonal
+```
 
-Attention has no notion of order built in. Permute the rows of $X$ and the
-same permutation $P$ carries through to $Q$, $K$, and $V$, because each is a
-row-wise linear map. A row-wise softmax commutes with a row permutation, so
-$\operatorname{Attention}(PQ, PK, PV) = P \cdot \operatorname{Attention}(Q,K,V)$:
-self-attention applied to a reordered sequence returns the same outputs,
-reordered the same way, with no trace of the original order surviving
-anywhere in the computation. A mechanism with this property cannot recover
-which input arrived at which position on its own, which is why every
-practical use of self-attention adds positional information to $X$ before
-projecting, the subject of the next lesson.
+For $T = 3$, the mask is
+
+$$
+M = \begin{bmatrix} 0 & -\infty & -\infty \\ 0 & 0 & -\infty \\ 0 & 0 & 0 \end{bmatrix}
+$$
+
+Apply a $T = 2$ mask to the worked example. Row 0 becomes $[0.7071, -\infty]$,
+so its weights are $[1, 0]$ and its output is $[1, 0]$. Row 1 has nothing
+masked, so it stays $[0.3302, 0.6698]$.
+
+Why before the softmax and not after? If you zeroed the weights after the
+softmax, the denominator would still include the future positions. The weights
+left behind would sum to less than 1, and the future would still have leaked
+into them through that sum.
+
+## Order doesn't exist yet
+
+Shuffle the rows of $X$. Each of $Q$, $K$, and $V$ is computed row by row, so
+their rows shuffle the same way. The softmax works row by row too. The result:
+without a mask, the output is the same set of rows, shuffled in the same
+order. Self-attention on its own can't tell "dog bites man" from "man bites
+dog". The next lesson fixes this by adding position information to $X$.
+
+## Backward pass
+
+To train, you need the gradient of the loss with respect to $Q$, $K$, and $V$.
+Call the upstream gradient on the output `dout` (shape $T \times d_v$). Work
+backwards through each forward line, one at a time:
+
+1. `output = weights @ V`. So `dV = weights.T @ dout` and
+   `dweights = dout @ V.T`.
+2. `weights = softmax(scores)`. For each row, the softmax gradient is
+   `dscores = weights * (dweights - rowsum)`, where `rowsum` is the sum over
+   the row of `weights * dweights`.
+3. `scores = Q @ K.T / sqrt(d_k)`. So `dQ = dscores @ K / sqrt(d_k)` and
+   `dK = dscores.T @ Q / sqrt(d_k)`.
+
+The mask has no gradient of its own. Masked positions have weight 0, so their
+`dscores` is 0 too.
+
+## Build it step by step
+
+The checks test your functions in this order.
+
+1. **`causal_mask(T)`** returns a $(T, T)$ float array: 0 on and below the
+   diagonal, `-np.inf` strictly above. Start with `np.zeros((T, T))` and set
+   the upper triangle with `np.triu_indices(T, k=1)`. Common mistake: using
+   `k=0`, which also masks the diagonal, so position 0 has nothing to look at
+   and its row becomes all NaN.
+2. **`softmax(x, axis=-1)`** takes any shape and returns the same shape. Use
+   `np.max`, `np.exp`, and `np.sum` along `axis`, all with `keepdims=True`.
+   Common mistake: forgetting `keepdims`, so the division broadcasts along the
+   wrong axis.
+3. **`scaled_dot_product_attention(q, k, v, mask=None)`** takes `q` of shape
+   $(T_q, d_k)$, `k` of $(T_k, d_k)$, and `v` of $(T_k, d_v)$. It returns a
+   tuple `(output, weights)` with shapes $(T_q, d_v)$ and $(T_q, T_k)$. Take
+   $d_k$ from `q.shape[-1]`. Common mistake: adding the mask after the softmax.
+4. **`multi_head_attention(x, Wq, Wk, Wv, Wo, heads, mask=None)`** takes `x`
+   of shape $(T, d)$ and four $(d, d)$ matrices, and returns $(T, d)$. Project,
+   loop over heads slicing columns, call your attention function with the same
+   mask for every head, concatenate with `np.concatenate(..., axis=-1)`, then
+   multiply by `Wo`. Common mistake: slicing rows instead of columns.
+5. **`attention_backward(dout, q, k, v, mask=None)`** recomputes the forward
+   pass, then follows the three backward steps above. It returns `(dq, dk, dv)`
+   with the same shapes as `q`, `k`, and `v`. Common mistake: forgetting the
+   `1 / sqrt(d_k)` factor on `dq` and `dk`.
+6. **`attention_flops(T, d, heads)`** returns the integer
+   `8*T*d**2 + 4*T**2*d`. The `heads` argument is accepted but not used.
 
 ## Cost and scaling
 
-For a sequence of length $T$ and model width $d$ split across $h$ heads, the
-following costs apply.
+A flop is one multiply or one add. Multiplying a $p \times q$ matrix by a
+$q \times r$ matrix takes $2pqr$ flops. Count the pieces of one layer:
 
-| Quantity | Cost | Where it shows up |
+| Piece | Flops | Grows with |
 |---|---|---|
-| $Q$, $K$, $V$, $O$ projections | $8Td^2$ flops | Linear in sequence length, quadratic in width |
-| Score matrix and weighted sum | $4T^2 d$ flops | Quadratic in sequence length, linear in width |
-| Score matrix storage | $O(hT^2)$ memory | One $T \times T$ matrix per head, kept for the backward pass |
-| Activations for backpropagation | $O(Td)$ memory | $Q$, $K$, $V$, and the output, per layer |
+| Four projections: $Q$, $K$, $V$, and $W_O$ | $4 \times 2Td^2 = 8Td^2$ | length times width squared |
+| Scores $QK^{\top}$ plus weighted sum with $V$ | $2 \times 2T^2 d = 4T^2 d$ | length squared times width |
 
-The $4T^2 d$ term dominates once $T$ exceeds $2d$, so doubling the sequence
-length quadruples the dominant cost while doubling the model width only
-doubles it — the reverse of a recurrent cell, whose cost is linear in $T$ but
-whose sequential dependency was the real bottleneck. Self-attention trades an
-$O(T^2)$ compute bill for direct, one-step access between every pair of
-positions and full parallelism across time.
+Add them to get the total:
+
+$$
+\text{flops} = 8 T d^2 + 4 T^2 d
+$$
+
+Read aloud: eight times length times width squared, plus four times length
+squared times width. The number of heads isn't in it. For $T = 16$ and $d = 4$,
+that's $8 \cdot 16 \cdot 16 + 4 \cdot 256 \cdot 4 = 2048 + 4096 = 6144$.
+
+```python
+flops = 8 * T * d**2 + 4 * T**2 * d
+```
+
+Once $T$ is larger than $2d$, the second term wins. Doubling the sequence
+length then roughly quadruples the cost. Memory grows the same way: each head
+keeps a $T \times T$ weight table for the backward pass.
 
 ## Where this breaks
 
-**Quadratic cost at long context.** The $T^2$ term makes attention the
-dominant cost once sequences reach the thousands of tokens, both in compute
-and in the memory needed to hold every head's $T \times T$ score matrix for
-the backward pass. Sparse and linear-time approximations to attention trade
-exactness for sub-quadratic scaling.
-
-**No sense of order without help.** Permutation equivariance is exact, so a
-sequence with no positional signal added is indistinguishable from any
-reordering of it. Every architecture built on self-attention injects
-position from outside the attention mechanism itself.
-
-**One layer, one hop.** A single layer computes one convex combination of
-the value vectors per position, chosen by a content-based similarity to that
-position's query. It copies, averages, and routes information between any
-two positions in one step, but it cannot compose two such lookups on its own:
-attending to "the token before the token this position matches" needs the
-result of one lookup to feed a second, which is exactly what stacking layers
-provides.
+- **Long sequences get expensive fast.** The $T^2$ term dominates at thousands
+  of tokens, in both time and memory. People use tricks that compute attention
+  in tiles without storing the full table, or approximate attention with
+  cheaper patterns.
+- **No sense of order.** As you saw, shuffled input gives shuffled output.
+  Every real model adds position information to the input.
+- **One layer, one lookup.** A single layer can copy or average information
+  between any two positions in one step. It can't chain two lookups, like
+  "find the word before the word that matches me". Stacking layers gives the
+  model that chain.
+- **A fully masked row.** If a row of the mask is all $-\infty$, the softmax
+  divides 0 by 0 and returns NaN. A causal mask always leaves the diagonal
+  open, so this only happens with other masks.
 
 ## The exercise
 
-You implement scaled dot-product attention, multi-head attention, and the
-supporting pieces from this lesson. Write `softmax(x, axis=-1)`, a numerically
-stable softmax along an arbitrary axis, and
-`scaled_dot_product_attention(q, k, v, mask=None)`, applying an additive mask
-before the softmax when one is given. Write `multi_head_attention(x, Wq, Wk,
-Wv, Wo, heads, mask=None)` for a single sequence `x`, splitting the projected
-`Q`, `K`, `V` into `heads` equal blocks along their last axis before running
-attention per head and recombining. Write `causal_mask(T)`, returning the
-$T \times T$ additive mask from this lesson, and `attention_flops(T, d,
-heads)`, returning the hand-computed flop count $8Td^2 + 4T^2d$. Finally write
-`attention_backward(dout, q, k, v, mask=None)` for the single-head case,
-returning the gradient with respect to `q`, `k`, and `v`.
+You build self-attention from its parts: `causal_mask`, `softmax`,
+`scaled_dot_product_attention`, `multi_head_attention`, `attention_backward`,
+and `attention_flops`. Everything works on a single sequence with no batch
+dimension.
 
-The checks verify that `softmax` stays finite and sums to one at logits large
-enough to overflow a naive implementation, that the causal mask makes a given
-position's output unchanged when a later position in the input is perturbed,
-that one-head multi-head attention exactly reproduces single-head attention,
-that permuting the rows of the input permutes the rows of the output
-identically, that `attention_backward` matches `mlcheck.finite_difference`, and
-that `attention_flops` matches the hand-computed value and stays unchanged
-across different head counts at fixed `T` and `d`.
+The checks confirm that the mask has the right pattern, that `softmax` stays
+finite at logits of 900 and sums to one along the axis you ask for, and that
+attention weights form valid rows. They check that changing later positions
+never changes earlier outputs under the causal mask, that one-head multi-head
+attention matches single-head attention times `Wo`, and that shuffling the
+input shuffles the output the same way. Finally, they compare
+`attention_backward` against finite differences, a numerical estimate of the
+gradient, and check that `attention_flops` matches the formula for every head
+count.

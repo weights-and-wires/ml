@@ -2,14 +2,14 @@
 title: PCA and the SVD
 slug: 13-pca-and-svd
 part: "Part 2 — Classical machine learning"
-summary: Maximum-variance projection, minimum reconstruction error, and probabilistic PCA are the same subspace, computed by the SVD.
-minutes: 45
+summary: Find the directions your data varies most along, using the SVD, power iteration, and a probabilistic version fitted by EM.
+minutes: 65
 gpu: false
 objectives:
-  - State the two definitions of PCA and explain why they select the same subspace.
-  - Compute PCA from the SVD of the centred data matrix, and convert singular values to eigenvalues.
-  - Use the Eckart-Young-Mirsky theorem to predict reconstruction error without touching the data twice.
-  - State the EM updates for probabilistic PCA and explain why the maximum likelihood solution recovers the PCA subspace.
+  - Centre data and compute principal components, scores, and explained variance from the SVD.
+  - Reconstruct data from k components, and predict the reconstruction error from the singular values.
+  - Build power iteration to find the top eigenvector, and explain why the eigenvalue gap sets its speed.
+  - Fit probabilistic PCA with EM, and check that its log-likelihood never goes down.
 prereqs:
   - 02-linear-regression
 exercise: 13-pca-and-svd
@@ -17,274 +17,229 @@ exercise: 13-pca-and-svd
 
 # PCA and the SVD
 
-Principal component analysis answers a question none of the supervised
-methods so far can ask. Given only $X$, with no labels, which directions in
-feature space carry the data's structure, and which are noise you can
-discard? You can pose that question two ways: which projection keeps the
-most variance, or which projection loses the least information. Both
-questions have the same answer, and that answer is a subspace the singular
-value decomposition already computes. The factorisation lesson 2 used to
-solve least squares stably is, applied to the data matrix itself, principal
-component analysis.
+So far every model had labels to learn from. Principal component analysis (PCA) works with the data alone. It asks: along which directions does the data actually spread out, and which directions are mostly noise you could throw away?
 
-This lesson shows why the two definitions of PCA agree, ties the resulting
-eigenproblem to the SVD, states the theorem that makes truncation provably
-optimal, and extends the model to a probabilistic version that lands on the
-same subspace from a different starting point.
+Think of a cloud of points shaped like a flat pancake floating in 3D. Almost all of the spread lies in the plane of the pancake. If you describe each point by its two coordinates in that plane, you lose very little. PCA finds that plane for you, in any number of dimensions.
+
+The tool that does the work is the singular value decomposition (SVD), which you met when solving least squares. This lesson shows how to read PCA straight off the SVD, how to find the top direction with a simple loop called power iteration, and how a probabilistic version of PCA lands on the same answer.
 
 ## What you already know
 
-- Every real $n \times d$ matrix has an SVD $X = U\Sigma V^{\top}$, with $U$
-  and $V$ having orthonormal columns and $\Sigma$ diagonal and nonnegative.
-- A symmetric matrix has a real eigendecomposition with orthonormal
-  eigenvectors, by the spectral theorem.
-- The trace of a matrix equals the sum of its eigenvalues, and is invariant
-  under conjugation by an orthogonal matrix.
-- Maximising a quadratic form over the unit sphere, $\max_{\lVert w \rVert = 1} w^{\top}Aw$
-  for symmetric $A$, is solved by the top eigenvector of $A$.
+- Any $n$-by-$d$ matrix $X$ factors as $X = U S V^{\top}$, the SVD. The columns of $U$ and $V$ are unit length and at right angles to each other, and $S$ is diagonal with nonnegative entries $s_1 \ge s_2 \ge \ldots$, the singular values.
+- An eigenvector $v$ of a square matrix $A$ satisfies $Av = \lambda v$: multiplying by $A$ only stretches it, by the eigenvalue $\lambda$.
+- The variance of a list of numbers is the average squared distance from their mean.
+- The norm of a vector, $\lVert v \rVert$, is its length, `np.linalg.norm(v)`.
 
-## Two definitions, one subspace
+## Step 1: centre the data
 
-Take centred data $x_1, \ldots, x_n \in \mathbb{R}^d$ (mean zero; centring is
-addressed below), with sample covariance
-$\hat{\Sigma} = \frac{1}{n-1}\sum_i x_i x_i^{\top}$. PCA looks for a
-$k$-dimensional subspace, represented by a matrix $V \in \mathbb{R}^{d \times k}$
-with orthonormal columns ($V^{\top}V = I_k$).
-
-**Maximum variance** chooses $V$ to maximise the variance of the projected
-data, $\frac{1}{n-1}\sum_i \lVert V^{\top}x_i \rVert^2 = \operatorname{tr}(V^{\top}\hat{\Sigma}V)$.
-**Minimum reconstruction error** chooses $V$ to minimise the squared error of
-approximating each $x_i$ by its projection back out of the subspace,
-$\sum_i \lVert x_i - VV^{\top}x_i \rVert^2$.
-
-These look like different objectives. They are the same one. Pythagoras
-gives $\lVert x_i \rVert^2 = \lVert V^{\top}x_i \rVert^2 + \lVert x_i - VV^{\top}x_i \rVert^2$
-for any orthonormal $V$, because $VV^{\top}x_i$ is the orthogonal projection
-of $x_i$ onto $\operatorname{range}(V)$. Sum over $i$ and rearrange:
+PCA is about how the data spreads around its middle, so first move the middle to the origin. Subtract each column's mean from that column:
 
 $$
-\sum_i \lVert x_i - VV^{\top}x_i \rVert^2 = \sum_i \lVert x_i \rVert^2 - \sum_i \lVert V^{\top}x_i \rVert^2 .
+X_c = X - \bar x ,
 $$
 
-The first term on the right does not depend on $V$. Minimising reconstruction
-error and maximising projected variance differ only by that constant, so
-they pick the same $V$.
+where $\bar x$ is the length-$d$ vector of column means. Read it aloud: from every row, subtract the average row. Afterwards every column of $X_c$ has mean zero.
 
-### Solving the optimisation
+```python
+mean = X.mean(axis=0)     # shape (d,)
+Xc = X - mean             # broadcasting subtracts it from every row
+```
 
-Maximising $\operatorname{tr}(V^{\top}\hat{\Sigma}V)$ over orthonormal
-$V \in \mathbb{R}^{d \times k}$ is solved by taking the columns of $V$ to be
-the top $k$ eigenvectors of $\hat{\Sigma}$. For $k=1$ this is the
-quadratic-form maximisation you already know, giving the top eigenvector
-$v_1$ with $\hat{\Sigma}v_1 = \lambda_1 v_1$. Ky Fan's theorem extends this
-to general $k$: the maximum equals $\lambda_1 + \cdots + \lambda_k$,
-achieved when $\operatorname{range}(V)$ is the span of the top $k$
-eigenvectors. Those eigenvectors are the **principal components**, and
-$XV \in \mathbb{R}^{n \times k}$ gives the **scores**.
+Why bother? If you skip centring, the first "direction of spread" tends to point from the origin to the middle of the cloud. That tells you where the data sits, not how it varies.
 
-## The SVD does this without forming the covariance
+## Step 2: the principal components
 
-Let $X \in \mathbb{R}^{n \times d}$ be the centred data matrix (row $i$ is
-$x_i^{\top}$), with SVD $X = U\Sigma V^{\top}$. Then
+Picture a line through the origin. Project every centred point onto it, so each point becomes one number: its position along the line. Some lines give projections that are widely spread. Others squash everything together. The **first principal component** is the direction whose projections have the largest variance. The second is the best direction at right angles to the first, and so on.
 
-$$
-\hat{\Sigma} = \frac{X^{\top}X}{n-1} = \frac{V\Sigma^{\top}\Sigma V^{\top}}{n-1} = V \left(\frac{\Sigma^{\top}\Sigma}{n-1}\right) V^{\top} ,
-$$
+There is a second, equivalent way to say this. Replace each point by its shadow on the line. The best line is the one that makes these shadows closest to the original points. The two definitions agree, because by Pythagoras, each point's squared length equals its squared shadow length plus its squared distance to the line. The total is fixed, so making the shadows long is the same as making the distances short.
 
-which is an eigendecomposition of $\hat{\Sigma}$: the right singular vectors
-of $X$ are the eigenvectors of the sample covariance, and the eigenvalues
-satisfy
+### Reading PCA off the SVD
+
+Take the SVD of the centred data, $X_c = U S V^{\top}$. Then:
+
+- The **components** are the first $k$ columns of $V$. Each is a unit-length direction in feature space, with shape `(d,)`.
+- The **scores** are the coordinates of each point along those directions: $X_c V_k$, with shape `(n, k)`.
+- The **explained variance** of component $i$ is the variance of its scores:
 
 $$
-\lambda_i = \frac{\sigma_i^2}{n-1} , \qquad \sigma_i^2 = (n-1)\lambda_i .
+\lambda_i = \frac{s_i^2}{n - 1} .
 $$
 
-Computing PCA through the SVD of $X$, rather than the eigendecomposition of
-$X^{\top}X$, avoids the same trap as lesson 2's case against the normal
-equations: forming $X^{\top}X$ squares the condition number of $X$ before
-you compute anything with it.
+Read it aloud: square the $i$-th singular value and divide by $n - 1$. These $\lambda_i$ are also the eigenvalues of the sample covariance matrix $X_c^{\top} X_c / (n-1)$, and the components are its eigenvectors. The SVD gets them without ever forming that matrix, which is more accurate numerically.
 
-### The Eckart-Young-Mirsky theorem
+```python
+U, s, Vt = np.linalg.svd(Xc, full_matrices=False)
+components = Vt[:k].T                  # shape (d, k), note the transpose
+scores = Xc @ components               # shape (n, k)
+explained_variance = s[:k] ** 2 / (n - 1)
+```
 
-Truncating the SVD to its top $k$ terms, $X_k = U_{:,:k}\Sigma_{:k,:k}V_{:,:k}^{\top}$,
-gives the best rank-$k$ approximation of $X$ in both the Frobenius and
-spectral norms:
+`np.linalg.svd` returns $V^{\top}$, not $V$, and it sorts the singular values from largest to smallest.
 
-$$
-X_k = \operatorname*{arg\,min}_{\operatorname{rank}(Y) \leq k} \lVert X - Y \rVert_F ,
-\qquad
-\lVert X - X_k \rVert_F^2 = \sum_{i > k} \sigma_i^2 .
-$$
+## Step 3: reconstruct and measure the error
 
-The reconstruction $VV^{\top}x_i$ from the previous section realises $X_k$
-row by row. The theorem turns the reconstruction-error bound into an
-equality you can predict without touching the data twice: sum the squares
-of the discarded singular values, and that is the total squared
-reconstruction error, exactly.
-
-### Explained variance
-
-The fraction of total variance kept by the top $k$ components is
+To go back from $k$ scores to the original $d$ features, walk along each component by its score and add the mean back:
 
 $$
-\frac{\lambda_1 + \cdots + \lambda_k}{\lambda_1 + \cdots + \lambda_d} = \frac{\sigma_1^2 + \cdots + \sigma_k^2}{\sigma_1^2 + \cdots + \sigma_r^2} ,
+\hat X = \bar x + Z V_k^{\top} ,
 $$
 
-with $r = \operatorname{rank}(X)$. These **explained variance ratios** sum to
-one across the full rank by construction, and reporting them alongside a
-chosen $k$ is the standard way to justify how much structure a truncation
-keeps.
+where $Z$ is the `(n, k)` score matrix. Read it aloud: each reconstructed row is the mean plus score 1 times component 1, plus score 2 times component 2, and so on.
 
-### Why centring matters
+```python
+X_hat = mean + scores @ components.T   # shape (n, d)
+```
 
-Raw, uncentred data $z_1, \ldots, z_n$ with mean $\bar{z}$ has second-moment
-matrix
+How much do you lose? The Eckart–Young theorem says keeping the top $k$ SVD terms gives the best possible rank-$k$ approximation, and it tells you the error exactly:
 
 $$
-\sum_i z_i z_i^{\top} = \sum_i (z_i - \bar{z})(z_i - \bar{z})^{\top} + n\bar{z}\bar{z}^{\top} ,
+\sum_{\text{all entries}} (X - \hat X)^2 = \sum_{i > k} s_i^2 .
 $$
 
-because the cross terms cancel. The uncentred second-moment matrix is the
-covariance plus a rank-one term pointing along the mean. When
-$\lVert \bar{z} \rVert$ is large relative to the data's spread, that term
-dominates the spectrum, and the top "principal component" of uncentred data
-becomes the mean direction itself — a fact about where the data sits, not
-about how it varies. Centring removes that term before you solve the
-eigenproblem.
+Read it aloud: the total squared reconstruction error equals the sum of the squares of the singular values you threw away. You can predict the error before you reconstruct anything.
 
-### Power iteration
+### Explained variance ratio
 
-Given a symmetric $A$ with eigenvalues $\lvert \lambda_1 \rvert > \lvert \lambda_2 \rvert \geq \cdots$
-and eigenvectors $u_1, u_2, \ldots$, power iteration repeats
-$v \leftarrow Av / \lVert Av \rVert$ from an arbitrary starting vector
-$v_0 = \sum_i c_i u_i$ with $c_1 \neq 0$. Each unnormalised step scales every
-eigenvector's coefficient by its own $\lambda_i$, so after $t$ steps the
-component along every eigenvector but the first shrinks relative to $c_1
-u_1$ at rate $\lvert \lambda_2/\lambda_1 \rvert^t$ — the **eigenvalue gap**
-raised to the iteration count. A large gap gives fast convergence to $u_1$;
-a gap near one gives a rate near one and an iteration that crawls.
-Deflation, which subtracts the found component and repeats, extracts
-further components at the same kind of rate against the next gap,
-$\lambda_3/\lambda_2$.
-
-### Probabilistic PCA
-
-Model each point as $x = Wz + \mu + \epsilon$, with latent
-$z \sim \mathcal{N}(0, I_k)$, noise $\epsilon \sim \mathcal{N}(0, \sigma^2 I_d)$,
-and $W \in \mathbb{R}^{d \times k}$. Marginalising $z$ gives
-$x \sim \mathcal{N}(\mu, C)$ with $C = WW^{\top} + \sigma^2 I_d$. Over
-centred data ($\mu = 0$ without loss of generality), the log-likelihood is
+Each component's share of the total spread is its squared singular value over the sum of all of them:
 
 $$
-\ell(W, \sigma^2) = -\frac{n}{2}\left( d\log(2\pi) + \log\lvert C \rvert + \operatorname{tr}(C^{-1}S) \right) ,
-\qquad S = \frac{1}{n}\sum_i x_i x_i^{\top} .
+r_i = \frac{s_i^2}{\sum_j s_j^2} .
 $$
 
-A closed-form maximiser exists, but the EM route generalises to missing
-data. Both steps are closed form because the complete-data log-likelihood,
-given $z_i$, is quadratic in $W$ and $z_i$.
+Read it aloud: the fraction of total variance that component $i$ carries. The ratios add up to one. People plot them to decide how many components to keep. The $n - 1$ cancels, so you can skip it.
 
-**E-step.** With $M = W^{\top}W + \sigma^2 I_k$, the latent posterior is
-Gaussian:
+```python
+s = np.linalg.svd(Xc, compute_uv=False)
+ratio = s ** 2 / np.sum(s ** 2)
+```
+
+### A worked example
+
+Take three points in 2D: $(2, 0)$, $(0, 2)$, and $(4, 4)$.
+
+1. The mean is $(2, 2)$. The centred rows are $(0, -2)$, $(-2, 0)$, and $(2, 2)$.
+2. The singular values of $X_c$ are $s_1 = \sqrt{12} \approx 3.4641$ and $s_2 = 2$. So $s_1^2 = 12$ and $s_2^2 = 4$.
+3. With $n - 1 = 2$, the explained variances are $12/2 = 6$ and $4/2 = 2$. The ratios are $12/16 = 0.75$ and $4/16 = 0.25$.
+4. The first component is $(1, 1)/\sqrt2 \approx (0.7071, 0.7071)$, up to sign.
+5. The scores on it are $-\sqrt2$, $-\sqrt2$, and $2\sqrt2$.
+6. Reconstructing with $k = 1$ gives $(1, 1)$, $(1, 1)$, and $(4, 4)$.
+7. The squared errors are $1 + 1 = 2$, $1 + 1 = 2$, and $0$, for a total of $4 = s_2^2$. Eckart–Young checks out.
+
+The SVD may flip the sign of a component. Then the scores flip too, and the reconstruction is unchanged.
+
+## Step 4: power iteration
+
+Sometimes you only need the top eigenvector of a symmetric matrix $A$, such as the covariance. **Power iteration** finds it with nothing but matrix-vector products. Start with any vector, multiply by $A$, rescale to length one, and repeat:
 
 $$
-\mathbb{E}[z_i] = M^{-1}W^{\top}x_i , \qquad
-\mathbb{E}[z_iz_i^{\top}] = \sigma^2 M^{-1} + \mathbb{E}[z_i]\mathbb{E}[z_i]^{\top} .
+v \leftarrow \frac{A v}{\lVert A v \rVert} .
 $$
 
-**M-step.** Maximising the expected complete-data log-likelihood over $W$
-and $\sigma^2$ gives
+Read it aloud: multiply by $A$, then divide by the length so the vector does not blow up or vanish. Each multiplication stretches the part of $v$ along eigenvector $i$ by $\lambda_i$. The biggest eigenvalue wins, so $v$ turns toward the top eigenvector.
+
+```python
+v = np.ones(d) / np.sqrt(d)
+for _ in range(iters):
+    v = A @ v
+    v = v / np.linalg.norm(v)
+eigenvalue = v @ A @ v          # the Rayleigh quotient
+```
+
+The estimate of the eigenvalue is the **Rayleigh quotient** $v^{\top} A v$, which equals $\lambda_1$ when $v$ is the top eigenvector.
+
+How fast does it converge? Each step shrinks the leftover error by about $|\lambda_2 / \lambda_1|$, the **eigenvalue gap** ratio. A ratio of 0.5 halves the error each step. A ratio of 0.99 crawls.
+
+Worked example: let $A$ have rows $(2, 0)$ and $(0, 1)$, so $\lambda_1 = 2$, $\lambda_2 = 1$, and the top eigenvector is $(1, 0)$. Start from $(0.7071, 0.7071)$.
+
+- Step 1: $Av = (1.4142, 0.7071)$, normalised to $(0.8944, 0.4472)$. Rayleigh quotient $1.8$.
+- Step 2: $Av = (1.7889, 0.4472)$, normalised to $(0.9701, 0.2425)$. Rayleigh quotient $1.9412$.
+
+The second entry roughly halves each step, matching the ratio $1/2$.
+
+## Step 5: probabilistic PCA and EM
+
+Probabilistic PCA (PPCA) tells a story about how the data was made. Each point starts as a short hidden vector $z$ of length $k$, drawn from a standard normal distribution. A $d$-by-$k$ matrix $W$ maps it into feature space, and Gaussian noise with variance $\sigma^2$ is added: $x = Wz + \text{noise}$. The best-fitting $W$ spans the same subspace as the top $k$ principal components.
+
+You fit it with **expectation–maximisation (EM)**. EM alternates two steps. The E-step guesses the hidden $z$ for each point, given the current $W$ and $\sigma^2$. The M-step picks the $W$ and $\sigma^2$ that best explain the data, given those guesses. Every round is guaranteed not to lower the log-likelihood.
+
+All the formulas below work on centred data $X_c$, one row per point.
+
+**E-step.** Form the small $k$-by-$k$ matrix $M = W^{\top} W + \sigma^2 I$. The best guess of each point's hidden vector, stacked as rows, is
 
 $$
-W_{\text{new}} = \left( \sum_i x_i \mathbb{E}[z_i]^{\top} \right) \left( \sum_i \mathbb{E}[z_iz_i^{\top}] \right)^{-1} ,
+E_z = X_c W M^{-1} ,
 $$
 
+a matrix of shape `(n, k)`. The E-step also needs the sum over points of $\mathbb{E}[z z^{\top}]$, which captures how uncertain those guesses are:
+
 $$
-\sigma^2_{\text{new}} = \frac{1}{nd} \sum_i \left( \lVert x_i \rVert^2 - 2\mathbb{E}[z_i]^{\top}W_{\text{new}}^{\top}x_i + \operatorname{tr}\!\big(\mathbb{E}[z_iz_i^{\top}]\, W_{\text{new}}^{\top}W_{\text{new}}\big) \right) .
+E_{zz} = n\,\sigma^2 M^{-1} + E_z^{\top} E_z .
 $$
 
-Each M-step maximises the same lower bound the E-step made tight, so the
-marginal log-likelihood is nondecreasing across iterations. That guarantee
-holds for every EM algorithm, not only this one.
+Read it aloud: $n$ copies of the posterior uncertainty $\sigma^2 M^{-1}$, plus the outer products of the guesses. It has shape `(k, k)`.
 
-Tipping and Bishop showed that at any stationary point,
-$W = U_k(\Lambda_k - \sigma^2 I_k)^{1/2}R$ for an arbitrary orthogonal $R$,
-where $U_k$ and $\Lambda_k$ are the top-$k$ eigenvectors and eigenvalues of
-$S$, and the maximum likelihood noise variance is the average of the
-discarded eigenvalues, $\sigma^2_{\text{ML}} = \frac{1}{d-k}\sum_{i>k}\lambda_i$.
-The column space of $W$ is the PCA subspace at every such stationary point,
-regardless of $\sigma^2$, and as $\sigma^2 \to 0$ the model's reconstruction
-converges to ordinary PCA's.
+**M-step.** Update $W$ by a least-squares-style solve:
 
-### Whitening
+$$
+W_{\text{new}} = X_c^{\top} E_z \, E_{zz}^{-1} .
+$$
 
-Standardising each principal component to unit variance,
-$x \mapsto \Lambda^{-1/2}V^{\top}(x - \mu)$ with $\Lambda$ the full
-eigenvalue diagonal and $V$ the full eigenvector matrix, produces data with
-identity covariance. Every direction carries the same scale, so a
-distance-based or gradient-based method downstream stops responding to
-units the original features happened to use.
+Then update the noise variance as the average leftover error per entry:
+
+$$
+\sigma^2_{\text{new}} = \frac{1}{nd}\Big( \textstyle\sum X_c^2 \;-\; 2 \sum \big(E_z \odot X_c W_{\text{new}}\big) \;+\; \operatorname{tr}\big(E_{zz} W_{\text{new}}^{\top} W_{\text{new}}\big) \Big) .
+$$
+
+Read it aloud: take the total squared data, subtract twice the sum of the elementwise product $\odot$ of the guesses with $X_c W_{\text{new}}$, and add the trace (sum of the diagonal) of $E_{zz} W_{\text{new}}^{\top} W_{\text{new}}$. Divide by the number of entries $nd$.
+
+```python
+M_inv = np.linalg.inv(W.T @ W + sigma2 * np.eye(k))
+Ez = Xc @ W @ M_inv
+Ezz = n * sigma2 * M_inv + Ez.T @ Ez
+W_new = (Xc.T @ Ez) @ np.linalg.inv(Ezz)
+```
+
+**Log-likelihood.** Under the model, each point is Gaussian with covariance $C = W W^{\top} + \sigma^2 I$. With $S = X_c^{\top} X_c / n$, the log-likelihood of all the data is
+
+$$
+\ell = -\frac{n}{2}\Big( d \log(2\pi) + \log\det C + \operatorname{tr}(C^{-1} S) \Big) .
+$$
+
+Read it aloud: a constant, plus a penalty for a large covariance ($\log\det C$), plus a penalty for data that does not fit it ($\operatorname{tr}(C^{-1}S)$), all scaled by $-n/2$. Compute $\log\det C$ with `np.linalg.slogdet` and $C^{-1} S$ with `np.linalg.solve(C, S)`. Record $\ell$ after every iteration. It should never go down.
+
+## Build it step by step
+
+The checks test the functions in this order.
+
+1. **`center(X)`.** Takes shape `(n, d)`. Returns `(Xc, mean)` with shapes `(n, d)` and `(d,)`. Use `X.mean(axis=0)`. Common mistake: `axis=1`, which averages each row instead of each column.
+2. **`pca_svd(X, k)`.** Returns `(components, scores, explained_variance)` with shapes `(d, k)`, `(n, k)`, and `(k,)`. Centre, call `np.linalg.svd(Xc, full_matrices=False)`, take `Vt[:k].T`, and use `s[:k] ** 2 / (n - 1)`. Common mistake: taking columns of `Vt` instead of rows, or running the SVD on uncentred `X`.
+3. **`reconstruct(mean, components, scores)`.** Returns shape `(n, d)`: `mean + scores @ components.T`. Common mistake: forgetting to add the mean back.
+4. **`explained_variance_ratio(X)`.** Returns every ratio, largest first. Centre, get the singular values with `compute_uv=False`, square, and divide by their sum. Common mistake: keeping only the top `k`, so the ratios do not sum to one.
+5. **`power_iteration(A, iters)`.** Returns `(v, eigenvalue)`. Start from `np.ones(d) / np.sqrt(d)`, loop `iters` times, then return `v @ A @ v`. Common mistake: normalising only at the end, which can overflow.
+6. **`ppca_em(X, k, iters)`.** Returns `(W, sigma2, history)`. Centre, set `W = np.random.default_rng(0).normal(scale=0.1, size=(d, k))` and `sigma2 = 1.0`, then loop: E-step, M-step, and append the log-likelihood under the new parameters. Clip `sigma2` to at least `1e-8`. Common mistake: computing the M-step for `sigma2` with the old `W` instead of `W_new`.
 
 ## Cost and scaling
 
-The following table compares routes to the same subspace.
+The following table compares routes to the principal components, for $n$ rows, $d$ features, and $k$ components.
 
-| Route | Flops | Notes |
+| Route | How the work grows | Notes |
 |---|---|---|
-| Eigendecomposition of $X^{\top}X$ | $O(nd^2 + d^3)$ | Forms the Gram matrix; squares $\kappa_2(X)$ as in lesson 2. |
-| Thin SVD of $X$ | $O(nd \min(n, d))$ | Never forms $X^{\top}X$; the numerically preferred route. |
-| Power iteration, one eigenvector, $t$ steps | $O(td^2)$ dense, $O(t \cdot \text{nnz})$ sparse | Avoids factorising $A$ at all; pays per iteration instead. |
-| One EM iteration for probabilistic PCA | $O(ndk + nk^2 + k^3)$ | The $k^2$ and $k^3$ terms come from forming and inverting $M$. |
+| SVD of $X_c$ | About $n \cdot d \cdot \min(n, d)$ | Most accurate; the default. |
+| Eigenvectors of $X_c^{\top} X_c$ | About $n d^2 + d^3$ | Forming $X_c^{\top} X_c$ loses precision. |
+| Power iteration, $t$ steps | About $t \cdot d^2$ | Only the top vector; fast for sparse $A$. |
+| One PPCA EM round | About $n d k$ | Cheap when $k$ is much smaller than $d$. |
 
-When $k \ll d \ll n$, probabilistic PCA's EM iteration costs far less than a
-full SVD of $X$, which is why it replaces the exact method on large,
-high-dimensional data with only a handful of components to find.
+Memory is dominated by $X$ itself, `n * d` numbers. The SVD also needs space for $U$, about `n * min(n, d)` numbers.
 
 ## Where this breaks
 
-**Outliers dominate the variance objective.** PCA maximises variance, and
-variance is quadratic in each point's distance from the mean, so a small
-number of outliers can rotate a principal component toward themselves.
-Robust variants replace the squared reconstruction error with one that grows
-more slowly.
-
-**Nonlinear structure has no good linear subspace.** Data lying on a curved
-manifold, such as a spiral or a sphere, has no low-dimensional linear
-projection that preserves its structure. Kernel PCA and nonlinear
-embeddings relax the "subspace" part of the definition to handle this case.
-
-**Close eigenvalues make the subspace itself unstable, not only the iteration.**
-When $\lambda_k \approx \lambda_{k+1}$, the top-$k$ subspace is barely better
-supported by the data than the top-$(k-1)$ or top-$(k+1)$ subspace, and
-small perturbations of the sample swap which eigenvector lands on which
-side of the cut, even though the subspace spanned by the tied group stays
-stable.
-
-**Unscaled features bias the projection before it starts.** A feature
-measured in different units carries a different variance for reasons
-unrelated to importance, and PCA cannot distinguish large variance from
-large scale. Standardising each feature to unit variance before fitting is
-the usual response, at the cost of changing what "the principal directions"
-mean.
+- **Outliers.** Variance squares distances, so a few far-away points can drag a component toward themselves. Remove outliers first, or use a robust variant.
+- **Curved data.** A spiral or a sphere has no good flat subspace. Kernel PCA and nonlinear methods handle these.
+- **Near-equal eigenvalues.** When $\lambda_k \approx \lambda_{k+1}$, a small change in the data can swap which direction is kept. Power iteration also becomes very slow.
+- **Different units.** A feature measured in grams has a bigger variance than the same feature in kilograms, and PCA will favour it. Standardise each feature to unit variance first when units differ.
 
 ## The exercise
 
-You implement PCA three ways and connect them. Write `center`, which returns
-centred data and the mean removed, and `pca_svd(X, k)`, which returns the top
-$k$ components, scores, and explained variance through the SVD of the
-centred data, not through an eigendecomposition of the covariance. Write
-`reconstruct`, which inverts the projection back into the original space,
-and `explained_variance_ratio`, the full-rank normalised spectrum.
+You compute PCA three ways and check that they agree. Write `center` and `pca_svd`, then `reconstruct` and `explained_variance_ratio`. Then write `power_iteration`, which finds the top eigenvector of a symmetric matrix, and `ppca_em`, which fits probabilistic PCA by EM and returns the log-likelihood after every iteration.
 
-Then write `power_iteration(A, iters)`, which finds the top eigenvector of a
-symmetric matrix without factorising it, and `ppca_em(X, k, iters)`, which
-fits probabilistic PCA with the EM updates derived above and returns the
-log-likelihood at every iteration alongside the fitted parameters.
-
-The checks confirm that `pca_svd`'s components and explained variance agree
-with a direct eigendecomposition of the sample covariance up to sign, that
-`reconstruct` applied to a truncated `pca_svd` matches the Eckart-Young
-bound $\sum_{i>k}\sigma_i^2$ exactly, that `explained_variance_ratio` sums
-to one across the full rank, that `power_iteration`'s convergence rate to
-the top eigenvector tracks the eigenvalue gap, and that `ppca_em`'s
-log-likelihood never decreases from one iteration to the next.
+The checks confirm that `center` gives zero column means, that `pca_svd` returns orthonormal components with `scores == Xc @ components` and matches an eigendecomposition of the covariance up to sign, that `reconstruct` hits the Eckart–Young error $\sum_{i>k} s_i^2$, and that `explained_variance_ratio` sums to one. They check that `power_iteration` converges at the rate the eigenvalue gap predicts, that the log-likelihood from `ppca_em` never decreases, and that its fitted `W` spans the PCA subspace.

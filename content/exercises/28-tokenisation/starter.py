@@ -4,7 +4,7 @@ Everything operates on lists of integer symbol IDs. The base alphabet is the
 256 possible byte values, IDs 0 through 255. Every merge you (or `train_bpe`)
 perform introduces one new, larger ID for a pair of existing symbols, and the
 convention this file uses throughout is that the merge at position i in a
-merges list always introduces ID 256 + i — you never need to invent or track
+merges list always introduces ID 256 + i, so you never need to invent or track
 IDs separately from a merge list's position.
 
 `_pretokenize` below is provided and used by both `train_bpe` and `encode`.
@@ -106,7 +106,7 @@ def encode(text: str, merges: list[tuple[int, int]]) -> list[int]:
 
     Split `text` with `_pretokenize` and encode each span to a list of its
     UTF-8 byte values. Apply merges[0] to every span, then merges[1], and so
-    on, in the order given — never by recomputing frequencies on `text`
+    on, in the order given, never by recomputing frequencies on `text`
     itself. merges[i] always introduces symbol ID 256 + i, whether or not
     `merges` is the list `train_bpe` produced. Concatenate every span's
     final symbol list, in span order, into one flat list.

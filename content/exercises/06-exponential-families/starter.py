@@ -1,16 +1,22 @@
 """Exponential families and Fisher scoring for GLMs.
 
-Three families share one set of formulas: `"gaussian"` with unit dispersion,
-`"bernoulli"`, and `"poisson"`. Each is written in canonical form
+Three families share one set of formulas: `"gaussian"` with variance 1,
+`"bernoulli"`, and `"poisson"`. Each one is described by a single function,
+the log-partition function A(eta):
 
-    p(y | eta) = h(y) * exp(eta * T(y) - A(eta)),  T(y) = y,
+    p(y | eta) = h(y) * exp(eta * y - A(eta))
 
-so a family is fully described by its log-partition function `A(eta)`. Fill
-in `log_partition`, then `mean_from_natural` and `variance_from_natural`,
-which are its first and second derivatives. Then build the GLM machinery on
-top: `glm_gradient`, `glm_fisher_information`, and `fit_fisher_scoring`,
-assuming the canonical link, so the natural parameter is the linear predictor
-directly: `eta = X @ w`.
+You write six functions, in this order:
+
+1. `log_partition`: A(eta) for each family.
+2. `mean_from_natural`: the mean, which is the first derivative A'(eta).
+3. `variance_from_natural`: the variance, the second derivative A''(eta).
+4. `glm_gradient`: X.T @ (mu - y), the same for every family.
+5. `glm_fisher_information`: X.T @ diag(variance) @ X.
+6. `fit_fisher_scoring`: the Newton loop from lesson 5, using the two above.
+
+Shapes: X is (n, d), one row per example; y is (n,); w is (d,). The link is
+canonical, so the natural parameter is the score itself: eta = X @ w.
 """
 
 import numpy as np
@@ -122,6 +128,13 @@ def fit_fisher_scoring(
     Returns:
         A tuple `(w, history)`: the fitted coefficients, shape (d,), and the
         list of loss values recorded before each step.
+
+    Steps:
+        1. Start from w = zeros(d) and an empty history list.
+        2. In each pass, compute eta, append the loss, and compute the
+           gradient. Stop if its norm is below `tol`.
+        3. Otherwise solve the Fisher information system for the step and
+           subtract it from w.
     """
     raise NotImplementedError("fit_fisher_scoring")
 

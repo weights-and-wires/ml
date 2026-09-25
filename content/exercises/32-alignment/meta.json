@@ -1,7 +1,7 @@
 {
   "id": "32-alignment",
   "title": "Reward models, the KL-optimal policy, and DPO",
-  "brief": "Implement the Bradley-Terry reward loss and the DPO loss it becomes after substituting in the KL-regularised optimum, and watch DPO's gradient sharpen a policy's preferences.",
+  "brief": "Build the Bradley-Terry reward loss, the best policy on a KL leash, and the DPO loss that reuses the reward loss, then watch DPO's gradient sharpen a policy's preferences.",
   "needs_gpu": false,
   "timeout": 60,
   "packages": ["numpy"],
@@ -10,6 +10,6 @@
     "The gradient of the mean Bradley-Terry loss with respect to reward_chosen is (sigmoid(z) - 1) / n, and the gradient with respect to reward_rejected is the negative of that, since the loss depends only on the difference z = reward_chosen - reward_rejected.",
     "optimal_policy computes logits = ref_logprobs + rewards / beta, subtracts the row-wise max before exponentiating for stability, then normalises along the last axis. That subtraction does not change the normalised result.",
     "dpo_loss is bradley_terry_loss applied to implicit_reward(policy_chosen_logps, ref_chosen_logps, beta) and implicit_reward(policy_rejected_logps, ref_rejected_logps, beta). Writing it that way makes dpo_grad reuse the same derivative you already worked out for bradley_terry_grad.",
-    "implicit_reward is just beta * (policy_logps - ref_logps), elementwise, for whatever shape you are given."
+    "implicit_reward is beta * (policy_logps - ref_logps), elementwise, for whatever shape you are given."
   ]
 }

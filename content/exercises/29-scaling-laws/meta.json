@@ -1,7 +1,7 @@
 {
   "id": "29-scaling-laws",
   "title": "The compute-optimal frontier",
-  "brief": "Count a transformer's parameters, estimate its training compute, derive the compute-optimal split from a Lagrange multiplier, and fit a power law in log space.",
+  "brief": "Count a transformer's parameters, estimate its training compute, compute the best split of a compute budget, and fit a power law with a straight line in log space.",
   "needs_gpu": false,
   "timeout": 30,
   "packages": ["numpy"],

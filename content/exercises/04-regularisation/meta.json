@@ -1,16 +1,18 @@
 {
   "id": "04-regularisation",
-  "title": "Ridge paths, soft thresholding, and ISTA versus FISTA",
-  "brief": "Compute the whole ridge path from one SVD, derive soft thresholding as a proximal operator, and watch FISTA outrun ISTA on an ill-conditioned lasso.",
+  "title": "Ridge, soft thresholding, and ISTA versus FISTA",
+  "brief": "Compute ridge for many penalties from one SVD, build soft thresholding, and watch FISTA beat ISTA on the lasso.",
   "needs_gpu": false,
   "timeout": 60,
-  "packages": ["numpy"],
+  "packages": [
+    "numpy"
+  ],
   "hints": [
-    "ridge_closed_form is one linear solve: (X^T X + lambda I) w = X^T y. Use numpy.linalg.solve, not an explicit matrix inverse.",
-    "ridge_svd_path only needs U^T y computed once; for each lambda, scale it by s / (s**2 + lambda) and rotate back through V^T, so the whole path costs one SVD plus a handful of vector operations.",
-    "effective_degrees_of_freedom is sum(s**2 / (s**2 + lambda)); when lambda is an array, return one degrees-of-freedom value per entry.",
-    "soft_threshold(x, thresh) is sign(x) * max(|x| - thresh, 0), applied elementwise; it is exactly the proximal operator of thresh * |.|.",
-    "ista and fista should both return (w, history), where history[k] is the lasso objective 0.5 * ||Xw - y||^2 + lambda * ||w||_1 after k steps, so the checks can compare convergence speed directly.",
-    "fista's momentum uses t_{k+1} = (1 + sqrt(1 + 4 t_k^2)) / 2 starting from t_0 = 1, and extrapolates z_{k+1} = w_{k+1} + ((t_k - 1) / t_{k+1}) * (w_{k+1} - w_k); the gradient step in fista is taken at z, not at w."
+    "ridge_closed_form is one call: np.linalg.solve(X.T @ X + lam * np.eye(d), X.T @ y). Don't use np.linalg.inv.",
+    "ridge_svd_path: compute U.T @ y once. Build factors s[None, :] / (s[None, :]**2 + lambdas[:, None]) of shape (m, r), multiply by U.T @ y, then @ Vt.",
+    "effective_degrees_of_freedom is np.sum(s**2 / (s**2 + lam)). For an array of lambdas, broadcast to shape (m, r) and sum over the last axis.",
+    "soft_threshold(x, t) is np.sign(x) * np.maximum(np.abs(x) - t, 0.0).",
+    "ista and fista return (w, history), where history[k] is 0.5 * np.sum((X @ w - y)**2) + lam * np.sum(np.abs(w)) after k steps.",
+    "fista: start with t = 1 and z = w. Take the ISTA step from z, then t_new = (1 + sqrt(1 + 4 t**2)) / 2 and z = w_new + ((t - 1) / t_new) * (w_new - w)."
   ]
 }

@@ -1,15 +1,17 @@
 {
   "id": "06-exponential-families",
   "title": "Fisher scoring for a Poisson GLM",
-  "brief": "Write the log-partition function for three exponential families, then fit a Poisson regression by Fisher scoring and check it against the logistic Newton step you already built.",
+  "brief": "Write A(eta), the mean, and the variance for three families, then fit a Poisson regression with one loop that also reproduces lesson 5's Newton step.",
   "needs_gpu": false,
   "timeout": 60,
-  "packages": ["numpy"],
+  "packages": [
+    "numpy"
+  ],
   "hints": [
-    "A(eta) is 0.5 * eta**2 for gaussian, log(1 + exp(eta)) (through log-sum-exp) for bernoulli, and exp(eta) for poisson.",
-    "mean_from_natural is A'(eta): eta itself for gaussian, sigmoid(eta) for bernoulli, exp(eta) for poisson.",
-    "variance_from_natural is A''(eta): 1 for gaussian, p * (1 - p) for bernoulli, exp(eta) again for poisson, since a Poisson's variance equals its mean.",
-    "glm_gradient and glm_fisher_information do not need a family-specific formula once mean_from_natural and variance_from_natural are correct: they are X.T @ (mu - y) and X.T @ diag(V) @ X for every family here, because the link is canonical.",
-    "fit_fisher_scoring is the same loop as fit_newton from the previous lesson, with the Hessian replaced by glm_fisher_information."
+    "A(eta) is 0.5 * eta**2 for gaussian, np.maximum(eta, 0) + np.log1p(np.exp(-np.abs(eta))) for bernoulli, and np.exp(eta) for poisson.",
+    "The mean is A'(eta): eta.copy() for gaussian, a stable sigmoid for bernoulli, and np.exp(eta) for poisson.",
+    "The variance is A''(eta): np.ones_like(eta) for gaussian, p * (1 - p) for bernoulli, and np.exp(eta) again for poisson, because a Poisson's variance equals its mean.",
+    "Once the mean and variance are right, the gradient is X.T @ (mu - y) and the Fisher information is (X * v[:, None]).T @ X for every family. No per-family code is needed.",
+    "fit_fisher_scoring is the fit_newton loop from lesson 5. Record np.sum(log_partition(family, eta) - y * eta) before each step and use np.linalg.solve for the step."
   ]
 }

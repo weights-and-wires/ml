@@ -2,14 +2,14 @@
 title: Training a transformer
 slug: 27-training-a-transformer
 part: "Part 5 — Transformers"
-summary: "The causal language-modelling objective, the AdamW recipe that fits it, and the flops that say what a run costs."
-minutes: 60
+summary: "Train a tiny language model: the next-token loss, a warmup-cosine schedule, gradient clipping, and one AdamW step."
+minutes: 75
 gpu: true
 objectives:
-  - Explain why an untrained model's loss sits at log V, and read perplexity as an effective branching factor.
-  - "Justify each element of the AdamW training recipe: the warmup-into-cosine schedule, global-norm clipping, weight tying, and excluding norms and biases from decay."
-  - Explain why fp16 needs loss scaling and bf16 does not, from the two formats' exponent widths.
-  - Derive the 6ND training-flops estimate from the forward and backward passes.
+  - Compute the next-token cross-entropy loss and perplexity, and check that an untrained model scores log V.
+  - Build a learning-rate schedule that warms up linearly and then decays along a cosine.
+  - Clip gradients by their global norm and apply one AdamW update by hand.
+  - Estimate the compute of a training run with the 6ND rule, and explain why bf16 needs no loss scaling.
 prereqs:
   - 26-the-transformer-block
   - 17-optimisers
@@ -18,241 +18,338 @@ exercise: 27-training-a-transformer
 
 # Training a transformer
 
-A transformer block computes a function. Turning a stack of them into a
-language model is an optimisation problem. Once a model reaches billions of
-parameters and trillions of tokens, every choice in the training recipe
-carries weight. The wrong learning-rate schedule wastes a run that costs
-real money, and the wrong numeric format corrupts gradients without raising
-an error. This lesson derives the objective, the sanity check that catches a
-broken setup before it burns compute, and the handful of recipe choices that
-every modern transformer training run shares. It also gives the reasoning
-that makes each one non-negotiable rather than a hyperparameter to sweep. It closes
-with the flop-counting argument that turns a parameter count and a token
-count into an estimate of what a run costs, setting up the compute-optimal
-trade-offs of lesson 29.
+You can build a transformer block. Now you'll teach a stack of them to write.
+The task is always the same: read some text and guess the next token. A token
+is a small piece of text, such as a character or a word fragment. Do that
+guess well enough, billions of times, and the model learns grammar, facts, and
+style along the way.
+
+Training a big model is expensive, so small mistakes cost real money. A bad
+learning rate can waste a week of compute. The wrong number format can quietly
+zero out gradients without any error. This lesson walks through the handful of
+choices that almost every transformer training run shares, and why each one
+is there.
+
+You'll finish by writing one complete training step in PyTorch and watching a
+tiny model memorise a string.
 
 ## What you already know
 
-- The transformer block computes $\operatorname{Attn}$ and a feed-forward
-  network, wrapped in residual connections (lesson 26).
-- Cross-entropy loss for a categorical prediction is $-\log p(\text{true class})$.
-- AdamW maintains first and second moment estimates of the gradient, applies
-  bias correction, and decays weights independently of the gradient step
-  (lesson 17).
-- A transformer block's forward cost is about twice its parameter count, in
-  flops per token (lesson 26).
-- IEEE floating-point formats split their bits between an exponent, which
-  sets the representable range, and a mantissa, which sets the precision
-  within that range.
+- Cross-entropy loss is minus the log of the probability the model gave the
+  right answer.
+- AdamW keeps running averages of the gradient and its square, and shrinks
+  weights a little each step, from lesson 17.
+- A transformer block's forward pass costs about two flops per weight per
+  token, from lesson 26.
+- The softmax turns scores, called logits, into probabilities that sum to one.
+- The norm of a vector is its length: the square root of the sum of its
+  squared entries.
 
 ## The objective
 
-A causal language model factors the joint probability of a token sequence
-$x_1, \dots, x_T$ autoregressively:
+A language model reads tokens $x_1, x_2, \dots$ and at each position predicts
+a probability for every token in its vocabulary of size $V$. The loss at each
+position is the cross-entropy against the token that actually came next. You
+average over all positions:
 
 $$
-p(x_1, \dots, x_T) = \prod_{t=1}^{T} p(x_t \mid x_{<t}) .
+L = -\frac{1}{N}\sum_{i=1}^{N} \log p_i[\text{target}_i]
 $$
 
-Maximising that log-likelihood is the same problem as minimising the average
-cross-entropy between the model's predicted next-token distribution and the
-token that actually came next, at every position:
+Read aloud: $N$ is the number of predictions (every position of every
+sequence in the batch). For prediction $i$, look up the probability $p_i$
+the model gave to the true next token, take its log, and average. The minus
+sign turns "high probability" into "low loss".
 
-$$
-L = -\frac{1}{T}\sum_{t=1}^{T} \log p_\theta(x_{t+1} \mid x_{\le t}) .
-$$
+In training, the model always sees the true text so far, never its own
+guesses. This is called **teacher forcing**. It means one forward pass gives
+predictions at every position at once. The targets are the inputs shifted by
+one: if the inputs are "t, o, space" the targets are "o, space, b".
 
-Training feeds the model the true prefix $x_{\le t}$ at every position rather
-than its own previous predictions — **teacher forcing**. The model
-therefore computes logits for every position in one forward pass, and the
-loss at position $t$ compares those logits against $x_{t+1}$, the sequence
-shifted by one. Teacher forcing never checks whether the model can sustain its own
-predictions across many steps; that gap between training on ground truth and
-generating from the model's own output is exposure bias, a separate concern
-from the objective.
+### Compute it safely
 
-### The sanity anchor
+You get log-probabilities from logits with the log-softmax: subtract the
+log-sum-exp of the row. The log-sum-exp is $\log \sum_j e^{z_j}$, and
+`torch.logsumexp` computes it without overflow.
 
-At initialisation, a well-behaved model's logits sit near zero for every
-token, so its predicted distribution over the vocabulary $V$ is close to
-uniform. The cross-entropy of a uniform distribution against any single true
-class is $-\log(1/V) = \log V$, regardless of which class is true. A training
-run whose first loss reading is not close to $\log V$ has a bug before the
-loss. It might be an output layer that is not near-zero at initialisation, a
-mismatched vocabulary size, or logits scaled by an accidental factor — worth
-checking before a single step of compute goes into chasing it later.
+```python
+logp = logits - torch.logsumexp(logits, dim=-1, keepdim=True)   # (..., V)
+nll = -logp.gather(-1, targets.unsqueeze(-1)).squeeze(-1)       # (...)
+loss = nll.mean()
+```
+
+`gather` picks, at each position, the entry whose index is the target.
+
+### A worked example
+
+Take two positions with $V = 3$. The logits are $[2, 0, 0]$ with target 0, and
+$[0, 3, 0]$ with target 1.
+
+1. Row 1: $\log(e^2 + 1 + 1) = \log 9.389 = 2.2395$. The loss is
+   $2.2395 - 2 = 0.2395$. The model gave the target probability 0.787.
+2. Row 2: $\log(1 + e^3 + 1) = \log 22.086 = 3.0949$. The loss is
+   $3.0949 - 3 = 0.0949$.
+3. The mean is $(0.2395 + 0.0949) / 2 = 0.1672$.
+
+### The sanity check: log V
+
+An untrained model has logits near zero, so it spreads probability evenly:
+$1/V$ for every token. Its loss is $-\log(1/V) = \log V$, whatever the target.
+With $V = 11$, that's 2.398. With $V = 50000$, it's 10.82. If your very first
+loss is far from $\log V$, you have a bug. Find it before spending any compute.
 
 ### Perplexity
 
-Perplexity is $\exp(L)$, the loss carried back out of log space. Because it
-is the exponential of an average of per-token log-probabilities, it equals
-the geometric mean of each step's reciprocal probability. A model assigning
-probability exactly $1/k$ to the true token at every step, as an untrained
-model does with $k = V$, has perplexity exactly $k$. That reading survives
-loosely away from that special case: a perplexity of $20$ means the model is,
-on average, about as uncertain at each step as a uniform choice among twenty
-tokens. Report perplexity instead of raw loss for comparisons across
-vocabularies of similar size; comparing perplexities across very different
-tokenisers compares different branching factors, not different models.
+**Perplexity** is $e^L$, the loss taken back out of log space.
 
-## The recipe
+```python
+ppl = math.exp(loss)
+```
 
-**AdamW with $\beta_2 = 0.95$.** The second-moment estimate's exponential
-moving average has an effective memory of about $1/(1-\beta_2)$ steps. The
-default $\beta_2 = 0.999$ integrates gradient statistics over roughly a
-thousand steps, far longer than the gradient distribution stays stationary
-under the large batches and aggressive learning rates pretraining uses.
-Lowering $\beta_2$ to $0.95$ shortens that memory to about twenty steps, so
-the second-moment estimate tracks a gradient scale that shifts every few
-hundred steps.
+It reads as "how many tokens the model is torn between, on average". The
+untrained model has perplexity $e^{\log V} = V$: it's guessing among all $V$
+tokens. The worked example has perplexity $e^{0.1672} = 1.18$, almost
+certain. A loss of 0 gives perplexity 1.
 
-**Linear warmup into cosine decay.** Adam's bias-corrected second moment
-divides by a quantity that starts small and grows to one. At step one, a
-single noisy gradient sample can therefore swing the effective step size by
-an order of magnitude relative to its steady-state value. A linear ramp from zero keeps
-the learning rate small while that correction is least trustworthy, then
-hands off to a smooth cosine decay from the peak rate to a floor across the
-remaining, fixed compute budget. The schedule is continuous by construction,
-and because it is defined relative to a known total step count, the anneal
-finishes exactly as the budget runs out.
+## The learning-rate schedule
 
-**Global-norm clipping at $1.0$.** Before the optimiser step, compute the
-norm of the gradient across every parameter, $g = \big(\sum_i \lVert
-\nabla_i \rVert^2\big)^{1/2}$, and rescale the whole gradient by
-$\min(1, 1/g)$ when it exceeds the threshold. Rescaling every coordinate by
-the same factor preserves the gradient's direction and only shrinks its
-magnitude, unlike clipping each coordinate independently, which would distort
-the step's direction. Gradient norms during stable training sit below the
-threshold almost always, so clipping only intervenes on the rare spike that
-would otherwise become a destructive update at the current learning rate.
+Early in training, AdamW's running averages are built from only a few noisy
+gradients. Big steps at that point can knock the model somewhere bad. So you
+start with a tiny learning rate and ramp it up, like easing a car out of a
+parking space before you hit the motorway. That's the **warmup**. After it,
+you slowly lower the rate so the model settles into a good spot. A cosine
+curve gives a smooth glide down.
 
-**Weight tying.** The input embedding table and the output projection to
-logits are both linear maps between the vocabulary and $d_{\text{model}}$, so
-tying sets them to the same matrix, transposed for the output side. Beyond
-removing an entire $V \times d_{\text{model}}$ block of parameters, a token's
-input embedding and the direction that makes it likely as an output play
-complementary roles in the same geometry, and sharing the matrix forces that
-geometry to serve both.
+$$
+\text{lr}(s) =
+\begin{cases}
+\text{peak} \cdot \dfrac{s}{\text{warmup}} & s < \text{warmup} \\[2ex]
+\text{floor} + \tfrac{1}{2}(\text{peak} - \text{floor})\big(1 + \cos(\pi \cdot \text{progress})\big) & s \ge \text{warmup}
+\end{cases}
+$$
 
-**No decay on norms and biases.** Weight decay pulls every weight toward
-zero, appropriate for the large matrices that do the model's feature
-transformations. Normalisation gains start at one and biases at zero so a
-sublayer starts close to the identity, and decaying a gain toward zero fights
-that initialisation directly. Biases and gains together are a tiny fraction
-of the parameter count, so excluding them costs nothing toward regularising
-the model. Implementations split parameters into two groups by whether a
-tensor has more than one dimension, and decay only the matrices.
+where $\text{progress} = (s - \text{warmup}) / (\text{total} - \text{warmup})$.
 
-## Numeric precision
+Read aloud: during warmup, the rate climbs in a straight line from 0 to the
+peak. After warmup, progress runs from 0 to 1. At progress 0, the cosine is 1,
+so the bracket is 2 and the rate is exactly the peak. At progress 1, the
+cosine is $-1$, the bracket is 0, and the rate is exactly the floor.
 
-Training in fp32 throughout is safe and slow. Two lower-precision formats
-trade safety for throughput, and they fail differently.
+```python
+if step < warmup:
+    return peak * step / warmup
+progress = (step - warmup) / (total - warmup)
+return floor + 0.5 * (peak - floor) * (1 + math.cos(math.pi * progress))
+```
 
-| Format | Exponent bits | Mantissa bits | Representable range |
+Try warmup 10, total 50, peak 2, and floor 0.1. At step 5, the rate is
+$2 \cdot 5/10 = 1.0$. At step 10, it's the peak, 2. At step 30, progress is
+0.5, the cosine is 0, and the rate is $0.1 + 0.95 = 1.05$. At step 50, it's
+the floor, 0.1.
+
+## Gradient clipping
+
+Now and then, one batch produces a huge gradient. One huge step can undo hours
+of training. Clipping puts a speed limit on the step. You measure the length
+of the whole gradient, across every parameter at once, and if it's over the
+limit, you shrink every gradient by the same factor.
+
+$$
+g = \sqrt{\sum_{\text{arrays}} \sum_{\text{entries}} \text{grad}^2},
+\qquad
+\text{if } g > \text{max\_norm}: \ \text{grad} \leftarrow \text{grad} \cdot \frac{\text{max\_norm}}{g}
+$$
+
+Read aloud: square every gradient entry in every array, add them all up, and
+take the square root. That's the global norm $g$. If it's over the limit,
+multiply every array by the limit divided by $g$. Afterwards the global norm
+is exactly the limit. Shrinking everything by the same factor keeps the
+direction of the step and only changes its length.
+
+```python
+total = math.sqrt(sum(float((g**2).sum()) for g in grads))
+if total > max_norm:
+    for g in grads:
+        g *= max_norm / total   # in place
+```
+
+For the gradients $[3, 4]$ and $[0]$, the global norm is 5. With a limit of
+10, nothing changes. With a limit of 2.5, both arrays are halved, and
+$[3, 4]$ becomes $[1.5, 2]$. The function returns 5, the norm before
+clipping.
+
+## One AdamW step
+
+AdamW is the optimiser. For every parameter $\theta$ with gradient $g$, it
+keeps two running averages: $m$, the average gradient, and $v$, the average
+squared gradient. At step $t$ (counting from 1):
+
+$$
+\begin{aligned}
+m &\leftarrow \beta_1 m + (1 - \beta_1)\, g, &
+v &\leftarrow \beta_2 v + (1 - \beta_2)\, g^2, \\
+\hat{m} &= \frac{m}{1 - \beta_1^{t}}, &
+\hat{v} &= \frac{v}{1 - \beta_2^{t}}, \\
+\theta &\leftarrow \theta\,(1 - \text{lr}\cdot\lambda) - \text{lr}\,\frac{\hat{m}}{\sqrt{\hat{v}} + \epsilon}
+\end{aligned}
+$$
+
+Read aloud: blend the new gradient into each running average. Both averages
+start at zero, so early on they're too small. Dividing by $1 - \beta^t$ fixes
+that, which is called bias correction. Then shrink the weight a little by
+$\lambda$, the weight decay, and step against the gradient, scaled by its
+typical size. Transformers use $\beta_1 = 0.9$ and $\beta_2 = 0.95$. The
+smaller $\beta_2$ means $v$ remembers only about the last 20 steps.
+
+```python
+m = b1 * m + (1 - b1) * g
+v = b2 * v + (1 - b2) * g**2
+m_hat, v_hat = m / (1 - b1**step), v / (1 - b2**step)
+theta = theta * (1 - lr * wd) - lr * m_hat / (torch.sqrt(v_hat) + eps)
+```
+
+A worked example: $\theta = 1$, $g = 0.5$, step 1, lr 0.1, $\lambda = 0.1$.
+Then $m = 0.05$ and $v = 0.0125$. After bias correction, $\hat{m} = 0.5$ and
+$\hat{v} = 0.25$, so $\hat{m} / \sqrt{\hat{v}} = 1$. The new weight is
+$1 \cdot (1 - 0.01) - 0.1 \cdot 1 = 0.89$.
+
+### Which weights not to decay
+
+Weight decay pulls weights toward zero. That's good for big weight matrices.
+It's bad for layer norm gains, which start at 1 on purpose, and pointless for
+biases. So those get $\lambda = 0$. In code, the config lists their names in
+`no_decay`. A common rule is to skip decay for any tensor with fewer than two
+dimensions.
+
+### Weight tying
+
+The input embedding maps tokens to vectors. The output layer maps vectors back
+to token scores. Many models use the same matrix for both, transposed on the
+output side. That saves $V \times d$ weights. The `__main__` demo does this:
+it multiplies by `params["embed"].T` to get logits.
+
+## Number formats
+
+Training in 32-bit floats (fp32) is safe but slow. Two 16-bit formats are
+faster, and they fail differently. The exponent bits set how tiny or huge a
+number can be. The mantissa bits set how many digits of precision you get.
+
+| Format | Exponent bits | Mantissa bits | Smallest normal number |
 |---|---|---|---|
-| fp32 | 8 | 23 | $\approx 10^{-38}$ to $10^{38}$ |
-| fp16 | 5 | 10 | $\approx 6\times 10^{-5}$ to $65504$ |
-| bf16 | 8 | 7 | $\approx 10^{-38}$ to $10^{38}$ |
+| fp32 | 8 | 23 | about $10^{-38}$ |
+| fp16 | 5 | 10 | about $6 \times 10^{-5}$ |
+| bf16 | 8 | 7 | about $10^{-38}$ |
 
-bf16 keeps fp32's 8-bit exponent and truncates only the mantissa, so it spans
-the same range as fp32 at coarser precision. fp16 keeps more mantissa bits but
-narrows the exponent to 5 bits. Gradients in a deep network routinely fall
-below fp16's smallest representable magnitude, particularly late in training
-or in layers many blocks from the loss. bf16 still represents those values,
-at reduced precision. fp16 instead flushes them to exact zero, deleting the
-gradient signal outright.
+Gradients are often smaller than $10^{-5}$. In fp16, those round to exactly
+zero, and learning silently stops. The fix is **loss scaling**: multiply the
+loss by a big number $s$ before the backward pass, which multiplies every
+gradient by $s$ too. Divide the gradients by $s$ before the optimiser step.
+bf16 has the same range as fp32, so it needs no scaling. It's less precise,
+but it doesn't lose small numbers.
 
-**Loss scaling** fixes fp16's range problem specifically. Multiplying the
-loss by a constant $s$ before calling backward multiplies every gradient by
-that same $s$, by linearity of differentiation. This shifts small gradients
-up into fp16's representable range before they underflow. Dividing the
-gradients by $s$ again before the optimiser step restores the correct
-scale. bf16 needs
-no such correction, because nothing in its exponent range risks underflowing
-in the first place — the technique patches a narrow-exponent format, not a
-low-precision one.
+## How much compute a run takes
 
-**Gradient accumulation** buys a wider effective batch with extra compute
-instead of extra memory: it sums the gradients from $k$ microbatches before
-one optimiser step, matching the update a real batch of size $k \times
-\text{microbatch}$ would produce. It is this effective batch size —
-microbatch times accumulation steps times devices — that a schedule's warmup
-length is tuned against.
-
-## The compute of a training run
-
-A block's forward pass costs about two flops per parameter per token, one
-multiply and one add through each weight the token passes through, as derived
-in lesson 26. The backward pass computes gradients for both the layer's
-inputs, to keep propagating error backward, and its weights, to know how to
-update them. Each of these is a matrix multiply the same size as the forward
-one, so backward costs about twice the forward pass: $4N$ flops per token
-against the forward's $2N$. Summed,
+The forward pass costs about $2N$ flops per token for a model with $N$
+weights: one multiply and one add per weight. The backward pass does two
+matrix products of the same size for every forward one: one for the gradient
+of the inputs and one for the gradient of the weights. So it costs about $4N$.
+For $D$ training tokens:
 
 $$
-C \approx (2N + 4N) \cdot D = 6ND,
+C \approx 6 N D
 $$
 
-flops for a model of $N$ non-embedding parameters trained on $D$ tokens. This
-ignores attention's $O(T)$ term per token, exactly as lesson 26's per-block
-estimate does. It also ignores every elementwise operation, because a matrix
-multiply's flops dominate an elementwise pass over the same tensor by a
-factor of the matrix's inner dimension.
+Read aloud: total training flops are six times the number of weights times
+the number of tokens.
+
+```python
+flops = 6 * params * tokens
+```
+
+A model with a million weights trained on ten thousand tokens takes
+$6 \times 10^{6} \times 10^{4} = 6 \times 10^{10}$ flops. Lesson 29 uses this
+rule to choose model sizes.
+
+## Build it step by step
+
+The checks test your functions in this order.
+
+1. **`causal_lm_loss(logits, targets)`** takes logits of shape $(\dots, V)$
+   and integer targets of shape $(\dots)$, and returns a scalar tensor. Use
+   `torch.logsumexp`, `gather`, and `.mean()`. It must work with or without a
+   batch axis, so work on `dim=-1`. Common mistake: summing instead of taking
+   the mean, which breaks the $\log V$ check.
+2. **`perplexity(loss)`** returns `math.exp` of the loss as a float. Wrap the
+   input in `float()` so a tensor works too.
+3. **`warmup_cosine_lr(step, warmup, total, peak, floor)`** returns a float.
+   Two branches, as above. Common mistake: using `step <= warmup` for the
+   warmup branch. Both branches give the peak at the boundary, so either works,
+   but make sure the cosine branch divides by `total - warmup`, not `total`.
+4. **`clip_global_norm(grads, max_norm)`** returns the norm before clipping
+   and scales the arrays in place. Use `g *= scale`, which works for numpy
+   arrays and torch tensors. Common mistake: `g = g * scale`, which makes a
+   new array and leaves the caller's list untouched.
+5. **`training_flops(params, tokens)`** returns `6 * params * tokens`.
+6. **`train_step(model_fn, params, batch, opt_state, config)`** returns
+   `(new_params, new_opt_state, loss_as_float)`. Steps:
+   - Compute logits with `model_fn(params, batch["inputs"])`, the loss with
+     `causal_lm_loss`, and call `loss.backward()`.
+   - Collect every `params[name].grad` and pass the list to
+     `clip_global_norm` with `config["max_grad_norm"]`.
+   - Set `step = opt_state["step"] + 1`, then get the learning rate for that
+     step from `warmup_cosine_lr` with the config's schedule fields.
+   - Inside `torch.no_grad()`, apply the AdamW update to each name, using 0
+     decay for names in `config["no_decay"]`. Read `beta1`, `beta2`, `eps`,
+     and `weight_decay` with `config.get` and defaults 0.9, 0.95, `1e-8`, and
+     0.
+   - Store each new weight as `updated.detach().requires_grad_()`, and return
+     the new `m`, `v`, and step in a fresh `opt_state` dict.
+
+   Common mistake: using the old step count, 0, in the bias correction. That
+   divides by $1 - \beta^0 = 0$.
 
 ## Cost and scaling
 
-| Quantity | Scaling |
-|---|---|
-| Forward flops per token | $\approx 2N$ |
-| Backward flops per token | $\approx 4N$ |
-| Total training flops | $\approx 6ND$ |
-| Optimiser state memory (AdamW) | $2N$ extra values ($m$ and $v$), on top of $N$ parameters and $N$ gradients |
-| Effective batch size | microbatch $\times$ accumulation steps $\times$ devices |
+The main costs of a run grow like this.
 
-AdamW's memory cost is easy to undercount. A naive fp32 implementation holds
-four copies of every parameter — the parameter, its gradient, and the two
-moment estimates — before any activation memory is counted. That is why
-optimiser state, not parameters, is often the first thing to run out of room
-on a single device.
+| Quantity | Rough size |
+|---|---|
+| Forward flops per token | $2N$ |
+| Backward flops per token | $4N$ |
+| Total training flops | $6ND$ |
+| Memory for AdamW | $4N$ numbers: weights, gradients, $m$, and $v$ |
+
+The memory row surprises people. AdamW stores two extra numbers per weight, so
+the optimiser state is often the first thing that runs out of room on a GPU.
+**Gradient accumulation** helps with batch size: add up the gradients of
+several small batches before one step. It behaves like one big batch, for
+the price of more time instead of more memory.
 
 ## Where this breaks
 
-**A loss that never approaches $\log V$.** The single most common early
-failure, which the sanity anchor exists to catch before a run trains for
-hours on a broken setup.
-
-**fp16 without loss scaling.** Gradients underflow silently — no error, no
-NaN, only a model that stops learning in the layers whose gradients vanished
-first, usually the earliest ones.
-
-**Clipping set too aggressively.** A clip threshold well below the typical
-gradient norm turns every step into a fixed-magnitude update, discarding the
-information the gradient's magnitude carries about how far to move. Clipping
-should intervene on outliers, not on every step.
-
-**Decaying norms and biases anyway.** A framework's default weight-decay
-group sometimes ignores parameter dimensionality. Decaying a layer norm's
-gain toward zero then shrinks that sublayer's output on every forward pass —
-a symptom that looks like an unrelated instability far from its cause.
+- **First loss far from log V.** Something is wrong: the vocabulary size, the
+  output layer's starting scale, or the target shift. Check before training.
+- **fp16 without loss scaling.** Small gradients become zero, and the earliest
+  layers stop learning, with no error message. Use bf16 or loss scaling.
+- **Clip limit set too low.** If every step is clipped, every step has the same
+  length, and you lose the information in the gradient's size. The limit
+  should only catch rare spikes.
+- **Decaying norm gains.** A layer norm gain shrinking toward zero weakens its
+  sublayer every step. The symptom looks like an unrelated instability. Keep
+  gains and biases in `no_decay`.
 
 ## The exercise
 
-You implement the objective, the schedule, the clipping rule, and one AdamW
-step, then train a tiny transformer with them. Write `causal_lm_loss(logits,
-targets)`, `perplexity(loss)`, `warmup_cosine_lr(step, warmup, total, peak,
-floor)`, `clip_global_norm(grads, max_norm)`, `training_flops(params, tokens)`,
-and `train_step(model_fn, params, batch, opt_state, config)`. This last
-function runs one forward pass, computes the loss, backpropagates, and clips
-the gradient. It then applies one decoupled-weight-decay AdamW update, using
-the learning rate the schedule gives the current step. Build a small causal transformer from
-lesson 26's pieces in this file's `__main__` block, training it on a short,
-repeating, built-in character string for a few hundred steps.
+You write six functions: `causal_lm_loss`, `perplexity`, `warmup_cosine_lr`,
+`clip_global_norm`, `training_flops`, and `train_step`. The file already
+contains a tiny character-level transformer, so once your functions work, the
+**Run** button trains it on a repeated line of text and prints a sample.
 
-The checks verify that the loss on uniform logits equals $\log V$ exactly,
-and that perplexity is the exponential of the loss. They verify that the
-schedule agrees with both of its pieces at the warmup boundary, and reaches
-its floor exactly at the final step. They verify that clipping produces
-exactly the threshold norm when the gradient exceeds it, and changes
-nothing when it does not. They also verify that the flop formula matches a hand computation, and
-that twenty steps of `train_step` on a batch small enough to memorise drive
-the loss well below $\log V$.
+The checks confirm that uniform logits give a loss of exactly $\log V$, with
+and without a batch axis, and that the loss matches a hand computation. They
+check that perplexity is $e^L$, that the schedule starts at 0, hits the peak
+at the warmup boundary without a jump, and ends at the floor. They check that
+clipping reports the pre-clip norm, leaves small gradients alone, and trims
+large ones to exactly the limit. Then they check the $6ND$ formula, one
+`train_step` against an AdamW update computed by hand, and that twenty steps
+drive the loss on a repeating pattern well below $\log V$.

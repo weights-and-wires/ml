@@ -97,6 +97,13 @@ def nucleus_filter(probs: np.ndarray, p: float) -> np.ndarray:
     The nucleus is the smallest set of tokens, taken in decreasing order of
     probability, whose cumulative probability is at least `p`.
 
+    Steps:
+        1. order = np.argsort(-probs) gives indices from most to least likely.
+        2. Take np.cumsum of the sorted probabilities.
+        3. Find the first position whose running total reaches p
+           (np.searchsorted), and keep every index up to and including it.
+        4. Copy the kept entries into a zero array and divide by their sum.
+
     Args:
         probs: A probability distribution, shape (vocab,).
         p: Cumulative probability threshold, in (0, 1].

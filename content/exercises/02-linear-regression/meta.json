@@ -1,14 +1,17 @@
 {
   "id": "02-linear-regression",
   "title": "Least squares three ways",
-  "brief": "Solve the same problem through the normal equations, QR, and the SVD, then watch the first one lose its digits.",
+  "brief": "Fit the same line with the normal equations, QR, and the SVD, then see the first one lose accuracy.",
   "needs_gpu": false,
   "timeout": 60,
-  "packages": ["numpy"],
+  "packages": [
+    "numpy"
+  ],
   "hints": [
-    "numpy.linalg.cholesky returns the lower factor L with A = L L^T. Solve L z = b, then L^T w = z, with scipy-free triangular solves built from numpy.linalg.solve_triangular's absence in mind: numpy has no triangular solve, so use scipy.linalg.solve_triangular.",
-    "numpy.linalg.qr(X, mode='reduced') gives the thin factorisation. R is upper triangular, so back substitution is a triangular solve against Q.T @ y.",
-    "For the pseudoinverse, zero out every singular value at or below rcond * s.max(), and invert only the rest. Slicing V and U to the surviving columns gives the minimum-norm solution for free.",
-    "condition_number is s.max() / s.min() from numpy.linalg.svd(X, compute_uv=False)."
+    "condition_number: s = np.linalg.svd(X, compute_uv=False) is sorted largest first, so return s[0] / s[-1].",
+    "residual_orthogonality: compute r = y - X @ w, then np.abs(X.T @ r).max(), and wrap it in float().",
+    "fit_qr: Q, R = np.linalg.qr(X, mode='reduced'), then solve_triangular(R, Q.T @ y, lower=False).",
+    "fit_normal_equations: L = np.linalg.cholesky(X.T @ X). Solve L z = X.T @ y with lower=True, then L.T w = z with lower=False.",
+    "fit_svd: keep = s > rcond * s[0]. Use U[:, keep], s[keep], and vt[keep], so the tiny singular values are dropped instead of divided by."
   ]
 }

@@ -2,14 +2,15 @@
 title: Multilayer perceptrons
 slug: 15-multilayer-perceptrons
 part: "Part 3 — Neural networks"
-summary: Why depth needs nonlinearity, what the universal approximation theorem promises, and why depth beats width on the sawtooth.
-minutes: 40
+summary: Stack layers with ReLU or GELU between them, see why the nonlinearity matters, and build a deep sawtooth network by hand.
+minutes: 55
 gpu: false
 objectives:
-  - State why a composition of affine maps is affine, and what that forces onto a network with no nonlinearity.
-  - State the universal approximation theorem precisely, including what it does not say about width or learnability.
-  - Give the width a two-layer ReLU network needs to approximate a Lipschitz function to a stated error.
-  - State the exponential-in-depth bound on the linear regions of a scalar ReLU network, and apply it to the sawtooth.
+  - Compute ReLU, GELU, and their derivatives, and check them with finite differences.
+  - Build a forward pass for any list of affine-then-activation layers.
+  - Explain why stacked layers with no nonlinearity collapse into one linear layer.
+  - Build a ReLU network whose number of linear pieces doubles with every layer.
+  - Count the parameters and flops of a network by hand.
 prereqs:
   - 05-logistic-regression
 exercise: 15-multilayer-perceptrons
@@ -17,268 +18,269 @@ exercise: 15-multilayer-perceptrons
 
 # Multilayer perceptrons
 
-Logistic regression is a single affine map followed by a fixed
-nonlinearity, and every derivation you have done so far has depended on
-that map being the whole model. A multilayer perceptron stacks several such
-maps. This lesson answers what stacking buys you, and it is not "more
-capacity" as a slogan. It is a specific theorem about which functions
-become representable, and a specific construction that hits a stated
-error with a stated width. It is also a specific function that depth
-represents efficiently while width alone cannot.
+Logistic regression computes one weighted sum of the inputs and squashes it.
+That draws a single straight boundary. Many real problems need a curved
+boundary, or a function that bends in many places.
 
-The nonlinearity between the affine maps is the entire reason any of this
-works. Remove it, and depth becomes provably useless — the cleanest way to
-see why the nonlinearity has to be there.
+A multilayer perceptron (MLP) gets there by stacking layers. Each layer takes a
+weighted sum and then bends the result with a simple function called an
+**activation**. Stack enough of these and the network can bend a line into
+almost any shape.
+
+In this lesson you build the building blocks: two activations, a forward pass,
+and a network you design by hand, with no training, that shows why depth is so
+powerful. You also learn to count what a network costs.
 
 ## What you already know
 
-- An affine map is $x \mapsto Wx + b$; the composition of two affine maps is
-  affine, with $W = W_2 W_1$ and $b = W_2 b_1 + b_2$.
-- The rank of a product of matrices is at most the minimum of the factors'
-  ranks: $\operatorname{rank}(AB) \leq \min(\operatorname{rank}(A),
-  \operatorname{rank}(B))$.
-- A function is Lipschitz with constant $L$ if $|f(x) - f(y)| \leq L|x - y|$
-  for all $x, y$ in its domain.
-- Logistic regression's map $x \mapsto \sigma(w^\top x + b)$, where $\sigma$
-  is a fixed, non-affine nonlinearity applied after the affine part.
-- A continuous function on a compact set is bounded and attains its
-  extrema.
+- A linear layer computes `W @ x + b`: a matrix `W`, an input vector `x`, and a bias vector `b`.
+- Logistic regression is one linear layer followed by the sigmoid.
+- A derivative measures how much a function's output changes when you nudge its input.
+- A finite difference, $(f(x+h) - f(x-h)) / 2h$ for a small $h$, approximates a derivative.
+- The chain rule: the derivative of $f(g(x))$ is $f'(g(x)) \cdot g'(x)$.
 
-## The MLP as alternating affine maps and nonlinearities
+## Layers and the forward pass
 
-A multilayer perceptron with $L$ layers computes
+A **layer** does two things. First an **affine map**: multiply by a weight
+matrix and add a bias. Then an activation, applied to every entry separately.
 
 $$
-h^{(0)} = x, \qquad h^{(\ell)} = \phi_\ell\big(W_\ell h^{(\ell-1)} + b_\ell\big)
-\ \text{ for } \ell = 1, \dots, L,
+h_{\text{out}} = \sigma(W h_{\text{in}} + b)
 $$
 
-where $W_\ell \in \mathbb{R}^{n_\ell \times n_{\ell-1}}$, $b_\ell \in
-\mathbb{R}^{n_\ell}$, and $\phi_\ell$ is a fixed nonlinearity applied
-elementwise — typically the identity at the final layer, when the output is
-a score or a set of logits rather than a probability. The $n_\ell$ are the
-widths, and $L$ is the depth.
+Read it aloud: take the input vector $h_{\text{in}}$, multiply by the weight
+matrix $W$, add the bias $b$, and apply the activation $\sigma$ to each entry.
+In this exercise, $W$ has shape `(out, in)`: one row per output unit. The
+number $W h_{\text{in}} + b$ before the activation is the **pre-activation**.
 
-### Why the nonlinearity cannot be dropped
+A network is a list of layers. The **forward pass** feeds the input through
+them one after another:
 
-Suppose every $\phi_\ell$ is the identity. Then $h^{(\ell)} = W_\ell
-h^{(\ell-1)} + b_\ell$ is affine in $h^{(\ell-1)}$, and by induction the
-whole network is affine in $x$: composing two affine maps gives $(W_2 W_1)
-x + (W_2 b_1 + b_2)$, and the argument extends to any number of layers. An
-$L$-layer network with no nonlinearity computes $x \mapsto \bar{W} x +
-\bar{b}$ for a single $\bar{W} = W_L \cdots W_1$ — the hypothesis class of
-linear regression, regardless of $L$.
+```python
+h = x
+for layer in params:
+    z = h @ layer["W"].T + layer["b"]      # pre-activation, shape (out,)
+    h = activation(layer["activation"], z)
+```
 
-Depth without nonlinearity still changes what is easy to reach by gradient
-descent. A hidden layer narrower than the input or output forces a rank
-constraint, $\operatorname{rank}(\bar{W}) \leq \min_\ell n_\ell$. A network
-with a width-$r$ bottleneck represents only affine maps of rank at most
-$r$, however many wide layers surround it. This is the entire content of linear
-autoencoders, and one reason PCA appears as a special case of a linear
-network with a bottleneck. But such a network can never represent a
-function that is not affine. Every other claim in this lesson depends on
-restoring the nonlinearity between layers.
+Writing `h @ W.T` instead of `W @ h` gives the same answer for a vector, and it
+also works when `h` is a batch of rows.
 
-## Activations and their derivatives
+### Worked example by hand
 
-Three nonlinearities recur through the rest of the course.
+A first layer with `W = [[1, 0], [0, 1], [1, 1]]`, `b = [0, 0, -1]`, and ReLU.
+A second layer with `W = [[1, 1, 1]]`, `b = [0.5]`, and no activation. Input
+`x = [2, -3]`.
 
-**ReLU.** $\operatorname{relu}(z) = \max(z, 0)$, with derivative $1$ for
-$z > 0$ and $0$ for $z < 0$ — undefined at $z=0$, where implementations
-pick a value in $[0,1]$ without practical consequence. ReLU is piecewise
-linear, unbounded above, and exactly zero on a whole half-line. That is
-both its main failure mode (a unit that lands in the zero half-line for
-every training example stops learning, the "dying ReLU" problem) and the
-reason it costs almost nothing to compute or differentiate.
+- Pre-activation of layer 1: $[2, -3, 2 + (-3) - 1] = [2, -3, -2]$.
+- After ReLU: $[2, 0, 0]$.
+- Layer 2: $2 + 0 + 0 + 0.5 = 2.5$.
 
-**tanh.** $\tanh(z) = \frac{e^z - e^{-z}}{e^z + e^{-z}}$, with derivative
-$1 - \tanh^2(z)$. It is bounded in $(-1,1)$, smooth, and saturates: for
-large $|z|$ the derivative is exponentially small, which drives vanishing
-gradients in deep or recurrent networks built from it.
+Your `mlp_forward` must return `[2.5]` for this input.
 
-**GELU.** $\operatorname{gelu}(z) = z\,\Phi(z)$, where $\Phi$ is the
-standard Gaussian CDF. Since $\Phi$ has no elementary closed form, practice
-uses the tanh approximation
+## Why you need a nonlinearity
+
+Suppose you drop the activation and stack two affine maps:
 
 $$
-\operatorname{gelu}(z) \approx \tfrac{1}{2} z \left(1 + \tanh\!\left(
-\sqrt{2/\pi}\,\big(z + 0.044715\, z^3\big)\right)\right),
+W_2 (W_1 x + b_1) + b_2 = (W_2 W_1)\, x + (W_2 b_1 + b_2)
 $$
 
-whose derivative follows from the product and chain rules. GELU is smooth
-and non-monotone: it dips slightly negative for $z$ a little below zero
-before rising, a property that is empirically useful in transformer
-feedforward blocks.
+Read it aloud: applying one affine map after another is the same as applying a
+single affine map, with weight matrix $W_2 W_1$ and bias $W_2 b_1 + b_2$. So a
+hundred linear layers are no more powerful than one. Worse, if the middle layer
+is narrow, the combined matrix can be no richer than that middle width allows.
+Its **rank**, the number of independent directions it can output, is at most
+the smallest width in the stack.
 
-## The universal approximation theorem
+```python
+W, b = W2 @ W1, W2 @ b1 + b2      # the whole network in one layer
+```
 
-**Theorem (Cybenko 1989; Hornik 1991).** Let $\phi$ be any continuous,
-non-polynomial function, and let $K \subset \mathbb{R}^d$ be compact. For
-every continuous $f : K \to \mathbb{R}$ and every $\varepsilon > 0$, there
-exist an integer $m$, weights $w_1, \dots, w_m \in \mathbb{R}^d$, biases
-$b_1, \dots, b_m$, and coefficients $c_1, \dots, c_m$ such that
+The activation between layers is what breaks this collapse.
 
-$$
-\sup_{x \in K} \left| f(x) - \sum_{i=1}^{m} c_i\, \phi(w_i^\top x + b_i)
-\right| < \varepsilon .
-$$
+## ReLU
 
-Read this for exactly what it promises. A **two-layer** network — one
-hidden layer of width $m$, one linear output — approximates any continuous
-function on a compact set to any accuracy, for essentially any
-nonlinearity. It says nothing about how large $m$ must be: the theorem is
-purely existential. For many functions, $m$ must grow exponentially in
-$d$ to hit a fixed $\varepsilon$ — an instance of the curse of
-dimensionality the theorem stays silent about. It says nothing about how to
-find the weights: no training procedure is guaranteed to locate a good
-approximation, only that one exists. And it says nothing about depth: a
-function that needs exponential width at depth two can need only
-polynomial width at depth three or four, the subject of the next section.
-
-## An explicit two-layer construction
-
-The theorem's proof is nonconstructive in general, but for a single input
-dimension you can build the approximating network by hand.
-
-Let $f : [a,b] \to \mathbb{R}$ be $L$-Lipschitz, and let $f_m$ be the
-piecewise-linear interpolant of $f$ at $m+1$ equally spaced breakpoints,
-spacing $h = (b-a)/m$. On each interval, $f_m$'s convex-combination
-structure bounds the gap to $f$ by the Lipschitz constant: the interpolation
-error is maximised at the midpoint of an interval, where it equals
-$\tfrac{Lh}{2}$, so $\sup_x |f(x) - f_m(x)| \leq \tfrac{Lh}{2}$ on all of
-$[a,b]$. Setting $\tfrac{Lh}{2} \leq \varepsilon$ and solving for $m$ gives
+The **rectified linear unit** keeps positive numbers and replaces negative
+numbers with 0.
 
 $$
-m \geq \frac{L(b-a)}{2\varepsilon} .
+\operatorname{relu}(x) = \max(x, 0), \qquad
+\operatorname{relu}'(x) = \begin{cases} 1 & x > 0 \\ 0 & x < 0 \end{cases}
 $$
 
-Any continuous piecewise-linear function with interior breakpoints $t_1 <
-\cdots < t_{m-1}$ can be written exactly, with no approximation, as a sum
-of ReLUs:
+Read it aloud: ReLU returns $x$ when it is positive and 0 otherwise. Its slope
+is 1 on the right and 0 on the left. At exactly 0 the slope is not defined.
+Code usually picks 0 there, and the checks do not test that point.
+
+```python
+np.maximum(x, 0.0)
+(x > 0).astype(float)
+```
+
+A ReLU network is **piecewise linear**: it is made of straight segments joined
+at kinks. Each unit adds a kink where its pre-activation crosses 0.
+
+## GELU
+
+The **Gaussian error linear unit** is a smooth cousin of ReLU used in most
+transformers. It behaves like ReLU far from 0 but curves gently near 0. The
+exercise uses the standard tanh approximation:
 
 $$
-f_m(x) = f(t_0) + k_0 (x - t_0) + \sum_{j=1}^{m-1} \Delta k_j \,
-\operatorname{relu}(x - t_j),
+\operatorname{gelu}(x) = \tfrac{1}{2}\, x \left(1 + \tanh(u)\right), \qquad
+u = \sqrt{2/\pi}\,\left(x + 0.044715\, x^3\right)
 $$
 
-where $k_0$ is the slope on the first interval and $\Delta k_j$ is the
-change in slope at $t_j$. Each $\operatorname{relu}(x-t_j)$ contributes
-nothing before $t_j$ and a ramp of slope $1$ after it, so summing them with
-coefficients equal to the slope changes reproduces $f_m$ exactly. Writing
-the leading affine term itself as a difference of two ReLUs turns the whole
-sum into a genuine two-layer ReLU network. Substituting $m \approx
-L(b-a)/(2\varepsilon)$ gives the headline result: a two-layer ReLU network
-needs $\Theta(1/\varepsilon)$ hidden units to approximate an $L$-Lipschitz
-function on $[a,b]$ to error $\varepsilon$. This bound is tight up to
-constants — no piecewise-linear approximation with fewer pieces can achieve
-error $\varepsilon$ against every $L$-Lipschitz function.
+Read it aloud: compute an inner value $u$ from $x$ and $x^3$. Take its $\tanh$,
+which lies between -1 and 1. Add 1 so you get a number between 0 and 2, halve
+it, and multiply by $x$. For large positive $x$, $\tanh(u) \approx 1$ and the
+output is about $x$. For large negative $x$, $\tanh(u) \approx -1$ and the
+output is about 0.
 
-## Depth separation: the sawtooth
+Its derivative comes from the product rule and the chain rule. Write
+$t = \tanh(u)$. The derivative of $\tanh$ is $1 - t^2$:
 
-The construction above is one-dimensional, and its width is linear in
-$1/\varepsilon$. In higher dimension, the same style of argument makes
-width grow exponentially in $d$ for generic Lipschitz functions — the
-curse of dimensionality the universal approximation theorem hides. Depth
-changes the picture for specific, structured functions: some functions a
-narrow, deep network computes exactly require exponentially wider shallow
-networks to approximate at all.
+$$
+\operatorname{gelu}'(x) = \tfrac{1}{2}(1 + t) + \tfrac{1}{2}\, x\, (1 - t^2)\, \sqrt{2/\pi}\,\left(1 + 3 \cdot 0.044715\, x^2\right)
+$$
 
-The canonical example is the **tent map** $T(x) = 2\min(x, 1-x)$ on $[0,1]$,
-a "V" folded in half. Two ReLU units compute it exactly:
-$T(x) = 2\operatorname{relu}(x) - 4\operatorname{relu}(x - \tfrac12)$.
-Define the depth-$k$ **sawtooth** $S_k = T \circ T \circ \cdots \circ T$
-($k$ compositions). $T$ maps $[0,1]$ onto $[0,1]$ two-to-one, and
-does so on each piece the previous composition already created. As a
-result, $S_k$ has exactly $2^k$ monotone linear pieces on $[0,1]$: each
-additional layer of $T$ doubles the piece count by folding the range back
-over the whole domain. A ReLU network with $k$ hidden layers of width $2$ computes $S_k$
-exactly, by feeding each tent map's output into the next tent map's two
-probes — depth $k$, width $O(1)$.
+Read it aloud: the first term is the derivative of the $x$ factor times the
+bracket. The second term is $x$ times the derivative of the bracket, which is
+$\frac{1}{2}$ times $\tanh$'s slope $1 - t^2$ times the slope of $u$.
 
-The matching lower bound is a counting fact about linear regions. A ReLU
-network taking a scalar input, with hidden layers of widths $n_1, \dots,
-n_L$ and a linear output layer, computes a function with at most
-$\prod_{l=1}^{L} (n_l+1)$ linear pieces on any interval. That bound holds
-because each of the $n_l$ units in layer $l$ can cross zero at most once
-inside a piece the previous layer already created, splitting it into at
-most $n_l+1$ sub-pieces. A **shallow** competitor, one hidden layer of
-width $n$, has at most $n+1$ pieces. Matching the sawtooth's $2^k$ pieces
-therefore forces $n \geq 2^k-1$ — width exponential in $k$. The deep
-network reaches the same count with $2k$ hidden units, linear in $k$. More
-generally, a network of depth $L$ with width bounded by a constant $w$
-computes at most $(w+1)^L$ pieces. Matching the sawtooth at fixed width
-therefore forces depth $\Omega(k/\log w)$. What depth $\Theta(k)$ computes
-with $O(1)$ width per layer, $O(1)$ depth needs exponential width to match
-(Telgarsky; Eldan and Shamir, for related constructions).
+```python
+u = np.sqrt(2 / np.pi) * (x + 0.044715 * x**3)
+t = np.tanh(u)
+```
+
+### Worked example by hand
+
+At $x = 1$: $u = 0.79788 \times 1.044715 = 0.83356$, and $t = \tanh(0.83356) = 0.68238$.
+
+- $\operatorname{gelu}(1) = 0.5 \times 1 \times 1.68238 = 0.84119$.
+- $\operatorname{gelu}'(1) = 0.84119 + 0.5 \times (1 - 0.46564) \times 0.79788 \times 1.134145 = 0.84119 + 0.24177 = 1.08296$.
+- $\operatorname{gelu}(-1) = -0.15881$. GELU dips slightly below 0, unlike ReLU.
+
+## What one hidden layer can do
+
+The **universal approximation theorem** says, in words: a network with one
+hidden layer and a nonlinear activation such as ReLU can get as close as you
+like to any continuous function on a bounded region, if the hidden layer is
+wide enough.
+
+Two cautions come with it. It does not say how wide "wide enough" is, and for
+bumpy functions the width can be huge. It also says nothing about whether
+training will find those weights. For a function whose slope never exceeds $L$
+on $[0, 1]$, about $L / \epsilon$ ReLU units are enough to stay within error
+$\epsilon$, because each unit adds one kink to a piecewise-linear fit.
+
+## Depth: the sawtooth
+
+Depth can buy far more than width. The **tent map** folds the interval
+$[0, 1]$ in half:
+
+$$
+T(x) = 2 \min(x, 1 - x) = 2\operatorname{relu}(x) - 4\operatorname{relu}(x - \tfrac{1}{2}) \quad \text{on } [0, 1]
+$$
+
+Read it aloud: $T$ rises from 0 at $x = 0$ to 1 at $x = \frac{1}{2}$, then
+falls back to 0 at $x = 1$. You build it with two ReLU units: one that "sees"
+$x$ and one that "sees" $x - \frac{1}{2}$. Check the right half: for
+$x = 0.75$, $2(0.75) - 4(0.25) = 0.5$, and $2\min(0.75, 0.25) = 0.5$.
+
+Apply the tent map $k$ times in a row and you get a **sawtooth** with $2^k$
+straight pieces. Each fold doubles the number of teeth. A network with $k$
+layers of width 2 computes it with about $6k$ parameters. A one-hidden-layer
+network needs roughly $2^k$ units to make that many kinks, because each unit
+adds at most one kink.
+
+Depth 2 by hand, $T(T(x))$ at a few points:
+
+| $x$ | 0 | 0.125 | 0.25 | 0.375 | 0.5 | 0.75 |
+|---|---|---|---|---|---|---|
+| $T(x)$ | 0 | 0.25 | 0.5 | 0.75 | 1 | 0.5 |
+| $T(T(x))$ | 0 | 0.5 | 1 | 0.5 | 0 | 1 |
+
+That is two teeth, four straight pieces, which is $2^2$.
+
+To stack tents inside the layer format, fuse the "combine" step
+$2h_1 - 4h_2$ of one tent into the weights of the next layer. The next layer
+must probe $y$ and $y - \frac{1}{2}$, where $y = 2h_1 - 4h_2$, so both of its
+weight rows are $[2, -4]$ and its bias is $[0, -\frac{1}{2}]$.
+
+## Counting parameters and flops
+
+A layer with weights of shape `(out, in)` has `out * in` weights and `out`
+biases. A **flop** is one floating-point operation. The exercise charges:
+
+- $2 \times \text{in} \times \text{out}$ for the matrix-vector product, one multiply and one add per weight.
+- $\text{out}$ for the bias add.
+- Per output element: 1 for ReLU, 9 for GELU, 0 for identity.
+
+For a 4-8-8-3 network with ReLU, ReLU, identity:
+
+- Parameters: $(32 + 8) + (64 + 8) + (24 + 3) = 139$.
+- Flops: $(64 + 8 + 8) + (128 + 8 + 8) + (48 + 3 + 0) = 80 + 144 + 51 = 275$.
+
+```python
+sum(layer["W"].size + layer["b"].size for layer in params)
+```
+
+## Build it step by step
+
+Build the functions in the order the checks test them.
+
+1. **`relu(x)` and `relu_grad(x)`.** Any shape in, same shape out. Use `np.maximum` and a boolean mask cast with `.astype(float)`. Common mistake: returning a boolean array from `relu_grad`.
+2. **`gelu(x)` and `gelu_grad(x)`.** Same shape in and out. Compute `u` and `t = np.tanh(u)` once, then combine them as in the formulas above. Common mistake: forgetting the `3 *` in the slope of `u`, or dropping the first term $\frac{1}{2}(1 + t)$. The check compares your derivative to finite differences.
+3. **`mlp_forward(params, x)`.** Takes a list of layer dicts and a vector `x` of shape `(in,)`. Returns shape `(out,)`. Loop over layers, compute `h @ W.T + b`, and apply the named activation: `"relu"`, `"gelu"`, or `"identity"`. Common mistake: using `W @ h` with the wrong shape, or applying an activation to the final `"identity"` layer.
+4. **`sawtooth_network(depth)`.** Returns `depth + 1` layers. The first layer has `W` of shape `(2, 1)` with both rows `[1]` and bias `[0, -0.5]`. Each of the `depth - 1` middle layers has `W = [[2, -4], [2, -4]]` and bias `[0, -0.5]`. The output layer has `W = [[2, -4]]`, bias `[0]`, and `"identity"`. Common mistake: adding a separate combine layer with no activation, which breaks the `depth + 1` layer count.
+5. **`count_linear_regions_1d(params, x_min, x_max)`.** Keep a list of intervals. On each interval, every unit is an exact straight line in $x$, stored as a slope and an intercept, both arrays. For each layer, compute pre-activation slopes `W @ slopes` and intercepts `W @ intercepts + b`. Split the interval where any pre-activation is 0, at $x = -\text{intercept} / \text{slope}$, only if that point lies strictly inside the interval. On each piece, test the midpoint: a ReLU unit that is off gets slope and intercept 0. At the end, merge neighbouring pieces whose output formula is the same, and return the count. Common mistake: counting a kink that does not change the output, so you skip the final merge.
+6. **`parameter_count(params)`.** Sum `W.size + b.size`. Common mistake: forgetting the biases.
+7. **`flop_count(params)`.** Read `out, in = W.shape` and add the three charges above for each layer. Return an `int`. Common mistake: swapping `in` and `out` when you read the shape, or charging an activation cost for `"identity"`.
 
 ## Cost and scaling
 
-For a layer with input dimension $n_{\text{in}}$ and output dimension
-$n_{\text{out}}$, the affine part costs $2\, n_{\text{in}} n_{\text{out}}$
-flops for the matrix-vector product plus $n_{\text{out}}$ for the bias, and
-the nonlinearity costs $O(n_{\text{out}})$ more. None of this depends on
-depth directly; it depends on the widths, as the following table shows.
+The cost of one forward pass grows with the number of weights. The table shows
+how it changes for a network of $L$ layers of width $m$.
 
-| Quantity | Formula | Notes |
+| Change | Parameters | Flops per input |
 |---|---|---|
-| Parameters, one layer | $n_{\text{in}} n_{\text{out}} + n_{\text{out}}$ | Weights plus biases. |
-| Parameters, $L$ layers | $\sum_{\ell=1}^{L} (n_{\ell-1} n_\ell + n_\ell)$ | Dominated by the widest adjacent pair. |
-| Flops, one layer, ReLU | $2 n_{\text{in}} n_{\text{out}} + 2 n_{\text{out}}$ | Matmul, bias, one comparison per unit. |
-| Flops, forward pass | $\sum_{\ell} \big(2 n_{\ell-1} n_\ell + O(n_\ell)\big)$ | Linear in depth, quadratic in width per layer. |
+| Double the width $m$ | about 4 times | about 4 times |
+| Double the depth $L$ | about 2 times | about 2 times |
+| Double the batch size | unchanged | 2 times |
 
-A network with $L$ layers of equal width $n$ has $O(Ln^2)$ parameters and
-flops. Doubling the depth doubles the cost, while doubling the width
-quadruples it. That is one reason practical architectures favor moderate
-width and enough depth to reach the function class they need. The sawtooth
-section is the sharpest illustration: reaching $2^k$ linear pieces costs
-$O(k)$ parameters at width $2$ and depth $k$, against $O(2^k)$ parameters
-at depth $2$.
+Memory for inference is the weights plus one layer of activations. For
+training, you also keep every layer's activations for the backward pass, which
+you see in the next lesson.
 
 ## Where this breaks
 
-**The theorem does not tell you the width you need.** Cybenko and Hornik's
-result is an existence statement. Outside hand-built cases like the
-Lipschitz interpolant above, the required $m$ for a target $\varepsilon$ is
-unknown and can be astronomically large. Treating "a two-layer network can
-approximate anything" as a design principle ignores that the "anything" is
-frequently infeasible in practice.
+**Linear pieces grow, but training may not find them.** The sawtooth shows
+what depth can represent. Gradient descent from random weights rarely finds
+such a precise construction.
 
-**Optimization is not part of the guarantee.** Nothing above says gradient
-descent, from a random initialization, finds weights anywhere near the
-approximation the theorem promises exists. Expressivity and learnability
-are different questions, and a network can be expressive enough for a task
-while remaining hard to train on it.
+**Dead ReLUs.** If a unit's pre-activation is negative for every input, its
+slope is 0 everywhere and it never learns again. Careful initialisation, a
+smaller learning rate, or GELU help.
 
-**Piecewise-linear networks are not smooth.** A ReLU network's output has
-discontinuous derivatives at every breakpoint. This is invisible in the
-loss during training but matters for uses that need a smooth function,
-such as physical simulators or gradient-based optimization of the input
-rather than the parameters, where kinks make second-order methods behave
-badly.
+**Deep stacks are hard to train.** Gradients can shrink or grow as they pass
+through many layers. Later lessons cover initialisation, normalisation, and
+residual connections that fix this.
 
-**Linear-region counts do not measure practical expressivity.** The bound
-above is an upper bound on the pieces a network *can* produce, achieved by
-adversarial weights. A network trained by gradient descent on real data
-tends to realize far fewer effective regions than its architecture permits,
-and region counts correlate only loosely with generalization.
+**Wide shallow networks cost a lot.** The universal approximation theorem
+allows one hidden layer, but the width needed can be enormous. Depth is
+usually the cheaper route.
 
 ## The exercise
 
-You implement `relu`, `relu_grad`, `gelu`, and `gelu_grad`, then
-`mlp_forward(params, x)` for a network given as a list of layers, each a
-dict of a weight matrix, a bias, and an activation name. Then you build
-`sawtooth_network(depth)`, producing the exact weights derived above for a
-depth-`k` ReLU network computing the sawtooth, and `count_linear_regions_1d`,
-which counts a scalar ReLU network's linear pieces exactly by propagating
-breakpoints through the layers rather than by sampling. Finally,
-`parameter_count` and `flop_count` implement the formulas from the table
-above for an arbitrary network.
+You implement `relu`, `relu_grad`, `gelu`, `gelu_grad`, `mlp_forward`,
+`sawtooth_network`, `count_linear_regions_1d`, `parameter_count`, and
+`flop_count` in `starter.py`.
 
-The checks verify each activation and its derivative against
-`mlcheck.finite_difference`. They also verify that a two-layer network
-built from two `"identity"` layers collapses to the single affine map
-their product predicts, and inherits its rank bound. They verify that
-`sawtooth_network(k)` produces exactly $2^k$ linear pieces for several
-values of $k$ and matches the closed-form sawtooth to machine precision.
-Finally, they verify that `parameter_count` and `flop_count` match
-hand-worked totals for a stated four-layer architecture.
+The checks compare both derivatives to finite differences and test GELU at
+$\pm 8$. They run `mlp_forward` on the worked example above, and confirm that
+two identity layers equal one composed affine map. They check that
+`sawtooth_network(k)` has exactly $2^k$ linear pieces and matches the
+closed-form sawtooth to machine precision. Finally, they compare your counts to
+139 parameters and 275 flops on a 4-8-8-3 network.
