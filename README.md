@@ -28,9 +28,10 @@ computes it. Each lesson ends with a step-by-step guide to its exercise.
 | `backend/` | FastAPI: auth, content, progress, drafts, and the run stream. |
 | `backend/app/runner/` | The harness, the assertion library the checks use, and the two execution backends. |
 | `frontend/` | React and Vite: the reader, the editor, and the check console. |
+| `frontend/src/book/` | The print layout for the PDF book, and `frontend/scripts/build-book.mjs`, which prints it. |
 | `gpu/` | The RunPod serverless worker, for the lessons that want a GPU. |
 | `docs/` | The content contract and the curriculum. |
-| `scripts/` | Content validation and the deploy script. |
+| `scripts/` | Content validation, the book's content dump, and the deploy script. |
 
 ## The curriculum
 
@@ -200,12 +201,48 @@ commit it sent. `.env` on the VM is never touched, because it holds the session
 secret and the RunPod key. `Caddyfile.example` holds the vhost
 block, including the buffering and timeout settings the run stream needs.
 
+The script also builds the PDF book on your workstation, because printing it
+needs Chrome and the VM has little memory or disk to spare. It copies the PDF to
+`~/docs/ml/book` on the VM, which the container mounts read-only. For more
+information, see [The PDF book](#the-pdf-book).
+
 To reach the app before its DNS record resolves, tunnel the container's
 localhost port:
 
 ```bash
 ssh -L 8093:127.0.0.1:8093 ifkash@vm.ifkash.dev
 ```
+
+## The PDF book
+
+The **PDF** button in the header downloads the whole course as one book: every
+lesson, every exercise with its starter file and hints, and the solutions in an
+appendix. The book has a contents page with page numbers, a bookmark for every
+lesson and section, and running heads. Like the lessons, the download needs a
+signed-in session.
+
+To build the book, run the following command:
+
+```bash
+node frontend/scripts/build-book.mjs
+```
+
+The build needs Google Chrome or Chromium, found through `CHROME_PATH` or in
+the usual install locations. It dumps the lessons with the backend's own loader
+(`scripts/dump_book.py`), renders the print layout in `frontend/src/book/` with
+the site's Markdown pipeline, and prints it with headless Chrome. It prints
+more than once, so that the contents carry real page numbers. The PDF and its
+`manifest.json` land in `book/`, which Git ignores.
+
+The build fails on any formula KaTeX can't render and on anything wider than
+the page, because Chrome shrinks every page to fit the widest element. It skips
+itself when no lesson or layout file has changed; to rebuild anyway, pass
+`--force`. CI builds the book on every push and keeps it as a workflow
+artifact for seven days.
+
+The lockfile must come from npm 10, because the image's `npm ci` rejects a
+lockfile that npm 11 writes. After you change a dependency, run
+`npx npm@10 install` in `frontend/`.
 
 ## Licence
 

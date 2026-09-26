@@ -6,8 +6,10 @@
 #
 #   docker compose up -d --build
 #
-# This directory is a clone of the repository. A deploy is `git pull --ff-only`
-# then the line above; scripts/deploy.sh does both from a workstation.
+# This directory holds the committed tree, which scripts/deploy.sh ships from a
+# workstation with `git archive` and then runs the line above. The PDF book in
+# ./book is built on that workstation too, copied here, and mounted read-only;
+# without it the app runs as before, with no download button.
 
 name: ml
 
@@ -36,6 +38,7 @@ services:
       DATA_DIR: /data
     volumes:
       - ml-data:/data
+      - ./book:/app/book:ro
     networks:
       - edge
     # A reader's submission is a subprocess inside this container, so cap what

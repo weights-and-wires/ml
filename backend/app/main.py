@@ -1,8 +1,9 @@
 """The HTTP surface: auth, content, progress, drafts, and the run stream.
 
 Everything under `/api` needs a session cookie except `/api/health`,
-`/api/session`, and `/api/login`. Everything else is the single-page app, served
-from `frontend/dist` with a catch-all so client-side routes survive a reload.
+`/api/session`, and `/api/login`, and so does the PDF book under `/book`.
+Everything else is the single-page app, served from `frontend/dist` with a
+catch-all so client-side routes survive a reload.
 """
 
 from __future__ import annotations
@@ -66,6 +67,7 @@ def health(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
         "lessons": len(lessons),
         "exercises": len(curriculum.load_exercises()),
         "gpu": settings.gpu_available,
+        "book_pages": (book_info(settings) or {}).get("pages", 0),
     }
 
 
@@ -133,6 +135,49 @@ def solution(exercise_id: str, user: str = Depends(current_user)) -> dict[str, A
     if exercise is None:
         raise HTTPException(status_code=404, detail="No such exercise")
     return {"id": exercise_id, "solution": exercise["solution"]}
+
+
+def book_info(settings: Settings) -> dict[str, Any] | None:
+    """The PDF book on disk, as the book build's manifest describes it.
+
+    The PDF is built on the deploying machine and copied beside the app, so a
+    fresh checkout has none. Then this is None and the header shows no download
+    button, rather than one that leads to a 404.
+    """
+    try:
+        manifest = json.loads((settings.book_dir / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    name = manifest.get("file")
+    if not isinstance(name, str) or "/" in name or not (settings.book_dir / name).is_file():
+        return None
+    return {
+        "title": manifest.get("title"),
+        "pages": manifest.get("pages"),
+        "bytes": manifest.get("bytes"),
+        "built": manifest.get("built"),
+        "commit": manifest.get("commit"),
+        "url": f"/book/{name}",
+    }
+
+
+@app.get("/api/book")
+def book(
+    user: str = Depends(current_user), settings: Settings = Depends(get_settings)
+) -> dict[str, Any]:
+    """The whole course as one PDF, or None when this server has no PDF."""
+    return {"book": book_info(settings)}
+
+
+@app.get("/book/{name}")
+def book_file(
+    name: str, user: str = Depends(current_user), settings: Settings = Depends(get_settings)
+) -> FileResponse:
+    """The PDF, sent as a download. Only the file the manifest names is served."""
+    info = book_info(settings)
+    if info is None or info["url"] != f"/book/{name}":
+        raise HTTPException(status_code=404, detail="No such book")
+    return FileResponse(settings.book_dir / name, media_type="application/pdf", filename=name)
 
 
 # Drafts and progress ----------------------------------------------------

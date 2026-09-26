@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
+import DownloadBook from "./components/DownloadBook";
 import Login from "./components/Login";
 import Mark from "./components/Mark";
 import Sidebar from "./components/Sidebar";
@@ -145,6 +146,8 @@ export default function App() {
             GPU available
           </span>
         )}
+
+        <DownloadBook />
 
         <AccountMenu
           username={username}

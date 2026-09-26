@@ -11,6 +11,11 @@
 #
 # `.env` on the VM is never touched: it holds the session secret and the RunPod
 # key, and neither is in the repository.
+#
+# The PDF book is the one thing built here rather than on the VM, because
+# printing it needs Chrome and the VM has neither the disk nor the memory to
+# spare. The build skips itself when no lesson or layout file has changed.
+# To deploy without touching the PDF already on the VM, set ML_SKIP_BOOK=1.
 
 set -euo pipefail
 
@@ -24,6 +29,12 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
   echo "Warning: the working directory has changes that will not be deployed." >&2
 fi
 
+ROOT="$(git rev-parse --show-toplevel)"
+if [ "${ML_SKIP_BOOK:-0}" != "1" ]; then
+  echo "Building the PDF book"
+  node "$ROOT/frontend/scripts/build-book.mjs"
+fi
+
 echo "Shipping ${SHA:0:12} to $HOST:~/$REMOTE_DIR"
 
 ssh -i "$KEY" "$HOST" "mkdir -p ~/$REMOTE_DIR"
@@ -32,6 +43,14 @@ ssh -i "$KEY" "$HOST" "mkdir -p ~/$REMOTE_DIR"
 # tree is replaced file by file and only tracked paths are overwritten.
 git archive --format=tar "$SHA" \
   | ssh -i "$KEY" "$HOST" "tar -x -C ~/$REMOTE_DIR"
+
+# The directory must exist before compose mounts it, or Docker creates it as
+# root and the next copy fails.
+ssh -i "$KEY" "$HOST" "mkdir -p ~/$REMOTE_DIR/book"
+if [ "${ML_SKIP_BOOK:-0}" != "1" ]; then
+  echo "Copying the PDF book"
+  rsync -az --delete --exclude .build -e "ssh -i $KEY" "$ROOT/book/" "$HOST:$REMOTE_DIR/book/"
+fi
 
 echo "Building"
 ssh -i "$KEY" "$HOST" "cd ~/$REMOTE_DIR && GIT_SHA=$SHA docker compose up -d --build" 2>&1 \
@@ -47,7 +66,10 @@ for _ in $(seq 1 60); do
     "curl -fsS http://127.0.0.1:8093/api/health 2>/dev/null" \
     | python3 -c "import json,sys; print(json.load(sys.stdin).get('commit',''))" 2>/dev/null || true)"
   if [ "$reported" = "$SHA" ]; then
-    echo "Live at ${SHA:0:12}"
+    pages="$(ssh -i "$KEY" "$HOST" \
+      "curl -fsS http://127.0.0.1:8093/api/health 2>/dev/null" \
+      | python3 -c "import json,sys; print(json.load(sys.stdin).get('book_pages', 0))" 2>/dev/null || echo 0)"
+    echo "Live at ${SHA:0:12}, with a PDF book of $pages pages"
     exit 0
   fi
   sleep 5

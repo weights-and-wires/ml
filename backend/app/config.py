@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     data_dir: Path = REPO_ROOT / "data"
     content_dir: Path = REPO_ROOT / "content"
     frontend_dist: Path = REPO_ROOT / "frontend" / "dist"
+    # The PDF book and its manifest, written by frontend/scripts/build-book.mjs
+    # on the deploying machine and mounted into the container.
+    book_dir: Path = REPO_ROOT / "book"
 
     # Execution
     runner: str = "local"

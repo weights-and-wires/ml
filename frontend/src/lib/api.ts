@@ -35,6 +35,16 @@ export type Lesson = LessonMeta & {
 
 export type Part = { part: string; lessons: LessonMeta[] };
 
+/** The whole course as one PDF, built at deploy time. */
+export type BookFile = {
+  title: string;
+  pages: number;
+  bytes: number;
+  built: string;
+  commit: string;
+  url: string;
+};
+
 export type ProgressMap = Record<
   string,
   { status: "started" | "solved"; updated_at: number }
@@ -157,6 +167,8 @@ export const api = {
       runpod: Record<string, unknown>;
     }>("/api/compute"),
 
+  book: () => request<{ book: BookFile | null }>("/api/book"),
+
   health: () =>
     request<{
       ok: boolean;
@@ -164,6 +176,7 @@ export const api = {
       lessons: number;
       exercises: number;
       gpu: boolean;
+      book_pages: number;
     }>("/api/health"),
 };
 
