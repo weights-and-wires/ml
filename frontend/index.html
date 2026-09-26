@@ -1,14 +1,35 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#161614" media="(prefers-color-scheme: dark)" />
     <title>Machine learning — weights and wires</title>
     <meta
       name="description"
-      content="A graduate-level machine learning course, from least squares to mixtures of experts, with a check runner beside every lesson."
+      content="A hands-on machine learning course for undergraduates, from fitting a line to mixtures of experts, with an editor and a check runner beside every lesson."
     />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%231c1b18'/%3E%3Cg fill='%23f7f6f2'%3E%3Ccircle cx='6.5' cy='7.5' r='2'/%3E%3Ccircle cx='6.5' cy='16.5' r='2'/%3E%3Ccircle cx='17.5' cy='12' r='2.2'/%3E%3C/g%3E%3Cpath d='M8.3 8.3 15.6 11.3M8.3 15.7 15.6 12.7' stroke='%23f7f6f2' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <script>
+      // Apply the stored theme before the first paint. src/lib/theme.ts owns
+      // the same key and keeps it in step afterwards.
+      (function () {
+        var mode = null;
+        try {
+          mode = localStorage.getItem("ml.theme");
+        } catch (e) {}
+        var dark =
+          mode === "dark" ||
+          (mode !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

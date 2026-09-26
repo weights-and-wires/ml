@@ -4,16 +4,19 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import ExercisePane from "../components/ExercisePane";
 import LessonReader from "../components/LessonReader";
 import SplitPane from "../components/SplitPane";
-import { api, ApiError, type Lesson } from "../lib/api";
+import { api, ApiError, type Lesson, type LessonMeta } from "../lib/api";
 import { REVEAL_EVENT, revealInEditor } from "../lib/events";
+import { titleOf } from "../lib/parts";
 import { WIDE, useMediaQuery } from "../lib/useMediaQuery";
 
 type Props = {
   gpuAvailable: boolean;
+  /** Every lesson, in order, so neighbours and prerequisites show real titles. */
+  lessons: LessonMeta[];
   onProgress: () => void;
 };
 
-export default function LessonPage({ gpuAvailable, onProgress }: Props) {
+export default function LessonPage({ gpuAvailable, lessons, onProgress }: Props) {
   const { slug = "" } = useParams();
   const navigate = useNavigate();
   const [lesson, setLesson] = useState<Lesson | null>(null);
@@ -84,12 +87,9 @@ export default function LessonPage({ gpuAvailable, onProgress }: Props) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-center">
         <div>
-          <p className="text-sm text-ink-300">{error}</p>
-          <Link
-            to="/"
-            className="mt-3 inline-block text-sm text-wire-400 underline underline-offset-4"
-          >
-            Back to the dashboard
+          <p className="font-serif text-lg text-ink">{error}</p>
+          <Link to="/" className="btn btn-secondary mt-4">
+            Back to the contents
           </Link>
         </div>
       </div>
@@ -98,8 +98,8 @@ export default function LessonPage({ gpuAvailable, onProgress }: Props) {
 
   if (!lesson) {
     return (
-      <div className="flex flex-1 items-center justify-center text-xs text-ink-600">
-        Loading…
+      <div className="flex flex-1 items-center justify-center text-[13px] text-ink-4" aria-busy="true">
+        Loading the lesson…
       </div>
     );
   }
@@ -107,6 +107,7 @@ export default function LessonPage({ gpuAvailable, onProgress }: Props) {
   const reading = (
     <LessonReader
       lesson={lesson}
+      lessons={lessons}
       onStartExercise={lesson.exercise_detail ? () => revealInEditor() : undefined}
     />
   );
@@ -121,7 +122,7 @@ export default function LessonPage({ gpuAvailable, onProgress }: Props) {
         <div
           role="tablist"
           aria-label="Lesson and exercise"
-          className="flex shrink-0 gap-1 border-b border-ink-800 bg-ink-900/60 px-2 py-1.5"
+          className="flex shrink-0 gap-1 border-b border-rule bg-chrome p-1.5"
         >
           <Tab
             selected={tab === "first"}
@@ -153,7 +154,7 @@ export default function LessonPage({ gpuAvailable, onProgress }: Props) {
             initialCode={lesson.draft ?? lesson.exercise_detail.starter}
             gpuAvailable={gpuAvailable}
             gpuLesson={lesson.gpu}
-            next={lesson.next}
+            next={lesson.next ? { slug: lesson.next, title: titleOf(lesson.next, lessons) } : null}
             onSolved={onSolved}
           />
         }
@@ -178,10 +179,10 @@ function Tab({
       role="tab"
       aria-selected={selected}
       onClick={onSelect}
-      className={`min-h-9 flex-1 rounded-md px-3 text-[13px] font-medium transition ${
+      className={`min-h-9 flex-1 rounded-md px-3 text-[13.5px] font-medium transition-colors ${
         selected
-          ? "bg-wire-500/15 text-ink-100 ring-1 ring-wire-500/30"
-          : "text-ink-400 hover:bg-ink-850 hover:text-ink-200"
+          ? "bg-raise text-ink shadow-[inset_0_0_0_1px_var(--rule-strong)]"
+          : "text-ink-3 hover:text-ink"
       }`}
     >
       {label}

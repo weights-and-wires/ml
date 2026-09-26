@@ -164,7 +164,7 @@ export default function SplitPane({
         className={`group relative shrink-0 touch-none transition-colors ${
           stacked ? "hidden" : ""
         } ${row ? "w-px cursor-col-resize" : "h-px cursor-row-resize"} ${
-          dragging ? "bg-wire-500" : "bg-ink-800 hover:bg-wire-500/60"
+          dragging ? "bg-accent" : "bg-rule hover:bg-accent/60"
         }`}
       >
         {/* The visible line is a hairline; this widens what the pointer hits. */}

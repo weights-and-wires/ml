@@ -74,10 +74,7 @@ function callout(node: Element): Element | null {
     (c) => !(c === first && !textOf(first).trim() && first.children.length <= 1),
   );
   return el("aside", { className: ["callout", `callout-${kind.toLowerCase()}`], role: "note" }, [
-    el("div", { className: ["callout-label"] }, [
-      el("span", { className: ["callout-icon"], ariaHidden: "true" }, []),
-      { type: "text", value: label },
-    ]),
+    el("div", { className: ["callout-label"] }, [{ type: "text", value: label }]),
     el("div", { className: ["callout-body"] }, body),
   ]);
 }
@@ -114,7 +111,9 @@ function decorate(
       const firstContent = node.children.findIndex((c) => !isBlank(c)) === index;
       if (firstContent && /[.:]$/.test(text) && (node.tagName === "p" || node.tagName === "li")) {
         addClass(child, "runin");
-      } else if (isTerm(text)) {
+      } else if (isTerm(text) && !child.children.some((c) => isElement(c, "code"))) {
+        // Bold code names a function, not a term, which is also how the
+        // flashcards in lessonOutline tell the two apart.
         addClass(child, "term");
         const key = text.toLowerCase();
         if (!ctx.seenTerms.has(key)) {
@@ -231,9 +230,9 @@ export default function rehypeLesson(options: { symbols?: string[] } = {}) {
         child.children = [
           el("span", { className: ["h2-kicker"], ariaHidden: "true" }, [
             el("span", { className: ["h2-num"] }, [
-              { type: "text", value: String(number).padStart(2, "0") },
+              { type: "text", value: String(number) },
             ]),
-            { type: "text", value: KIND_LABEL[kind] },
+            el("span", { className: ["h2-kind"] }, [{ type: "text", value: KIND_LABEL[kind] }]),
           ]),
           el("span", { className: ["h2-text"] }, child.children),
         ];

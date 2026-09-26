@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { NavLink, useParams } from "react-router-dom";
 
 import type { Part, ProgressMap } from "../lib/api";
-import { partAccent } from "../lib/parts";
+import { splitPart } from "../lib/parts";
+import StatusMark from "./StatusMark";
 
 type Props = {
   parts: Part[];
@@ -38,14 +39,17 @@ export default function Sidebar({
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(
-        OPEN_PARTS_KEY,
-        JSON.stringify([...shutParts]),
-      );
+      window.localStorage.setItem(OPEN_PARTS_KEY, JSON.stringify([...shutParts]));
     } catch {
       // Storage being off only costs the reader their collapse state.
     }
   }, [shutParts]);
+
+  const numbers = useMemo(() => {
+    const map = new Map<string, number>();
+    parts.flatMap((part) => part.lessons).forEach((lesson, i) => map.set(lesson.slug, i + 1));
+    return map;
+  }, [parts]);
 
   const query = filter.trim().toLowerCase();
   const shown = useMemo(() => {
@@ -81,9 +85,7 @@ export default function Sidebar({
   // A hidden pane keeps its 18rem of content and loses its width, so the list
   // is clipped on the way out instead of reflowing into a narrower column.
   // visibility:hidden also takes the links out of the tab order.
-  const drawer = open
-    ? "visible translate-x-0 shadow-2xl shadow-ink-950/60"
-    : "invisible -translate-x-full";
+  const drawer = open ? "visible translate-x-0 shadow-2xl" : "invisible -translate-x-full";
   const wide = collapsed
     ? "lg:invisible lg:w-0 lg:translate-x-0 lg:border-r-0"
     : "lg:visible lg:w-72 lg:translate-x-0";
@@ -95,170 +97,133 @@ export default function Sidebar({
           type="button"
           aria-label="Close the lesson list"
           onClick={onClose}
-          className="fixed inset-0 z-40 bg-ink-950/70 backdrop-blur-[2px] lg:hidden"
+          className="fixed inset-0 z-40 bg-black/30 lg:hidden"
         />
       )}
 
       <nav
         aria-label="Lessons"
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 shrink-0 flex-col overflow-hidden border-r border-ink-800 bg-ink-900 transition-[transform,width,visibility] duration-200 ease-out lg:static ${drawer} ${wide}`}
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 shrink-0 flex-col overflow-hidden border-r border-rule bg-chrome transition-[transform,width,visibility] duration-200 ease-out lg:static ${drawer} ${wide}`}
       >
-        <div className="flex w-72 min-h-0 flex-1 flex-col">
-          <div className="border-b border-ink-800 px-4 py-3.5">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-ink-400">
-                Curriculum
+        <div className="flex min-h-0 w-72 flex-1 flex-col">
+          <div className="px-4 pb-3 pt-3.5">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="flex-1 text-[13px] font-semibold text-ink">Contents</span>
+              <span className="text-[12px] tabular-nums text-ink-3">
+                {totals.solved} of {totals.all} solved
               </span>
-              <span className="flex items-center gap-1.5">
-                <span className="font-mono text-[11px] tabular-nums text-ink-400">
-                  {totals.solved}/{totals.all}
-                </span>
-                <button
-                  type="button"
-                  onClick={onCollapse}
-                  aria-label="Hide the lesson list"
-                  title="Hide the lesson list (Cmd or Ctrl with B)"
-                  className="-mr-1 hidden rounded p-1 text-ink-600 transition hover:bg-ink-850 hover:text-ink-300 lg:block"
-                >
-                  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
-                    <path
-                      d="M7.5 2 3.5 6l4 4"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-                {/* The drawer covers the header, and with it the button that
-                    opened the drawer, so it carries its own way out. */}
-                <button
-                  type="button"
-                  onClick={onClose}
-                  aria-label="Close the lesson list"
-                  className="-mr-2 flex size-9 items-center justify-center rounded-md text-ink-400 transition hover:bg-ink-850 hover:text-ink-200 lg:hidden"
-                >
-                  <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
-                    <path
-                      d="M3.5 3.5l7 7M10.5 3.5l-7 7"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </button>
-              </span>
+              <button
+                type="button"
+                onClick={onCollapse}
+                aria-label="Hide the lesson list"
+                title="Hide the lesson list (Cmd or Ctrl with B)"
+                className="icon-btn -mr-1.5 hidden size-7! lg:inline-flex"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
+                  <path d="M7.5 2.5 4 6l3.5 3.5" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {/* The drawer covers the header, and with it the button that
+                  opened the drawer, so it carries its own way out. */}
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close the lesson list"
+                className="icon-btn -mr-2 lg:hidden"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+                  <path d="M3.5 3.5l7 7M10.5 3.5l-7 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+              </button>
             </div>
-            <div className="h-1 overflow-hidden rounded-full bg-ink-800">
+            <div className="h-[3px] overflow-hidden rounded-full bg-rule">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-good-500/70 to-good-500 transition-[width] duration-500"
-                style={{
-                  width: `${totals.all ? (totals.solved / totals.all) * 100 : 0}%`,
-                }}
+                className="h-full rounded-full bg-good transition-[width] duration-500"
+                style={{ width: `${totals.all ? (totals.solved / totals.all) * 100 : 0}%` }}
               />
             </div>
 
             <div className="relative mt-3">
               <svg
-                width="12"
-                height="12"
+                width="13"
+                height="13"
                 viewBox="0 0 12 12"
                 aria-hidden
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-600"
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-4"
               >
-                <circle
-                  cx="5"
-                  cy="5"
-                  r="3.4"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                  fill="none"
-                />
-                <path
-                  d="M7.6 7.6 10.5 10.5"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                  strokeLinecap="round"
-                />
+                <circle cx="5" cy="5" r="3.4" stroke="currentColor" strokeWidth="1.2" fill="none" />
+                <path d="M7.6 7.6 10.5 10.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
               </svg>
               <input
                 type="search"
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
-                placeholder="Filter lessons"
-                aria-label="Filter lessons"
-                className="w-full rounded-lg border border-ink-800 bg-ink-850 py-2 pl-7 pr-2.5 text-base text-ink-200 transition placeholder:text-ink-600 hover:border-ink-700 focus:border-wire-500/50 focus:bg-ink-900 focus:outline-none lg:py-1.5 lg:text-xs"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setFilter("");
+                }}
+                placeholder="Find a lesson"
+                aria-label="Find a lesson"
+                className="field py-1.5! pl-8!"
               />
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-4">
             {shown.map((part) => {
               const shut = shutParts.has(part.part) && !query;
-              const done = part.lessons.filter(
-                (l) => progress[l.slug]?.status === "solved",
-              ).length;
+              const { number, name } = splitPart(part.part);
+              const done = part.lessons.filter((l) => progress[l.slug]?.status === "solved").length;
               const complete = part.lessons.length > 0 && done === part.lessons.length;
               return (
-                <section key={part.part} className="mb-1">
+                <section key={part.part} className="mt-2">
                   <button
                     type="button"
                     onClick={() => toggle(part.part)}
                     aria-expanded={!shut}
-                    className="flex w-full items-center gap-1.5 rounded-md px-2 py-2.5 text-left text-[11px] font-medium uppercase tracking-[0.1em] text-ink-400 transition hover:bg-ink-850 hover:text-ink-300 lg:py-1.5"
+                    className="group flex w-full items-baseline gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-[color-mix(in_oklab,var(--ink)_5%,transparent)] lg:py-1.5"
                   >
+                    <span className="w-5 shrink-0 text-[11.5px] tabular-nums text-ink-4">
+                      {number ? `${number}.` : ""}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-ink-2">
+                      {name}
+                    </span>
+                    <span className={`text-[11.5px] tabular-nums ${complete ? "text-good" : "text-ink-4"}`}>
+                      {done}/{part.lessons.length}
+                    </span>
                     <svg
                       width="10"
                       height="10"
                       viewBox="0 0 10 10"
-                      className={`shrink-0 transition-transform duration-200 ${shut ? "" : "rotate-90"}`}
+                      className={`shrink-0 self-center text-ink-4 transition-transform duration-150 ${shut ? "-rotate-90" : ""}`}
                       aria-hidden
                     >
-                      <path d="M3 1.5 7 5 3 8.5" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M2.5 3.75 5 6.25l2.5-2.5" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span
-                      className="size-1.5 shrink-0 rounded-full"
-                      style={{ background: partAccent(part.part) }}
-                      aria-hidden
-                    />
-                    <span className="flex-1 truncate">{part.part}</span>
-                    <span
-                      className={`font-mono text-[10px] tabular-nums ${complete ? "text-good-500" : "text-ink-600"}`}
-                    >
-                      {done}/{part.lessons.length}
-                    </span>
                   </button>
 
                   {!shut && (
-                    <ul className="mt-0.5 space-y-px">
+                    <ul className="mt-px space-y-px">
                       {part.lessons.map((lesson) => {
                         const state = progress[lesson.slug]?.status;
+                        const current = slug === lesson.slug;
                         return (
                           <li key={lesson.slug}>
                             <NavLink
                               to={`/lessons/${lesson.slug}`}
                               onClick={onClose}
-                              className={({ isActive }) =>
-                                `group relative flex items-start gap-2 rounded-md py-2.5 pl-3 pr-2 text-[13px] leading-snug transition lg:py-1.5 ${
-                                  isActive || slug === lesson.slug
-                                    ? "bg-wire-500/12 text-ink-100 before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:rounded-full before:bg-wire-500"
-                                    : "text-ink-300 hover:bg-ink-850 hover:text-ink-200"
-                                }`
-                              }
+                              aria-current={current ? "page" : undefined}
+                              className={`flex items-start gap-2 rounded-md px-2 py-2 text-[13px] leading-snug transition-colors lg:py-[5px] ${
+                                current
+                                  ? "bg-raise font-medium text-ink shadow-[inset_0_0_0_1px_var(--rule)]"
+                                  : "text-ink-2 hover:bg-[color-mix(in_oklab,var(--ink)_5%,transparent)] hover:text-ink"
+                              }`}
                             >
-                              <StatusDot state={state} />
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate">{lesson.title}</span>
+                              <span className="w-5 shrink-0 pt-px text-[11.5px] tabular-nums text-ink-4">
+                                {numbers.get(lesson.slug)}
                               </span>
-                              {lesson.gpu && (
-                                <span
-                                  title="This lesson's exercise runs on a GPU"
-                                  className="mt-0.5 shrink-0 rounded border border-warm-500/30 bg-warm-500/10 px-1 font-mono text-[9px] uppercase text-warm-500"
-                                >
-                                  gpu
-                                </span>
-                              )}
+                              <span className="min-w-0 flex-1">{lesson.title}</span>
+                              <StatusMark state={state} className="mt-[3px]" />
                             </NavLink>
                           </li>
                         );
@@ -270,31 +235,13 @@ export default function Sidebar({
             })}
 
             {shown.length === 0 && (
-              <p className="px-3 py-6 text-center text-xs text-ink-600">
-                No lesson matches that.
+              <p className="px-3 py-8 text-center text-[13px] text-ink-3">
+                No lesson matches “{filter.trim()}”.
               </p>
             )}
           </div>
         </div>
       </nav>
     </>
-  );
-}
-
-function StatusDot({ state }: { state?: "started" | "solved" }) {
-  const colour =
-    state === "solved"
-      ? "bg-good-500 ring-2 ring-good-500/20"
-      : state === "started"
-        ? "bg-ink-400"
-        : "bg-ink-700";
-  const label =
-    state === "solved" ? "Solved" : state === "started" ? "Started" : "Not started";
-  return (
-    <span
-      className={`mt-[7px] size-1.5 shrink-0 rounded-full ${colour}`}
-      title={label}
-      aria-label={label}
-    />
   );
 }

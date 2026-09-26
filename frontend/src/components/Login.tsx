@@ -27,27 +27,18 @@ export default function Login({ onSignedIn }: { onSignedIn: (name: string) => vo
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center px-6 py-10">
-      <div className="w-full max-w-sm rounded-2xl border border-ink-800 bg-ink-900/70 p-7 shadow-2xl shadow-ink-950/60 backdrop-blur-sm">
-        <div className="mb-7">
-          <div className="mb-3 flex items-center gap-2.5">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-ink-850 ring-1 ring-ink-800">
-              <Mark size={16} />
-            </span>
-            <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-ink-400">
-              Weights and wires
-            </span>
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink-100">
-            Machine learning
-          </h1>
-          <p className="mt-2 text-sm leading-relaxed text-ink-400">
-            Thirty-three lessons, from least squares to mixtures of experts.
-            Every one of them has code to write.
-          </p>
-        </div>
+    <div className="flex min-h-full items-center justify-center bg-canvas px-5 py-12">
+      <div className="w-full max-w-[22rem]">
+        <Mark size={32} />
+        <h1 className="mt-5 font-serif text-[2rem] font-semibold leading-tight tracking-[-0.015em] text-ink">
+          Machine learning
+        </h1>
+        <p className="mt-2 font-serif text-[1.05rem] leading-relaxed text-ink-3">
+          Thirty-three lessons, from fitting a line to mixtures of experts, and
+          every one ends with code you write yourself.
+        </p>
 
-        <form onSubmit={submit} className="space-y-3">
+        <form onSubmit={submit} className="mt-8 space-y-4">
           <Field
             label="Username"
             value={username}
@@ -66,7 +57,7 @@ export default function Login({ onSignedIn }: { onSignedIn: (name: string) => vo
           {error && (
             <p
               role="alert"
-              className="rounded-lg border border-bad-500/30 bg-bad-500/10 px-3 py-2 text-sm text-bad-500"
+              className="rounded-md bg-[color-mix(in_oklab,var(--bad)_8%,transparent)] px-3 py-2 text-[13.5px] text-bad"
             >
               {error}
             </p>
@@ -75,7 +66,7 @@ export default function Login({ onSignedIn }: { onSignedIn: (name: string) => vo
           <button
             type="submit"
             disabled={busy || !username || !password}
-            className="w-full rounded-lg bg-wire-500 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-wire-500/20 transition hover:bg-wire-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+            className="btn btn-primary min-h-10! w-full text-[14px]!"
           >
             {busy ? "Signing in…" : "Sign in"}
           </button>
@@ -100,21 +91,16 @@ function Field({
   autoComplete?: string;
   autoFocus?: boolean;
 }) {
-  // The field is 16px on a phone and only shrinks on a wider screen: iOS
-  // Safari zooms the page in when a smaller input takes focus, and it never
-  // zooms back out.
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-medium text-ink-400">
-        {label}
-      </span>
+      <span className="mb-1.5 block text-[13px] font-medium text-ink-2">{label}</span>
       <input
         type={type}
         value={value}
         autoComplete={autoComplete}
         autoFocus={autoFocus}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-lg border border-ink-800 bg-ink-850 px-3 py-2.5 text-base text-ink-100 transition placeholder:text-ink-600 hover:border-ink-700 focus:border-wire-500/50 focus:bg-ink-900 focus:outline-none sm:text-sm"
+        className="field"
       />
     </label>
   );

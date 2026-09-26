@@ -1,196 +1,179 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import type { CSSProperties } from "react";
-
+import StatusMark from "../components/StatusMark";
 import { api, type Part, type ProgressMap } from "../lib/api";
-import { partAccent, splitPart } from "../lib/parts";
+import { splitPart, titleOf } from "../lib/parts";
 
-type Props = { parts: Part[]; progress: ProgressMap; username: string };
+type Props = { parts: Part[]; progress: ProgressMap };
 
-export default function Dashboard({ parts, progress, username }: Props) {
-  const [me, setMe] = useState<Awaited<ReturnType<typeof api.me>> | null>(null);
+type Me = Awaited<ReturnType<typeof api.me>>;
+
+export default function Dashboard({ parts, progress }: Props) {
+  const [me, setMe] = useState<Me | null>(null);
 
   useEffect(() => {
     api.me().then(setMe).catch(() => undefined);
   }, []);
 
   const lessons = useMemo(() => parts.flatMap((part) => part.lessons), [parts]);
-  const solved = lessons.filter((l) => progress[l.slug]?.status === "solved");
-  const started = lessons.filter((l) => progress[l.slug]?.status === "started");
-  const next =
-    lessons.find((l) => progress[l.slug]?.status === "started") ??
-    lessons.find((l) => !progress[l.slug]) ??
-    lessons[0];
+  const solved = lessons.filter((l) => progress[l.slug]?.status === "solved").length;
+  // The lesson touched most recently that is not yet solved, then the first
+  // one never opened, then the first lesson.
+  const next = useMemo(() => {
+    const started = lessons
+      .filter((l) => progress[l.slug]?.status === "started")
+      .sort((a, b) => (progress[b.slug]?.updated_at ?? 0) - (progress[a.slug]?.updated_at ?? 0));
+    return started[0] ?? lessons.find((l) => !progress[l.slug]) ?? lessons[0];
+  }, [lessons, progress]);
+  const resuming = next ? !!progress[next.slug] : false;
+  const nextNumber = next ? lessons.indexOf(next) + 1 : 0;
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-      <div className="mx-auto max-w-4xl px-6 py-10 lg:px-10">
-        <header className="mb-8 flex items-center gap-6">
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-ink-400">
-              Weights and wires
-            </p>
-            <h1 className="mt-1.5 text-3xl font-semibold tracking-tight text-ink-100">
-              Machine learning, one build at a time
-            </h1>
-            <p className="mt-2.5 max-w-2xl text-sm leading-relaxed text-ink-400">
-              Every lesson explains one idea in plain words, works a small
-              example by hand, and then walks you through building it. Your
-              code runs against checks that tell you exactly what is right and
-              what is not.
-            </p>
-          </div>
-          <ProgressRing done={solved.length} total={lessons.length} />
-        </header>
+      <div className="mx-auto max-w-3xl px-5 pb-16 pt-10 sm:px-8 lg:pt-14">
+        <header>
+          <h1 className="font-serif text-[2.1rem] font-semibold leading-[1.15] tracking-[-0.015em] text-ink sm:text-[2.5rem]">
+            Machine learning, one build at a time
+          </h1>
+          <p className="mt-3 max-w-[38rem] font-serif text-[1.08rem] leading-relaxed text-ink-3">
+            Each lesson explains one idea in plain words, works a small example
+            by hand, and then walks you through building it. Your code runs
+            against checks that say exactly what is right and what is not.
+          </p>
 
-        <div className="mb-9 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label="Solved" value={`${solved.length}`} of={`${lessons.length}`} />
-          <Stat label="In progress" value={`${started.length}`} />
-          <Stat label="Runs" value={me ? `${me.stats.runs}` : "—"} />
-          <Stat
-            label="Compute"
-            value={me ? formatSeconds(me.stats.compute_seconds) : "—"}
-          />
-        </div>
+          {lessons.length > 0 && (
+            <div className="mt-7 max-w-md">
+              <div className="flex items-baseline justify-between gap-3 text-[13px]">
+                <span className="text-ink-2">
+                  <span className="font-semibold tabular-nums text-ink">{solved}</span> of{" "}
+                  {lessons.length} lessons solved
+                </span>
+                {me && me.stats.runs > 0 && (
+                  <span className="text-ink-4 tabular-nums">
+                    {me.stats.runs} runs · {formatSeconds(me.stats.compute_seconds)} of compute
+                  </span>
+                )}
+              </div>
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-rule">
+                <div
+                  className="h-full rounded-full bg-good transition-[width] duration-500"
+                  style={{ width: `${(solved / lessons.length) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </header>
 
         {next && (
           <Link
             to={`/lessons/${next.slug}`}
-            style={{ "--accent": partAccent(next.part) } as CSSProperties}
-            className="continue group mb-10 flex items-center gap-4 rounded-2xl p-5 transition"
+            className="group mt-9 flex flex-col gap-4 rounded-xl border border-rule bg-raise p-5 transition-colors hover:border-rule-strong sm:flex-row sm:items-center sm:gap-6"
           >
-            <span className="continue-num">
-              {String(lessons.indexOf(next) + 1).padStart(2, "0")}
-            </span>
             <span className="min-w-0 flex-1">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[color-mix(in_oklab,var(--accent)_75%,white)]">
-                {progress[next.slug] ? "Pick up where you left off" : "Start here"}
+              <span className="block text-[12.5px] font-medium text-ink-3">
+                {resuming ? "Continue where you left off" : "Start here"} · Lesson {nextNumber}
               </span>
-              <span className="mt-1.5 block text-lg font-medium text-ink-100">
+              <span className="mt-1 block font-serif text-[1.35rem] font-semibold leading-snug text-ink">
                 {next.title}
               </span>
-              <span className="mt-1 block text-[13px] leading-snug text-ink-300">
-                {next.summary}
-              </span>
-              {next.minutes ? (
-                <span className="mt-2 inline-block font-mono text-[11px] text-ink-500">
-                  about {next.minutes} min
-                </span>
-              ) : null}
+              <span className="mt-1 block text-[14px] leading-snug text-ink-3">{next.summary}</span>
             </span>
-            <span className="continue-go">
-              {progress[next.slug] ? "Continue" : "Start"}
-              <span aria-hidden className="cta-arrow">
+            <span className="btn btn-primary self-start sm:self-center">
+              {resuming ? "Continue" : "Start lesson"}
+              <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
                 →
               </span>
             </span>
           </Link>
         )}
 
-        <div className="space-y-9">
+        <div className="mt-12 space-y-11">
           {parts.map((part) => {
             const { number, name } = splitPart(part.part);
-            const done = part.lessons.filter(
-              (l) => progress[l.slug]?.status === "solved",
-            ).length;
+            const done = part.lessons.filter((l) => progress[l.slug]?.status === "solved").length;
             return (
-              <section
-                key={part.part}
-                style={{ "--accent": partAccent(part.part) } as CSSProperties}
-              >
-                <div className="mb-3 flex items-center gap-3">
-                  <span className="part-badge">{number || "·"}</span>
-                  <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold text-ink-100">
+              <section key={part.part} aria-labelledby={`part-${number || name}`}>
+                <div className="flex items-baseline gap-3 border-b border-rule-strong pb-2">
+                  <h2 id={`part-${number || name}`} className="min-w-0 flex-1 font-serif text-[1.2rem] font-semibold text-ink">
+                    {number && <span className="mr-2 text-ink-4">Part {number}</span>}
                     {name}
                   </h2>
-                  <span className="font-mono text-[11px] tabular-nums text-ink-500">
-                    {done}/{part.lessons.length}
+                  <span className="text-[12.5px] tabular-nums text-ink-4">
+                    {done} of {part.lessons.length}
                   </span>
                 </div>
-                <div className="mb-3 h-1 overflow-hidden rounded-full bg-ink-800">
-                  <div
-                    className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-500"
-                    style={{
-                      width: `${part.lessons.length ? (done / part.lessons.length) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
-                <ul className="grid gap-2 sm:grid-cols-2">
+                <ol>
                   {part.lessons.map((lesson) => {
                     const state = progress[lesson.slug]?.status;
-                    const index = lessons.indexOf(lesson) + 1;
                     return (
-                      <li key={lesson.slug}>
+                      <li key={lesson.slug} className="border-b border-rule">
                         <Link
                           to={`/lessons/${lesson.slug}`}
-                          className="lesson-card group flex h-full gap-3 rounded-xl p-3.5"
-                          data-state={state ?? "new"}
+                          className="group -mx-3 flex items-start gap-3 rounded-md px-3 py-3.5 transition-colors hover:bg-[color-mix(in_oklab,var(--ink)_4%,transparent)]"
                         >
-                          <span className="lesson-card-num">
-                            {state === "solved" ? "✓" : String(index).padStart(2, "0")}
+                          <span className="w-6 shrink-0 pt-0.5 text-[13px] tabular-nums text-ink-4">
+                            {lessons.indexOf(lesson) + 1}
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="mb-1 flex items-center gap-2">
-                              <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink-100">
-                                {lesson.title}
-                              </span>
-                              {lesson.gpu && (
-                                <span className="shrink-0 rounded border border-warm-500/30 bg-warm-500/10 px-1 font-mono text-[9px] uppercase text-warm-500">
-                                  gpu
-                                </span>
-                              )}
+                            <span className="block text-[15px] font-medium leading-snug text-ink group-hover:text-accent">
+                              {lesson.title}
                             </span>
-                            <span className="line-clamp-2 block text-[12px] leading-snug text-ink-400">
+                            <span className="mt-0.5 block text-[13.5px] leading-snug text-ink-3">
                               {lesson.summary}
                             </span>
-                            <span className="mt-1.5 flex items-center gap-2 font-mono text-[10.5px] text-ink-500">
-                              {lesson.minutes ? <span>{lesson.minutes} min</span> : null}
-                              {state === "started" && (
-                                <span className="text-[color-mix(in_oklab,var(--accent)_75%,white)]">
-                                  in progress
-                                </span>
-                              )}
-                              {state === "solved" && <span className="text-good-500">solved</span>}
-                            </span>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-3 pt-0.5">
+                            {lesson.minutes ? (
+                              <span className="hidden text-[12.5px] tabular-nums text-ink-4 sm:inline">
+                                {lesson.minutes} min
+                              </span>
+                            ) : null}
+                            <StatusMark state={state} />
                           </span>
                         </Link>
                       </li>
                     );
                   })}
-                </ul>
+                </ol>
               </section>
             );
           })}
         </div>
 
         {me && me.runs.length > 0 && (
-          <section className="mt-10 border-t border-ink-800 pt-6">
-            <h2 className="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-ink-400">
-              Recent runs, {username}
+          <section className="mt-14">
+            <h2 className="border-b border-rule-strong pb-2 font-serif text-[1.2rem] font-semibold text-ink">
+              Recent runs
             </h2>
-            <ul className="space-y-1">
-              {me.runs.slice(0, 10).map((run, index) => (
-                <li
-                  key={index}
-                  className="flex items-center gap-3 rounded-md px-2 py-1.5 font-mono text-[11.5px] text-ink-400 transition odd:bg-ink-900/70 hover:bg-ink-850"
-                >
-                  <span
-                    className={`size-1.5 shrink-0 rounded-full ${run.ok ? "bg-good-500" : "bg-bad-500"}`}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-ink-300">
-                    {run.exercise_id}
-                  </span>
-                  <span>{run.mode}</span>
-                  <span className="text-ink-600">{run.backend}</span>
-                  {run.total != null && (
-                    <span className="tabular-nums">
-                      {run.passed}/{run.total}
+            <ul>
+              {me.runs.slice(0, 8).map((run, index) => (
+                <li key={index} className="border-b border-rule">
+                  <Link
+                    to={`/lessons/${run.exercise_id}`}
+                    className="-mx-3 flex items-center gap-3 rounded-md px-3 py-2.5 text-[13.5px] transition-colors hover:bg-[color-mix(in_oklab,var(--ink)_4%,transparent)]"
+                  >
+                    <span
+                      className={`size-1.5 shrink-0 rounded-full ${run.ok ? "bg-good" : "bg-bad"}`}
+                      aria-label={run.ok ? "Succeeded" : "Failed"}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-ink-2">
+                      {titleOf(run.exercise_id, lessons)}
                     </span>
-                  )}
-                  <span className="w-12 text-right tabular-nums text-ink-600">
-                    {run.seconds ? `${run.seconds.toFixed(1)}s` : ""}
-                  </span>
+                    <span className="shrink-0 tabular-nums text-ink-3">
+                      {run.mode === "check" && run.total != null
+                        ? `${run.passed ?? 0}/${run.total} checks`
+                        : run.ok
+                          ? "Ran"
+                          : "Run failed"}
+                    </span>
+                    {run.backend === "runpod" && (
+                      <span className="hidden shrink-0 text-[12px] text-ink-4 sm:inline">GPU</span>
+                    )}
+                    <span className="w-16 shrink-0 text-right text-[12.5px] tabular-nums text-ink-4">
+                      {ago(run.started_at)}
+                    </span>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -201,64 +184,17 @@ export default function Dashboard({ parts, progress, username }: Props) {
   );
 }
 
-function Stat({ label, value, of }: { label: string; value: string; of?: string }) {
-  return (
-    <div className="rounded-lg border border-ink-800 bg-ink-900/70 px-3.5 py-3 transition hover:border-ink-700">
-      <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-ink-400">
-        {label}
-      </div>
-      <div className="mt-1 font-mono text-xl text-ink-100 tabular-nums">
-        {value}
-        {of && <span className="text-sm text-ink-600">/{of}</span>}
-      </div>
-    </div>
-  );
-}
-
-/** The share of lessons solved, as a ring that fills in. */
-function ProgressRing({ done, total }: { done: number; total: number }) {
-  const r = 30;
-  const c = 2 * Math.PI * r;
-  const share = total ? done / total : 0;
-  return (
-    <div
-      className="relative hidden size-20 shrink-0 sm:block"
-      role="img"
-      aria-label={`${done} of ${total} lessons solved`}
-    >
-      <svg viewBox="0 0 72 72" className="size-full -rotate-90">
-        <circle cx="36" cy="36" r={r} fill="none" stroke="var(--color-ink-800)" strokeWidth="6" />
-        <circle
-          cx="36"
-          cy="36"
-          r={r}
-          fill="none"
-          stroke="url(#ring)"
-          strokeWidth="6"
-          strokeLinecap="round"
-          strokeDasharray={c}
-          strokeDashoffset={c * (1 - share)}
-          style={{ transition: "stroke-dashoffset 600ms ease-out" }}
-        />
-        <defs>
-          <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="var(--color-wire-500)" />
-            <stop offset="1" stopColor="var(--color-good-500)" />
-          </linearGradient>
-        </defs>
-      </svg>
-      <span className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-mono text-base leading-none text-ink-100 tabular-nums">
-          {Math.round(share * 100)}%
-        </span>
-        <span className="mt-1 text-[9px] uppercase tracking-[0.12em] text-ink-500">solved</span>
-      </span>
-    </div>
-  );
-}
-
 function formatSeconds(seconds: number): string {
   if (seconds < 60) return `${seconds.toFixed(0)}s`;
-  if (seconds < 3600) return `${(seconds / 60).toFixed(0)}m`;
-  return `${(seconds / 3600).toFixed(1)}h`;
+  if (seconds < 3600) return `${(seconds / 60).toFixed(0)} min`;
+  return `${(seconds / 3600).toFixed(1)} h`;
+}
+
+/** Seconds since the epoch → "just now", "5 min ago", "3 h ago", "2 d ago". */
+function ago(epochSeconds: number): string {
+  const seconds = Math.max(0, Date.now() / 1000 - epochSeconds);
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} h ago`;
+  return `${Math.floor(seconds / 86400)} d ago`;
 }

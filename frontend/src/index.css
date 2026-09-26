@@ -1,78 +1,164 @@
 @import "tailwindcss";
 @import "katex/dist/katex.min.css";
-@import "highlight.js/styles/github-dark.min.css";
+@import "@fontsource-variable/source-serif-4/opsz.css";
+@import "@fontsource-variable/source-serif-4/opsz-italic.css";
+@import "@fontsource-variable/inter/index.css";
+@import "@fontsource-variable/jetbrains-mono/index.css";
+
+/* ------------------------------------------------------------------------
+   Tokens. Components name a role (canvas, rule, ink-3) and never a raw
+   colour, so the light and dark themes differ only in the two blocks below.
+   ------------------------------------------------------------------------ */
+
+:root,
+[data-theme="light"] {
+  --canvas: #fcfbf8;
+  --chrome: #f5f3ee;
+  --sunk: #f0eee7;
+  --raise: #ffffff;
+  --rule: #e6e3da;
+  --rule-strong: #d4d0c4;
+
+  --ink: #1c1b18;
+  --ink-2: #37352f;
+  --ink-3: #6b675d;
+  --ink-4: #9a9589;
+
+  --accent: #2b59c3;
+  --good: #1b7a4a;
+  --bad: #b3261e;
+  --warn: #975a00;
+  --mark: #fae7a0;
+
+  --primary: #1c1b18;
+  --on-primary: #fcfbf8;
+  --shadow: 0 1px 2px rgb(28 27 24 / 0.05), 0 8px 24px -8px rgb(28 27 24 / 0.14);
+
+  --hl-keyword: #7b3fa0;
+  --hl-string: #2d7a36;
+  --hl-number: #a85300;
+  --hl-comment: #8c887d;
+  --hl-title: #2b59c3;
+  --hl-builtin: #0d6b78;
+  --hl-meta: #6b675d;
+}
+
+[data-theme="dark"] {
+  --canvas: #1a1a18;
+  --chrome: #151513;
+  --sunk: #22221f;
+  --raise: #242421;
+  --rule: #2e2d29;
+  --rule-strong: #3d3c37;
+
+  --ink: #eeece6;
+  --ink-2: #d3d0c7;
+  --ink-3: #a19d92;
+  --ink-4: #75726a;
+
+  --accent: #8cadff;
+  --good: #5fc48f;
+  --bad: #f08074;
+  --warn: #e3a94f;
+  --mark: rgb(227 169 79 / 0.3);
+
+  --primary: #eeece6;
+  --on-primary: #1a1a18;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -10px rgb(0 0 0 / 0.6);
+
+  --hl-keyword: #c9a3ee;
+  --hl-string: #a3d69c;
+  --hl-number: #efb46c;
+  --hl-comment: #7f7c72;
+  --hl-title: #8cadff;
+  --hl-builtin: #7fd0d8;
+  --hl-meta: #a19d92;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-chrome: var(--chrome);
+  --color-sunk: var(--sunk);
+  --color-raise: var(--raise);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
+  --color-accent: var(--accent);
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --color-warn: var(--warn);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+}
 
 @theme {
-  --color-ink-950: #08090c;
-  --color-ink-900: #0d0f14;
-  --color-ink-850: #12151c;
-  --color-ink-800: #1a1e27;
-  --color-ink-700: #252a36;
-  --color-ink-600: #39404f;
-  --color-ink-500: #5b6475;
-  --color-ink-400: #7b8496;
-  --color-ink-300: #a3abba;
-  --color-ink-200: #cdd3dd;
-  --color-ink-100: #e8ebf0;
-
-  --color-wire-500: #4f8cff;
-  --color-wire-400: #74a5ff;
-  --color-wire-600: #3a6fd8;
-
-  --color-good-500: #35c489;
-  --color-bad-500: #f2555a;
-  --color-warm-500: #f0a637;
-
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Source Serif 4 Variable", "Iowan Old Style", Georgia, serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-html,
-body,
-#root {
-  height: 100%;
-  /* A mobile browser's toolbars shrink the visible area; 100% resolves against
-     the larger initial containing block and pushes the layout off-screen.
-     Browsers without dvh ignore this line and keep the percentage above. */
-  height: 100dvh;
-}
+/* ------------------------------------------------------------------------
+   Base.
+   ------------------------------------------------------------------------ */
 
-body {
-  margin: 0;
-  /* The app scrolls inside its panes. Letting a pane's overscroll chain up to
-     the document is what triggers pull-to-refresh mid-lesson. */
-  overscroll-behavior: none;
-  /* A flat near-black reads as a void on a large screen. Two very low-opacity
-     washes give the page a light source without tinting the reading column. */
-  background:
-    radial-gradient(
-      1100px 620px at 14% -8%,
-      color-mix(in oklab, var(--color-wire-500) 11%, transparent),
-      transparent 62%
-    ),
-    radial-gradient(
-      900px 520px at 96% 4%,
-      color-mix(in oklab, var(--color-good-500) 6%, transparent),
-      transparent 58%
-    ),
-    var(--color-ink-950);
-  background-attachment: fixed;
-  color: var(--color-ink-200);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    /* A mobile browser's toolbars shrink the visible area; 100% resolves
+       against the larger initial containing block and pushes the layout
+       off-screen. Browsers without dvh keep the percentage above. */
+    height: 100dvh;
+  }
 
-::selection {
-  background: color-mix(in oklab, var(--color-wire-500) 32%, transparent);
-  color: var(--color-ink-100);
-}
+  body {
+    margin: 0;
+    /* The app scrolls inside its panes. Letting a pane's overscroll chain up
+       to the document is what triggers pull-to-refresh mid-lesson. */
+    overscroll-behavior: none;
+    background: var(--canvas);
+    color: var(--ink-2);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
 
-*:focus-visible {
-  outline: 2px solid var(--color-wire-500);
-  outline-offset: 2px;
-  border-radius: 6px;
+  ::selection {
+    background: color-mix(in oklab, var(--accent) 24%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--rule-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--rule-strong);
+    border-radius: 6px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
+  }
 }
 
 /* Honour a reader who has asked the system for less motion. */
@@ -82,166 +168,781 @@ body {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
-/* Scrollbars that do not shout in a dark pane. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-ink-700) transparent;
-}
-*::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-*::-webkit-scrollbar-thumb {
-  background: var(--color-ink-700);
-  border-radius: 6px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-*::-webkit-scrollbar-thumb:hover {
-  background: var(--color-ink-600);
-  background-clip: content-box;
+@layer components {
+  /* ----------------------------------------------------------------------
+     Controls shared across the app.
+     ---------------------------------------------------------------------- */
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 2rem;
+    border-radius: 6px;
+    padding: 0 0.75rem;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    transition:
+      background-color 120ms,
+      border-color 120ms,
+      color 120ms;
+  }
+  .btn:disabled {
+    opacity: 0.45;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: var(--on-primary);
+  }
+  .btn-primary:not(:disabled):hover {
+    background: color-mix(in oklab, var(--primary) 86%, var(--canvas));
+  }
+  .btn-secondary {
+    border: 1px solid var(--rule-strong);
+    background: var(--raise);
+    color: var(--ink);
+  }
+  .btn-secondary:not(:disabled):hover {
+    border-color: var(--ink-4);
+  }
+  .btn-ghost {
+    color: var(--ink-3);
+  }
+  .btn-ghost:not(:disabled):hover {
+    background: color-mix(in oklab, var(--ink) 6%, transparent);
+    color: var(--ink);
+  }
+  .btn-ghost[aria-pressed="true"],
+  .btn-ghost[aria-expanded="true"] {
+    background: color-mix(in oklab, var(--ink) 7%, transparent);
+    color: var(--ink);
+  }
+  .btn-danger {
+    border: 1px solid color-mix(in oklab, var(--bad) 40%, var(--rule));
+    color: var(--bad);
+  }
+  .btn-danger:hover {
+    background: color-mix(in oklab, var(--bad) 8%, transparent);
+  }
+  /* A phone needs a finger-sized target; a desktop wants the dense toolbar. */
+  @media (max-width: 1023px) {
+    .btn {
+      min-height: 2.5rem;
+      padding: 0 0.9rem;
+    }
+  }
+
+  .icon-btn {
+    display: inline-flex;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    color: var(--ink-3);
+    transition:
+      background-color 120ms,
+      color 120ms;
+  }
+  .icon-btn:hover {
+    background: color-mix(in oklab, var(--ink) 6%, transparent);
+    color: var(--ink);
+  }
+  @media (max-width: 1023px) {
+    .icon-btn {
+      width: 2.5rem;
+      height: 2.5rem;
+    }
+  }
+
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    border-radius: 4px;
+    padding: 0.1rem 0.3rem;
+    font-family: var(--font-sans);
+    font-size: 10.5px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--ink-4);
+    box-shadow: inset 0 0 0 1px var(--rule-strong);
+  }
+  .btn-primary .kbd {
+    color: color-mix(in oklab, var(--on-primary) 65%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--on-primary) 30%, transparent);
+  }
+
+  .field {
+    width: 100%;
+    border-radius: 6px;
+    border: 1px solid var(--rule-strong);
+    background: var(--raise);
+    padding: 0.55rem 0.7rem;
+    /* 16px on a phone: iOS Safari zooms in on a smaller field and never
+       zooms back out. */
+    font-size: 16px;
+    color: var(--ink);
+    transition: border-color 120ms, box-shadow 120ms;
+  }
+  @media (min-width: 640px) {
+    .field {
+      font-size: 14px;
+    }
+  }
+  .field::placeholder {
+    color: var(--ink-4);
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent);
+  }
+
+  .menu {
+    border: 1px solid var(--rule);
+    background: var(--raise);
+    border-radius: 8px;
+    padding: 0.3rem;
+    box-shadow: var(--shadow);
+  }
+  .menu-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.6rem;
+    border-radius: 5px;
+    padding: 0.45rem 0.6rem;
+    text-align: left;
+    font-size: 13px;
+    color: var(--ink-2);
+  }
+  .menu-item:hover {
+    background: color-mix(in oklab, var(--ink) 5%, transparent);
+    color: var(--ink);
+  }
+  .menu-item[aria-current="true"],
+  .menu-item[aria-checked="true"] {
+    color: var(--ink);
+    font-weight: 550;
+  }
+
+  .fade-in {
+    animation: fade-in 140ms ease-out;
+  }
+
+  /* ----------------------------------------------------------------------
+     The lesson body. Tailwind's typography plugin is not installed, so the
+     element rules a Markdown document needs live here.
+     ---------------------------------------------------------------------- */
+
+  .lesson {
+    font-family: var(--font-serif);
+    font-optical-sizing: auto;
+    font-size: 1.075rem;
+    line-height: 1.68;
+    color: var(--ink-2);
+  }
+  .lesson > * + *,
+  .lesson .lesson-intro > * + *,
+  .lesson .lesson-section > * + *,
+  .lesson .worked > * + *,
+  .lesson .callout-body > * + * {
+    margin-top: 1em;
+  }
+  .lesson p {
+    margin-block: 0;
+  }
+  .lesson h2,
+  .lesson h3 {
+    font-family: var(--font-serif);
+    color: var(--ink);
+    text-wrap: balance;
+  }
+  .lesson h2 {
+    font-size: 1.55rem;
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    line-height: 1.25;
+  }
+  .lesson h3 {
+    font-size: 1.18rem;
+    font-weight: 600;
+    line-height: 1.35;
+    margin-top: 1.9em;
+  }
+  .lesson strong {
+    color: var(--ink);
+    font-weight: 620;
+  }
+  .lesson em {
+    font-style: italic;
+  }
+  .lesson a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+  .lesson ul,
+  .lesson ol {
+    padding-left: 1.35em;
+  }
+  .lesson ul {
+    list-style: disc;
+  }
+  .lesson ol {
+    list-style: decimal;
+  }
+  .lesson li + li {
+    margin-top: 0.4em;
+  }
+  .lesson li::marker {
+    color: var(--ink-4);
+  }
+  /* A ligature turns `->` into one arrow glyph, which a beginner copying
+     the code by eye would type wrong. */
+  .lesson code,
+  .font-mono {
+    font-variant-ligatures: none;
+  }
+  .lesson code {
+    font-family: var(--font-mono);
+    font-size: 0.8em;
+    background: var(--sunk);
+    border-radius: 4px;
+    padding: 0.12em 0.34em;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+  .lesson pre {
+    background: var(--sunk);
+    border-radius: 8px;
+    padding: 0.9rem 1.05rem;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    font-size: 0.8rem;
+    line-height: 1.65;
+  }
+  .lesson pre code {
+    background: none;
+    padding: 0;
+    font-size: inherit;
+    overflow-wrap: normal;
+  }
+  .lesson blockquote {
+    border-left: 2px solid var(--rule-strong);
+    padding-left: 1rem;
+    color: var(--ink-3);
+  }
+  .lesson table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-sans);
+    font-size: 0.84rem;
+    line-height: 1.5;
+    display: block;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  .lesson th,
+  .lesson td {
+    border-bottom: 1px solid var(--rule);
+    padding: 0.5rem 0.9rem 0.5rem 0;
+    text-align: left;
+    vertical-align: top;
+  }
+  .lesson th {
+    border-bottom-color: var(--rule-strong);
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .lesson hr {
+    border: none;
+    border-top: 1px solid var(--rule);
+  }
+
+  .lesson .katex {
+    font-size: 1.06em;
+  }
+  .lesson .katex-display {
+    margin: 1.2em 0;
+    /* A wide equation scrolls inside its own box rather than widening the
+       page, which is how a phone reads the longer derivations. */
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    padding: 0.3em 0;
+    color: var(--ink);
+  }
+
+  /* The opening paragraph carries the lesson's promise. */
+  .lesson .lesson-intro > p:first-child {
+    font-size: 1.16rem;
+    line-height: 1.6;
+    color: var(--ink);
+  }
+
+  /* Sections. Each `##` arrives wrapped in a <section> by rehypeLesson. */
+  .lesson-section {
+    margin-top: 3.25rem;
+    scroll-margin-top: 64px;
+    transition: opacity 240ms ease;
+  }
+  .h2-kicker {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.4rem;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--ink-4);
+  }
+  .h2-num::before {
+    content: "§";
+    margin-right: 0.15em;
+  }
+  .h2-num {
+    font-variant-numeric: tabular-nums;
+    transition: color 200ms;
+  }
+  .h2-kind::before {
+    content: "·";
+    margin-right: 0.6rem;
+  }
+  .lesson-section[data-kind="concept"] .h2-kind {
+    display: none;
+  }
+  .h2-text {
+    display: block;
+  }
+  .lesson-section.is-read .h2-num {
+    color: var(--good);
+  }
+  .lesson-section[data-kind="pitfalls"] .h2-kind {
+    color: var(--bad);
+  }
+  .lesson-section[data-kind="build"] .h2-kind,
+  .lesson-section[data-kind="exercise"] .h2-kind {
+    color: var(--good);
+  }
+  .lesson-section[data-kind="example"] .h2-kind {
+    color: var(--warn);
+  }
+
+  /* Focus mode dims every section but the one being read. */
+  .reader[data-focus] .lesson-intro:not(.is-current),
+  .reader[data-focus] .lesson-section:not(.is-current) {
+    opacity: 0.3;
+  }
+  .reader[data-focus] .lesson-section:not(.is-current):hover {
+    opacity: 0.65;
+  }
+
+  /* "What you already know" reads as a ticked checklist. */
+  .lesson-section[data-kind="recap"] > ul {
+    list-style: none;
+    padding-left: 0;
+  }
+  .lesson-section[data-kind="recap"] > ul > li {
+    position: relative;
+    padding-left: 1.6em;
+  }
+  .lesson-section[data-kind="recap"] > ul > li::before {
+    content: "✓";
+    position: absolute;
+    left: 0.1em;
+    color: var(--good);
+    font-family: var(--font-sans);
+    font-weight: 600;
+  }
+
+  /* "Build it step by step" becomes a numbered path. */
+  .lesson-section[data-kind="build"] > ol {
+    list-style: none;
+    padding-left: 0;
+    counter-reset: step;
+  }
+  .lesson-section[data-kind="build"] > ol > li {
+    position: relative;
+    counter-increment: step;
+    padding: 0 0 0.25rem 2.6rem;
+  }
+  .lesson-section[data-kind="build"] > ol > li + li {
+    margin-top: 1.1rem;
+  }
+  .lesson-section[data-kind="build"] > ol > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0.15em;
+    display: flex;
+    width: 1.65rem;
+    height: 1.65rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--canvas);
+    box-shadow: inset 0 0 0 1px var(--rule-strong);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .lesson-section[data-kind="build"] > ol > li:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    left: calc(0.825rem - 0.5px);
+    top: calc(0.15em + 1.9rem);
+    bottom: -0.95rem;
+    width: 1px;
+    background: var(--rule-strong);
+  }
+
+  /* "Where this breaks": one entry per failure mode. */
+  .lesson .pitfall {
+    border-left: 2px solid color-mix(in oklab, var(--bad) 55%, transparent);
+    padding-left: 1rem;
+  }
+  .lesson .pitfall .runin {
+    display: block;
+    margin-bottom: 0.15rem;
+  }
+  .lesson ul.pitfall-list {
+    list-style: none;
+    padding-left: 0;
+  }
+  .lesson ul.pitfall-list > li + li {
+    margin-top: 1rem;
+  }
+
+  /* Worked examples, and whole sections that work one by hand. */
+  .lesson .worked,
+  .lesson-section[data-kind="example"] {
+    border-radius: 10px;
+    background: var(--chrome);
+    box-shadow: inset 0 0 0 1px var(--rule);
+    padding: 1.15rem 1.3rem 1.3rem;
+  }
+  .lesson .worked {
+    margin-top: 2em !important;
+  }
+  .lesson .worked > h3 {
+    margin-top: 0.15rem;
+  }
+  .worked-label {
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--warn);
+  }
+  .lesson .worked .formula,
+  .lesson-section[data-kind="example"] .formula,
+  .lesson .worked pre,
+  .lesson-section[data-kind="example"] pre,
+  .lesson .worked .codeblock,
+  .lesson-section[data-kind="example"] .codeblock {
+    background: var(--canvas);
+  }
+  .lesson .worked code,
+  .lesson-section[data-kind="example"] code {
+    background: color-mix(in oklab, var(--ink) 7%, transparent);
+  }
+  .lesson .worked pre code,
+  .lesson-section[data-kind="example"] pre code {
+    background: none;
+  }
+
+  .lesson strong.runin {
+    color: var(--ink);
+  }
+
+  /* Terms the lesson defines: a highlighter stroke you can find again. */
+  .lesson strong.term {
+    background: linear-gradient(180deg, transparent 62%, var(--mark) 62%);
+    padding: 0 0.08em;
+    scroll-margin-top: 90px;
+  }
+  .lesson strong.term.flash {
+    animation: term-flash 1.6s ease-out;
+  }
+
+  /* "Common mistake" becomes a small warning label. */
+  .mistake-tag {
+    display: inline-block;
+    margin-right: 0.35em;
+    border-radius: 4px;
+    padding: 0.05em 0.4em;
+    font-family: var(--font-sans);
+    font-size: 0.7em;
+    font-weight: 600;
+    vertical-align: 0.12em;
+    color: var(--warn);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--warn) 40%, transparent);
+  }
+
+  /* Display maths sits in a frame, with its plain-English reading beneath. */
+  .lesson .formula {
+    border-radius: 10px;
+    background: var(--raise);
+    box-shadow: inset 0 0 0 1px var(--rule);
+    padding: 0.1rem 1.2rem;
+    margin-block: 1.4em;
+  }
+  .lesson .formula > .katex-display {
+    margin: 0.85em 0;
+  }
+  /* "Read it aloud" is a sentence, sometimes followed by a list, that says
+     the formula above it in words. */
+  .lesson .readaloud-lead {
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--ink-3);
+  }
+  .lesson .formula > .readaloud-lead {
+    margin-top: 0;
+    padding-top: 0.75rem;
+    padding-bottom: 0.85rem;
+    border-top: 1px solid var(--rule);
+  }
+  .lesson .formula > .readaloud-lead:has(+ .readaloud) {
+    padding-bottom: 0;
+  }
+  .lesson .readaloud {
+    margin-top: 0.5em !important;
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--ink-2);
+  }
+  .lesson .formula > .readaloud {
+    margin-bottom: 1rem;
+    list-style: none;
+    padding-left: 0;
+  }
+  .lesson .formula > .readaloud > li {
+    padding-left: 0.85em;
+    border-left: 2px solid var(--rule-strong);
+  }
+
+  /* Callouts from `> [!KEY]` and friends. */
+  .callout {
+    --c: var(--accent);
+    border-left: 3px solid var(--c);
+    border-radius: 0 8px 8px 0;
+    background: color-mix(in oklab, var(--c) 6%, var(--canvas));
+    padding: 0.8rem 1.1rem 0.9rem 1rem;
+  }
+  .callout-key {
+    --c: var(--accent);
+  }
+  .callout-tip {
+    --c: var(--good);
+  }
+  .callout-warning {
+    --c: var(--warn);
+  }
+  .callout-recap {
+    --c: var(--ink-4);
+  }
+  .callout-label {
+    margin-bottom: 0.3rem;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--c);
+  }
+  .callout-recap .callout-label {
+    color: var(--ink-3);
+  }
+  .callout-key .callout-body {
+    color: var(--ink);
+  }
+  .callout-body > * + * {
+    margin-top: 0.6em;
+  }
+  .callout code {
+    background: color-mix(in oklab, var(--ink) 7%, transparent);
+  }
+  .callout-recap .callout-body ul {
+    list-style: none;
+    padding-left: 0;
+  }
+  .callout-recap .callout-body li {
+    position: relative;
+    padding-left: 1.3em;
+  }
+  .callout-recap .callout-body li::before {
+    content: "→";
+    position: absolute;
+    left: 0;
+    color: var(--ink-4);
+    font-family: var(--font-sans);
+  }
+
+  /* Inline code that names an exercise function: a link into the editor. */
+  .lesson .symbol {
+    display: inline;
+    border-radius: 4px;
+    font: inherit;
+    color: inherit;
+  }
+  .lesson .symbol code {
+    color: var(--accent);
+    background: color-mix(in oklab, var(--accent) 9%, transparent);
+    transition: background-color 120ms;
+  }
+  .lesson .symbol:hover code {
+    background: color-mix(in oklab, var(--accent) 16%, transparent);
+  }
+  .symbol-arrow {
+    margin-left: 0.1em;
+    font-family: var(--font-sans);
+    font-size: 0.7em;
+    color: var(--accent);
+  }
+
+  /* Code blocks carry their language and a copy button. */
+  .codeblock {
+    border-radius: 8px;
+    background: var(--sunk);
+    overflow: hidden;
+  }
+  .codeblock-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.35rem 0.45rem 0 1.05rem;
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    color: var(--ink-4);
+  }
+  .codeblock-bar button {
+    border-radius: 4px;
+    padding: 0.15rem 0.45rem;
+    color: var(--ink-3);
+  }
+  .codeblock-bar button:hover {
+    background: color-mix(in oklab, var(--ink) 7%, transparent);
+    color: var(--ink);
+  }
+  .lesson .codeblock pre {
+    border-radius: 0;
+    margin: 0;
+    padding-top: 0.45rem;
+    background: transparent;
+  }
+
+  /* One sentence rendered on its own, such as a flashcard's back. */
+  .lesson-inline {
+    font-size: 0.98rem;
+    line-height: 1.55;
+  }
+  .lesson-inline strong {
+    background: linear-gradient(180deg, transparent 62%, var(--mark) 62%);
+  }
+
+  /* Flashcards. */
+  .card {
+    display: flex;
+    flex-direction: column;
+    border-radius: 8px;
+    background: var(--raise);
+    box-shadow: inset 0 0 0 1px var(--rule);
+    transition: box-shadow 150ms, background-color 150ms;
+  }
+  .card:hover {
+    box-shadow: inset 0 0 0 1px var(--rule-strong);
+  }
+  .card.is-flipped {
+    background: var(--chrome);
+  }
+  .card-face {
+    flex: 1;
+    min-height: 5.25rem;
+    padding: 0.9rem 1rem;
+    text-align: left;
+    border-radius: 8px;
+  }
+  .card.is-flipped .card-back {
+    display: block;
+    animation: fade-in 180ms ease-out;
+  }
+
+  /* ----------------------------------------------------------------------
+     Syntax colours for lesson code, from the theme tokens above.
+     ---------------------------------------------------------------------- */
+
+  .hljs {
+    color: var(--ink);
+    background: transparent;
+  }
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-operator.hljs-keyword {
+    color: var(--hl-keyword);
+  }
+  .hljs-string,
+  .hljs-regexp,
+  .hljs-addition {
+    color: var(--hl-string);
+  }
+  .hljs-number,
+  .hljs-literal,
+  .hljs-symbol {
+    color: var(--hl-number);
+  }
+  .hljs-comment,
+  .hljs-quote {
+    color: var(--hl-comment);
+    font-style: italic;
+  }
+  .hljs-title,
+  .hljs-title.function_,
+  .hljs-section {
+    color: var(--hl-title);
+  }
+  .hljs-built_in,
+  .hljs-type,
+  .hljs-title.class_ {
+    color: var(--hl-builtin);
+  }
+  .hljs-meta,
+  .hljs-attr,
+  .hljs-attribute,
+  .hljs-params,
+  .hljs-variable {
+    color: var(--hl-meta);
+  }
+  .hljs-deletion {
+    color: var(--bad);
+  }
+
+  /* Monaco: the line a jump from the lesson lands on. */
+  .monaco-editor .reveal-line {
+    background: color-mix(in oklab, var(--accent) 16%, transparent);
+    animation: reveal-fade 1.8s ease-out forwards;
+  }
+  .monaco-editor .reveal-gutter {
+    background: var(--accent);
+    width: 3px !important;
+    margin-left: 3px;
+  }
 }
 
-/* The lesson body. Tailwind's typography plugin is not installed, so the
-   handful of element rules a Markdown document needs live here. */
-.lesson {
-  color: var(--color-ink-200);
-  font-size: 0.975rem;
-  line-height: 1.75;
-}
-.lesson > * + * {
-  margin-top: 1.05em;
-}
-.lesson h1 {
-  font-size: 1.9rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  color: var(--color-ink-100);
-  margin-top: 0;
-  line-height: 1.2;
-}
-.lesson h2 {
-  font-size: 1.32rem;
-  font-weight: 640;
-  color: var(--color-ink-100);
-  letter-spacing: -0.015em;
-  line-height: 1.3;
-}
-.lesson h3 {
-  font-size: 1.06rem;
-  font-weight: 600;
-  color: var(--color-ink-100);
-  margin-top: 1.8em;
-}
-.lesson p {
-  margin-block: 0;
-}
-.lesson strong {
-  color: var(--color-ink-100);
-  font-weight: 600;
-}
-.lesson a {
-  color: var(--color-wire-400);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.lesson ul,
-.lesson ol {
-  padding-left: 1.4em;
-}
-.lesson ul {
-  list-style: disc;
-}
-.lesson ol {
-  list-style: decimal;
-}
-.lesson li + li {
-  margin-top: 0.4em;
-}
-.lesson li::marker {
-  color: var(--color-ink-400);
-}
-.lesson code {
-  font-family: var(--font-mono);
-  font-size: 0.86em;
-  background: var(--color-ink-850);
-  border: 1px solid var(--color-ink-800);
-  border-radius: 5px;
-  padding: 0.1em 0.34em;
-  color: var(--color-ink-100);
-}
-.lesson pre {
-  background: var(--color-ink-900);
-  border: 1px solid var(--color-ink-800);
-  border-radius: 10px;
-  padding: 0.95rem 1.1rem;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  font-size: 0.85rem;
-  line-height: 1.6;
-}
-.lesson pre code {
-  background: none;
-  border: none;
-  padding: 0;
-  font-size: inherit;
-}
-.lesson blockquote {
-  border-left: 3px solid var(--color-ink-700);
-  padding-left: 1rem;
-  color: var(--color-ink-300);
-}
-.lesson table {
-  width: 100%;
-  border-radius: 10px;
-  border-collapse: collapse;
-  font-size: 0.88rem;
-  display: block;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-}
-.lesson th,
-.lesson td {
-  border: 1px solid var(--color-ink-800);
-  padding: 0.5rem 0.75rem;
-  text-align: left;
-  vertical-align: top;
-}
-.lesson tbody tr:nth-child(even) td {
-  background: color-mix(in oklab, var(--color-ink-900) 70%, transparent);
-}
-.lesson th {
-  background: color-mix(in oklab, var(--accent, var(--color-wire-500)) 10%, var(--color-ink-900));
-  color: var(--color-ink-100);
-  font-weight: 600;
-}
-.lesson hr {
-  border: none;
-  border-top: 1px solid var(--color-ink-800);
-}
-
-/* KaTeX defaults to the browser's text colour and a font size that is too
-   large beside 0.975rem body text. */
-.lesson .katex {
-  font-size: 1.04em;
-}
-.lesson .katex-display {
-  margin: 1.4em 0;
-  /* A wide equation scrolls inside its own box rather than widening the page,
-     which is how a phone reads the longer derivations. */
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  padding: 0.3em 0;
-}
-.lesson .katex-display > .katex {
-  color: var(--color-ink-100);
-}
-
-@keyframes pulse-in {
+@keyframes fade-in {
   from {
     opacity: 0;
     transform: translateY(2px);
@@ -251,902 +952,21 @@ body {
     transform: none;
   }
 }
-.appear {
-  animation: pulse-in 140ms ease-out;
-}
 
-/* ------------------------------------------------------------------------
-   The reading pane: a sticky bar, per-part accent, and focus mode.
-   `--accent` is set on the reader from the lesson's part.
-   ------------------------------------------------------------------------ */
-
-.reader {
-  --accent: var(--color-wire-500);
-  --accent-soft: color-mix(in oklab, var(--accent) 14%, transparent);
-  --accent-line: color-mix(in oklab, var(--accent) 38%, transparent);
-  scroll-padding-top: 64px;
-}
-
-.reader-bar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: color-mix(in oklab, var(--color-ink-950) 82%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--color-ink-800);
-}
-.reader-bar-inner {
-  height: 46px;
-}
-.reader-bar-num {
-  display: inline-flex;
-  min-width: 1.9rem;
-  justify-content: center;
-  border-radius: 6px;
-  padding: 0.1rem 0.35rem;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-.reader-progress {
-  height: 2px;
-  background: transparent;
-  overflow: hidden;
-}
-.reader-progress > span {
-  display: block;
-  height: 100%;
-  transform-origin: left;
-  background: linear-gradient(90deg, var(--accent), var(--color-good-500));
-  transition: transform 120ms linear;
-}
-
-.reader-menu {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 6px);
-  max-height: min(60vh, 420px);
-  overflow-y: auto;
-  border: 1px solid var(--color-ink-700);
-  background: var(--color-ink-900);
-  border-radius: 10px;
-  padding: 0.35rem;
-  box-shadow: 0 18px 50px -12px rgb(0 0 0 / 0.7);
-}
-.reader-menu-item {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 0.6rem;
-  border-radius: 7px;
-  padding: 0.45rem 0.55rem;
-  text-align: left;
-  font-size: 12.5px;
-  color: var(--color-ink-300);
-}
-.reader-menu-item:hover {
-  background: var(--color-ink-850);
-  color: var(--color-ink-100);
-}
-.reader-menu-item.is-current {
-  background: var(--accent-soft);
-  color: var(--color-ink-100);
-}
-.reader-menu-dot {
-  display: inline-flex;
-  size: 1.25rem;
-  width: 1.25rem;
-  height: 1.25rem;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  border: 1px solid var(--color-ink-700);
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--color-ink-500);
-}
-.reader-menu-dot.is-read {
-  border-color: transparent;
-  background: color-mix(in oklab, var(--color-good-500) 22%, transparent);
-  color: var(--color-good-500);
-}
-
-.part-chip {
-  border-radius: 999px;
-  border: 1px solid var(--accent-line);
-  background: var(--accent-soft);
-  color: color-mix(in oklab, var(--accent) 70%, white);
-  padding: 0.15rem 0.6rem;
-  font-size: 10.5px;
-  font-weight: 550;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-/* The objectives, as numbered targets. */
-.goals {
-  position: relative;
-  border-radius: 14px;
-  border: 1px solid var(--color-ink-800);
-  background:
-    linear-gradient(135deg, var(--accent-soft), transparent 55%),
-    var(--color-ink-900);
-  padding: 1.1rem 1.2rem;
-}
-.goals-title {
-  margin-bottom: 0.75rem;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: color-mix(in oklab, var(--accent) 65%, white);
-}
-.goals-num {
-  display: inline-flex;
-  width: 1.35rem;
-  height: 1.35rem;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px var(--accent-line);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: color-mix(in oklab, var(--accent) 70%, white);
-}
-
-/* Sections. Each `##` arrives wrapped in a <section> by rehypeLesson. */
-.reader-title,
-.lesson h1 {
-  font-size: 2.05rem;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  background: linear-gradient(100deg, var(--color-ink-100) 30%, color-mix(in oklab, var(--accent, var(--color-wire-500)) 75%, white));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.lesson .lesson-intro > p:first-child {
-  font-size: 1.06rem;
-  color: var(--color-ink-100);
-}
-.lesson .lesson-intro > * + *,
-.lesson .lesson-section > * + * {
-  margin-top: 1.05em;
-}
-.lesson-section {
-  margin-top: 2.6em;
-  padding-top: 1.4em;
-  border-top: 1px solid var(--color-ink-800);
-  scroll-margin-top: 58px;
-  transition: opacity 260ms ease, filter 260ms ease;
-}
-.h2-kicker {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  margin-bottom: 0.45rem;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-ink-500);
-}
-.h2-num {
-  display: inline-flex;
-  min-width: 1.75rem;
-  justify-content: center;
-  border-radius: 6px;
-  padding: 0.12rem 0.3rem;
-  font-family: var(--font-mono);
-  letter-spacing: 0;
-  color: color-mix(in oklab, var(--accent, var(--color-wire-500)) 75%, white);
-  background: var(--accent-soft, var(--color-ink-850));
-  box-shadow: inset 0 0 0 1px var(--accent-line, var(--color-ink-700));
-  transition: background 200ms, color 200ms;
-}
-.h2-text {
-  display: block;
-}
-.lesson-section.is-read .h2-num {
-  color: var(--color-good-500);
-  background: color-mix(in oklab, var(--color-good-500) 14%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-good-500) 35%, transparent);
-}
-.lesson-section[data-kind="pitfalls"] .h2-kicker { color: color-mix(in oklab, var(--color-bad-500) 80%, white); }
-.lesson-section[data-kind="build"] .h2-kicker { color: color-mix(in oklab, var(--color-good-500) 80%, white); }
-.lesson-section[data-kind="exercise"] .h2-kicker { color: color-mix(in oklab, var(--accent, var(--color-wire-500)) 80%, white); }
-
-/* Focus mode dims every section but the one being read. */
-.reader[data-focus] .lesson-intro:not(.is-current),
-.reader[data-focus] .lesson-section:not(.is-current) {
-  opacity: 0.26;
-  filter: saturate(0.4);
-}
-.reader[data-focus] .lesson-section:not(.is-current):hover {
-  opacity: 0.6;
-}
-.reader[data-focus] .lesson-section.is-current {
-  opacity: 1;
-}
-
-/* "What you already know" reads as a ticked checklist. */
-.lesson-section[data-kind="recap"] > ul {
-  list-style: none;
-  padding-left: 0;
-}
-.lesson-section[data-kind="recap"] > ul > li {
-  position: relative;
-  padding-left: 1.7em;
-}
-.lesson-section[data-kind="recap"] > ul > li::before {
-  content: "✓";
-  position: absolute;
-  left: 0.1em;
-  top: 0.05em;
-  color: var(--color-good-500);
-  font-weight: 700;
-}
-
-/* "Build it step by step" becomes a numbered path. */
-.lesson-section[data-kind="build"] > ol {
-  list-style: none;
-  padding-left: 0;
-  counter-reset: step;
-}
-.lesson-section[data-kind="build"] > ol > li {
-  position: relative;
-  counter-increment: step;
-  padding: 0.85rem 1rem 0.9rem 3.1rem;
-  border: 1px solid var(--color-ink-800);
-  border-radius: 12px;
-  background: color-mix(in oklab, var(--color-ink-900) 80%, transparent);
-}
-.lesson-section[data-kind="build"] > ol > li + li {
-  margin-top: 0.75rem;
-}
-.lesson-section[data-kind="build"] > ol > li::before {
-  content: counter(step);
-  position: absolute;
-  left: 0.85rem;
-  top: 0.85rem;
-  display: flex;
-  width: 1.6rem;
-  height: 1.6rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--color-good-500), color-mix(in oklab, var(--color-good-500) 55%, var(--accent, var(--color-wire-500))));
-  color: var(--color-ink-950);
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-.lesson-section[data-kind="build"] > ol > li:not(:last-child)::after {
-  content: "";
-  position: absolute;
-  left: 1.63rem;
-  top: 2.65rem;
-  bottom: -0.8rem;
-  width: 2px;
-  background: linear-gradient(var(--color-good-500), transparent);
-  opacity: 0.35;
-}
-
-/* "Where this breaks": one card per failure mode. */
-.lesson .pitfall {
-  position: relative;
-  border-radius: 10px;
-  border: 1px solid color-mix(in oklab, var(--color-bad-500) 22%, var(--color-ink-800));
-  background: color-mix(in oklab, var(--color-bad-500) 5%, var(--color-ink-900));
-  padding: 0.8rem 1rem 0.85rem 2.6rem;
-}
-.lesson .pitfall::before {
-  content: "!";
-  position: absolute;
-  left: 0.9rem;
-  top: 0.85rem;
-  display: flex;
-  width: 1.1rem;
-  height: 1.1rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: color-mix(in oklab, var(--color-bad-500) 25%, transparent);
-  color: var(--color-bad-500);
-  font-size: 0.72rem;
-  font-weight: 800;
-}
-.lesson .pitfall .runin {
-  display: block;
-  margin-bottom: 0.2rem;
-  color: var(--color-ink-100);
-}
-
-.lesson ul.pitfall-list {
-  list-style: none;
-  padding-left: 0;
-}
-.lesson ul.pitfall-list > li + li {
-  margin-top: 0.7rem;
-}
-
-/* A whole section that works an example by hand gets the example's card. */
-.lesson-section[data-kind="example"] {
-  border-top: none;
-}
-.lesson-section[data-kind="example"] {
-  position: relative;
-  border-radius: 14px;
-  border: 1px solid color-mix(in oklab, var(--color-warm-500) 28%, var(--color-ink-800));
-  background:
-    linear-gradient(160deg, color-mix(in oklab, var(--color-warm-500) 8%, transparent), transparent 45%),
-    var(--color-ink-900);
-  padding: 1.1rem 1.2rem 1.2rem;
-}
-.lesson-section[data-kind="example"] .h2-kicker {
-  color: var(--color-warm-500);
-}
-.lesson-section[data-kind="example"] .h2-num {
-  color: var(--color-warm-500);
-  background: color-mix(in oklab, var(--color-warm-500) 14%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-warm-500) 32%, transparent);
-}
-.lesson-section[data-kind="example"] .formula,
-.lesson-section[data-kind="example"] .codeblock {
-  background: var(--color-ink-950);
-}
-
-/* Run-in headings elsewhere. */
-.lesson strong.runin {
-  color: var(--color-ink-100);
-}
-
-/* Terms the lesson defines: a highlighter stroke you can find again. */
-.lesson strong.term {
-  color: var(--color-ink-100);
-  background: linear-gradient(
-    180deg,
-    transparent 58%,
-    color-mix(in oklab, var(--color-warm-500) 30%, transparent) 58%
-  );
-  border-radius: 2px;
-  padding: 0 0.1em;
-  scroll-margin-top: 90px;
-}
-.lesson strong.term.flash {
-  animation: term-flash 1.6s ease-out;
-}
 @keyframes term-flash {
-  0%, 30% {
-    background: color-mix(in oklab, var(--color-warm-500) 55%, transparent);
-    box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-warm-500) 25%, transparent);
+  0%,
+  35% {
+    box-shadow: 0 0 0 4px var(--mark);
+    background: var(--mark);
   }
 }
 
-/* "Common mistake" becomes a small warning tag. */
-.mistake-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
-  margin-right: 0.35em;
-  border-radius: 999px;
-  padding: 0.02em 0.55em 0.05em;
-  font-size: 0.74em;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  vertical-align: 0.08em;
-  color: var(--color-warm-500);
-  background: color-mix(in oklab, var(--color-warm-500) 13%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-warm-500) 30%, transparent);
-}
-.mistake-tag::before {
-  content: "⚠";
-}
-
-/* Display maths sits in a frame, with its plain-English reading beneath. */
-.lesson .formula {
-  position: relative;
-  border-radius: 12px;
-  border: 1px solid var(--accent-line, var(--color-ink-700));
-  background:
-    radial-gradient(420px 120px at 50% 0%, var(--accent-soft, transparent), transparent 70%),
-    var(--color-ink-900);
-  padding: 0.2rem 1.1rem;
-  margin-block: 1.4em;
-}
-.lesson .formula > .katex-display {
-  margin: 0.9em 0;
-}
-.lesson .formula > .readaloud-lead {
-  margin-top: 0.2rem;
-  padding-top: 0.75rem;
-  border-top: 1px dashed var(--color-ink-700);
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--color-ink-400);
-}
-.lesson .readaloud {
-  margin-top: 0.6em !important;
-  margin-bottom: 0.9rem;
-  font-size: 0.92em;
-}
-.lesson .formula > .readaloud {
-  list-style: none;
-  padding-left: 0;
-}
-.lesson .formula > .readaloud > li {
-  padding-left: 0.9em;
-  border-left: 2px solid var(--accent-line, var(--color-ink-700));
-}
-
-/* Worked examples: a card that invites a pencil. */
-.lesson .worked {
-  position: relative;
-  border-radius: 14px;
-  border: 1px solid color-mix(in oklab, var(--color-warm-500) 28%, var(--color-ink-800));
-  background:
-    linear-gradient(160deg, color-mix(in oklab, var(--color-warm-500) 8%, transparent), transparent 45%),
-    var(--color-ink-900);
-  padding: 1rem 1.15rem 1.1rem;
-  margin-top: 1.8em !important;
-}
-.lesson .worked > * + * {
-  margin-top: 0.9em;
-}
-.lesson .worked > h3 {
-  margin-top: 0.3rem;
-}
-.worked-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4em;
-  font-size: 10.5px;
-  font-weight: 650;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--color-warm-500);
-}
-.worked-label::before {
-  content: "✎";
-  font-size: 1.2em;
-  letter-spacing: 0;
-}
-
-/* Callouts from `> [!KEY]` and friends. */
-.callout {
-  --c: var(--color-wire-500);
-  position: relative;
-  border-radius: 12px;
-  border: 1px solid color-mix(in oklab, var(--c) 32%, var(--color-ink-800));
-  background:
-    linear-gradient(120deg, color-mix(in oklab, var(--c) 12%, transparent), transparent 60%),
-    var(--color-ink-900);
-  padding: 0.8rem 1rem 0.9rem 1.05rem;
-  box-shadow: inset 3px 0 0 var(--c);
-}
-.callout-key { --c: var(--accent, var(--color-wire-500)); }
-.callout-tip { --c: var(--color-good-500); }
-.callout-warning { --c: var(--color-warm-500); }
-.callout-recap { --c: #9b7bff; }
-.callout-label {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  margin-bottom: 0.3rem;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: color-mix(in oklab, var(--c) 78%, white);
-}
-.callout-icon::before {
-  display: inline-flex;
-  width: 1.15rem;
-  height: 1.15rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  background: color-mix(in oklab, var(--c) 22%, transparent);
-  font-size: 0.8rem;
-  letter-spacing: 0;
-}
-.callout-key .callout-icon::before { content: "★"; }
-.callout-tip .callout-icon::before { content: "💡"; font-size: 0.72rem; }
-.callout-warning .callout-icon::before { content: "!"; font-weight: 800; }
-.callout-recap .callout-icon::before { content: "↺"; }
-.callout-body > * + * {
-  margin-top: 0.55em;
-}
-.callout-key .callout-body {
-  font-size: 1.02rem;
-  font-weight: 500;
-  color: var(--color-ink-100);
-}
-.callout-recap .callout-body ul {
-  list-style: none;
-  padding-left: 0;
-}
-.callout-recap .callout-body li {
-  position: relative;
-  padding-left: 1.4em;
-}
-.callout-recap .callout-body li::before {
-  content: "→";
-  position: absolute;
-  left: 0;
-  color: color-mix(in oklab, var(--c) 80%, white);
-}
-
-/* Inline code that names an exercise function: a link into the editor. */
-.lesson .symbol {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.15em;
-  border-radius: 6px;
-  cursor: pointer;
-  vertical-align: baseline;
-}
-.lesson .symbol code {
-  border-color: color-mix(in oklab, var(--color-good-500) 35%, var(--color-ink-800));
-  background: color-mix(in oklab, var(--color-good-500) 9%, var(--color-ink-850));
-  transition: background 150ms, border-color 150ms;
-}
-.lesson .symbol:hover code {
-  border-color: var(--color-good-500);
-  background: color-mix(in oklab, var(--color-good-500) 18%, var(--color-ink-850));
-}
-.symbol-arrow {
-  font-size: 0.72em;
-  color: var(--color-good-500);
-  opacity: 0.7;
-  transition: transform 150ms, opacity 150ms;
-}
-.lesson .symbol:hover .symbol-arrow {
-  opacity: 1;
-  transform: translate(1px, -1px);
-}
-
-/* Code blocks carry their language and a copy button. */
-.codeblock {
-  border-radius: 10px;
-  border: 1px solid var(--color-ink-800);
-  background: var(--color-ink-900);
-  overflow: hidden;
-}
-.codeblock-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.3rem 0.5rem 0.3rem 0.9rem;
-  border-bottom: 1px solid var(--color-ink-800);
-  background: var(--color-ink-850);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--color-ink-500);
-}
-.codeblock-bar button {
-  border-radius: 5px;
-  padding: 0.15rem 0.5rem;
-  color: var(--color-ink-400);
-}
-.codeblock-bar button:hover {
-  background: var(--color-ink-800);
-  color: var(--color-ink-100);
-}
-.lesson .codeblock pre {
-  border: none;
-  border-radius: 0;
-  margin: 0;
-}
-.lesson .callout .codeblock,
-.lesson .worked .codeblock {
-  background: var(--color-ink-950);
-}
-
-/* One sentence rendered on its own, such as a flashcard's back. */
-.lesson-inline {
-  font-size: 0.9rem;
-  line-height: 1.6;
-}
-.lesson-inline strong {
-  color: var(--color-warm-500);
-}
-
-/* Flashcards. */
-.cards {
-  margin-top: 3rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--color-ink-800);
-}
-.cards-title {
-  font-size: 1.1rem;
-  font-weight: 640;
-  color: var(--color-ink-100);
-}
-.card {
-  display: flex;
-  flex-direction: column;
-  border-radius: 12px;
-  border: 1px solid var(--color-ink-800);
-  background: var(--color-ink-900);
-  transition: border-color 200ms, transform 200ms, background 200ms;
-}
-.card:hover {
-  border-color: color-mix(in oklab, var(--color-warm-500) 40%, var(--color-ink-800));
-  transform: translateY(-1px);
-}
-.card.is-flipped {
-  border-color: color-mix(in oklab, var(--color-warm-500) 45%, var(--color-ink-800));
-  background: color-mix(in oklab, var(--color-warm-500) 6%, var(--color-ink-900));
-}
-.card-face {
-  flex: 1;
-  min-height: 5.5rem;
-  padding: 0.85rem 1rem;
-  text-align: left;
-  border-radius: 12px;
-}
-.card.is-flipped .card-face {
-  animation: card-flip 260ms ease-out;
-}
-@keyframes card-flip {
-  from {
-    transform: rotateX(70deg);
-    opacity: 0.2;
-  }
-}
-.card-front {
-  display: flex;
-  height: 100%;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 0.6rem;
-}
-.card-term {
-  font-size: 1.02rem;
-  font-weight: 620;
-  color: var(--color-ink-100);
-}
-.card-hint {
-  font-size: 11px;
-  color: var(--color-ink-500);
-}
-.card-find {
-  align-self: flex-start;
-  margin: 0 0.75rem 0.65rem;
-  border-radius: 5px;
-  padding: 0.1rem 0.3rem;
-  font-size: 11px;
-  color: var(--color-warm-500);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-/* The call to action at the end of a lesson. */
-.cta {
-  position: relative;
-  margin-top: 2.5rem;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1rem;
-  overflow: hidden;
-  border-radius: 16px;
-  border: 1px solid var(--accent-line);
-  background:
-    radial-gradient(500px 180px at 0% 0%, color-mix(in oklab, var(--accent) 22%, transparent), transparent 70%),
-    radial-gradient(400px 160px at 100% 100%, color-mix(in oklab, var(--color-good-500) 14%, transparent), transparent 70%),
-    var(--color-ink-900);
-  padding: 1.2rem 1.3rem;
-}
-.cta-kicker {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: color-mix(in oklab, var(--accent) 75%, white);
-}
-.cta-title {
-  margin-top: 0.25rem;
-  font-size: 1.08rem;
-  font-weight: 620;
-  color: var(--color-ink-100);
-}
-.cta-brief {
-  margin-top: 0.25rem;
-  font-size: 0.84rem;
-  line-height: 1.5;
-  color: var(--color-ink-300);
-}
-.cta-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  border-radius: 10px;
-  padding: 0.65rem 1.1rem;
-  font-size: 0.88rem;
-  font-weight: 620;
-  color: var(--color-ink-950);
-  background: linear-gradient(135deg, var(--color-good-500), color-mix(in oklab, var(--color-good-500) 60%, var(--accent)));
-  box-shadow: 0 8px 26px -10px color-mix(in oklab, var(--color-good-500) 70%, transparent);
-  transition: transform 150ms, box-shadow 150ms;
-}
-.cta-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 30px -10px color-mix(in oklab, var(--color-good-500) 85%, transparent);
-}
-.cta-arrow {
-  display: inline-block;
-  animation: nudge 1.6s ease-in-out infinite;
-}
-@keyframes nudge {
-  0%, 100% { transform: translateX(0); }
-  50% { transform: translateX(4px); }
-}
-
-/* Monaco: the line a jump from the lesson lands on. */
-.monaco-editor .reveal-line {
-  background: color-mix(in oklab, var(--color-good-500) 18%, transparent);
-  animation: reveal-fade 1.8s ease-out forwards;
-}
-.monaco-editor .reveal-gutter {
-  background: var(--color-good-500);
-  width: 3px !important;
-  margin-left: 3px;
-}
 @keyframes reveal-fade {
-  0%, 55% { opacity: 1; }
-  100% { opacity: 0; }
-}
-
-/* ------------------------------------------------------------------------
-   The dashboard.
-   ------------------------------------------------------------------------ */
-
-.continue {
-  border: 1px solid color-mix(in oklab, var(--accent) 38%, transparent);
-  background:
-    radial-gradient(600px 200px at 0% 0%, color-mix(in oklab, var(--accent) 20%, transparent), transparent 70%),
-    radial-gradient(400px 180px at 100% 100%, color-mix(in oklab, var(--color-good-500) 10%, transparent), transparent 70%),
-    var(--color-ink-900);
-}
-.continue:hover {
-  border-color: color-mix(in oklab, var(--accent) 60%, transparent);
-  transform: translateY(-1px);
-}
-.continue-num {
-  display: none;
-  font-family: var(--font-mono);
-  font-size: 2.4rem;
-  font-weight: 600;
-  line-height: 1;
-  color: color-mix(in oklab, var(--accent) 60%, transparent);
-}
-@media (min-width: 640px) {
-  .continue-num {
-    display: block;
-  }
-}
-.continue-go {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 0.45rem;
-  border-radius: 10px;
-  padding: 0.55rem 0.95rem;
-  font-size: 0.85rem;
-  font-weight: 620;
-  color: var(--color-ink-950);
-  background: linear-gradient(135deg, var(--color-good-500), color-mix(in oklab, var(--color-good-500) 55%, var(--accent)));
-}
-
-.part-badge {
-  display: inline-flex;
-  width: 1.7rem;
-  height: 1.7rem;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--color-ink-950);
-  background: var(--accent);
-}
-
-.lesson-card {
-  border: 1px solid var(--color-ink-800);
-  background: color-mix(in oklab, var(--color-ink-900) 75%, transparent);
-  transition: transform 150ms, border-color 150ms, background 150ms;
-}
-.lesson-card:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in oklab, var(--accent) 45%, var(--color-ink-800));
-  background: color-mix(in oklab, var(--accent) 6%, var(--color-ink-900));
-}
-.lesson-card-num {
-  display: inline-flex;
-  width: 2rem;
-  height: 2rem;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9px;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: color-mix(in oklab, var(--accent) 75%, white);
-  background: color-mix(in oklab, var(--accent) 12%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 30%, transparent);
-}
-.lesson-card[data-state="solved"] .lesson-card-num {
-  color: var(--color-ink-950);
-  background: var(--color-good-500);
-  box-shadow: none;
-  font-weight: 800;
-}
-.lesson-card[data-state="started"] .lesson-card-num {
-  background: color-mix(in oklab, var(--accent) 24%, transparent);
-}
-
-/* ------------------------------------------------------------------------
-   The check console: a solved banner with a little confetti.
-   ------------------------------------------------------------------------ */
-
-.solved {
-  position: relative;
-  overflow: hidden;
-  border-radius: 10px;
-  border: 1px solid color-mix(in oklab, var(--color-good-500) 40%, transparent);
-  background:
-    radial-gradient(300px 100px at 0% 0%, color-mix(in oklab, var(--color-good-500) 22%, transparent), transparent 70%),
-    var(--color-ink-900);
-  padding: 0.75rem 0.9rem 0.85rem;
-}
-.solved-next {
-  margin-top: 0.6rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  border-radius: 8px;
-  padding: 0.35rem 0.75rem;
-  font-size: 12px;
-  font-weight: 620;
-  color: var(--color-ink-950);
-  background: var(--color-good-500);
-}
-.confetti {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-}
-.confetti > span {
-  position: absolute;
-  top: -8px;
-  left: calc(var(--i) * 7% + 3%);
-  width: 6px;
-  height: 10px;
-  border-radius: 2px;
-  opacity: 0;
-  background: hsl(calc(var(--i) * 47deg) 80% 62%);
-  animation: confetti-fall 1.4s ease-in calc(var(--i) * 45ms) 1 forwards;
-}
-@keyframes confetti-fall {
-  0% {
+  0%,
+  55% {
     opacity: 1;
-    transform: translateY(0) rotate(0deg);
   }
   100% {
     opacity: 0;
-    transform: translateY(110px) rotate(calc(var(--i) * 70deg + 180deg));
   }
 }

@@ -4,7 +4,8 @@
  * `@monaco-editor/react` loads the editor from jsdelivr unless it is handed an
  * instance. The app is behind a login on a private host, so it builds a lean
  * instance with the features and the one language the exercises need, gives it
- * the app's colours, and registers it with the loader.
+ * the app's colours in a light and a dark theme, and registers it with the
+ * loader.
  */
 
 import { loader } from "@monaco-editor/react";
@@ -43,68 +44,132 @@ self.MonacoEnvironment = {
   getWorker: () => new EditorWorker(),
 };
 
-export const THEME = "weights-and-wires";
+export const THEMES = { light: "ww-light", dark: "ww-dark" } as const;
 
-monaco.editor.defineTheme(THEME, {
-  base: "vs-dark",
+// Both themes mirror the tokens in index.css, so lesson code blocks and the
+// editor colour the same token the same way.
+monaco.editor.defineTheme(THEMES.light, {
+  base: "vs",
   inherit: true,
   rules: [
-    { token: "", foreground: "cdd3dd" },
-    { token: "keyword", foreground: "7aa2ff" },
-    { token: "string", foreground: "8fd6a0" },
-    { token: "string.escape", foreground: "b4ecc2" },
-    { token: "comment", foreground: "6b7488", fontStyle: "italic" },
-    { token: "number", foreground: "f0a637" },
-    { token: "type", foreground: "74d0e0" },
-    { token: "delimiter", foreground: "7b8496" },
-    { token: "identifier", foreground: "cdd3dd" },
+    { token: "", foreground: "1c1b18" },
+    { token: "keyword", foreground: "7b3fa0" },
+    { token: "string", foreground: "2d7a36" },
+    { token: "string.escape", foreground: "1f5e27" },
+    { token: "comment", foreground: "8c887d", fontStyle: "italic" },
+    { token: "number", foreground: "a85300" },
+    { token: "type", foreground: "0d6b78" },
+    { token: "delimiter", foreground: "6b675d" },
+    { token: "identifier", foreground: "1c1b18" },
   ],
   colors: {
-    "editor.background": "#0d0f14",
-    "editor.foreground": "#cdd3dd",
-    "editorCursor.foreground": "#4f8cff",
-    "editor.lineHighlightBackground": "#12151c",
-    "editor.lineHighlightBorder": "#12151c00",
-    "editor.selectionBackground": "#4f8cff33",
-    "editor.inactiveSelectionBackground": "#4f8cff1a",
-    "editor.selectionHighlightBackground": "#4f8cff1a",
-    "editor.wordHighlightBackground": "#4f8cff1f",
-    "editor.findMatchBackground": "#f0a63755",
-    "editor.findMatchHighlightBackground": "#f0a63726",
-    "editorLineNumber.foreground": "#39404f",
-    "editorLineNumber.activeForeground": "#7b8496",
-    "editorIndentGuide.background1": "#1a1e27",
-    "editorIndentGuide.activeBackground1": "#39404f",
-    "editorWhitespace.foreground": "#252a36",
-    "editorBracketMatch.background": "#4f8cff1f",
-    "editorBracketMatch.border": "#4f8cff80",
-    "editorBracketHighlight.foreground1": "#7b8496",
-    "editorBracketHighlight.foreground2": "#7aa2ff",
-    "editorBracketHighlight.foreground3": "#8fd6a0",
-    "editorGutter.background": "#0d0f14",
-    "editorWidget.background": "#12151c",
-    "editorWidget.border": "#252a36",
-    "editorSuggestWidget.background": "#12151c",
-    "editorSuggestWidget.border": "#252a36",
-    "editorSuggestWidget.selectedBackground": "#1a1e27",
-    "editorSuggestWidget.highlightForeground": "#74a5ff",
-    "editorHoverWidget.background": "#12151c",
-    "editorHoverWidget.border": "#252a36",
-    "editorRuler.foreground": "#1a1e27",
-    focusBorder: "#4f8cff",
+    "editor.background": "#fcfbf8",
+    "editor.foreground": "#1c1b18",
+    "editorCursor.foreground": "#2b59c3",
+    "editor.lineHighlightBackground": "#f5f3ee",
+    "editor.lineHighlightBorder": "#f5f3ee00",
+    "editor.selectionBackground": "#2b59c333",
+    "editor.inactiveSelectionBackground": "#2b59c31a",
+    "editor.selectionHighlightBackground": "#2b59c31a",
+    "editor.wordHighlightBackground": "#2b59c31a",
+    "editor.findMatchBackground": "#f2c94c80",
+    "editor.findMatchHighlightBackground": "#f2c94c40",
+    "editorLineNumber.foreground": "#c2beb2",
+    "editorLineNumber.activeForeground": "#6b675d",
+    "editorIndentGuide.background1": "#ebe8e0",
+    "editorIndentGuide.activeBackground1": "#d4d0c4",
+    "editorWhitespace.foreground": "#e6e3da",
+    "editorBracketMatch.background": "#2b59c31a",
+    "editorBracketMatch.border": "#2b59c366",
+    "editorBracketHighlight.foreground1": "#6b675d",
+    "editorBracketHighlight.foreground2": "#7b3fa0",
+    "editorBracketHighlight.foreground3": "#0d6b78",
+    "editorGutter.background": "#fcfbf8",
+    "editorWidget.background": "#ffffff",
+    "editorWidget.border": "#e6e3da",
+    "editorSuggestWidget.background": "#ffffff",
+    "editorSuggestWidget.border": "#e6e3da",
+    "editorSuggestWidget.selectedBackground": "#f0eee7",
+    "editorSuggestWidget.highlightForeground": "#2b59c3",
+    "editorHoverWidget.background": "#ffffff",
+    "editorHoverWidget.border": "#e6e3da",
+    "editorRuler.foreground": "#efece5",
+    focusBorder: "#2b59c3",
     "scrollbar.shadow": "#00000000",
-    "scrollbarSlider.background": "#252a3699",
-    "scrollbarSlider.hoverBackground": "#39404f99",
-    "scrollbarSlider.activeBackground": "#39404fcc",
+    "scrollbarSlider.background": "#d4d0c488",
+    "scrollbarSlider.hoverBackground": "#bdb8aa99",
+    "scrollbarSlider.activeBackground": "#bdb8aacc",
     "editorOverviewRuler.border": "#00000000",
   },
 });
+
+monaco.editor.defineTheme(THEMES.dark, {
+  base: "vs-dark",
+  inherit: true,
+  rules: [
+    { token: "", foreground: "eeece6" },
+    { token: "keyword", foreground: "c9a3ee" },
+    { token: "string", foreground: "a3d69c" },
+    { token: "string.escape", foreground: "c6e8c1" },
+    { token: "comment", foreground: "7f7c72", fontStyle: "italic" },
+    { token: "number", foreground: "efb46c" },
+    { token: "type", foreground: "7fd0d8" },
+    { token: "delimiter", foreground: "a19d92" },
+    { token: "identifier", foreground: "eeece6" },
+  ],
+  colors: {
+    "editor.background": "#1a1a18",
+    "editor.foreground": "#eeece6",
+    "editorCursor.foreground": "#8cadff",
+    "editor.lineHighlightBackground": "#20201e",
+    "editor.lineHighlightBorder": "#20201e00",
+    "editor.selectionBackground": "#8cadff33",
+    "editor.inactiveSelectionBackground": "#8cadff1a",
+    "editor.selectionHighlightBackground": "#8cadff1a",
+    "editor.wordHighlightBackground": "#8cadff1f",
+    "editor.findMatchBackground": "#e3a94f55",
+    "editor.findMatchHighlightBackground": "#e3a94f26",
+    "editorLineNumber.foreground": "#4a4944",
+    "editorLineNumber.activeForeground": "#a19d92",
+    "editorIndentGuide.background1": "#262623",
+    "editorIndentGuide.activeBackground1": "#3d3c37",
+    "editorWhitespace.foreground": "#2e2d29",
+    "editorBracketMatch.background": "#8cadff1f",
+    "editorBracketMatch.border": "#8cadff80",
+    "editorBracketHighlight.foreground1": "#a19d92",
+    "editorBracketHighlight.foreground2": "#c9a3ee",
+    "editorBracketHighlight.foreground3": "#7fd0d8",
+    "editorGutter.background": "#1a1a18",
+    "editorWidget.background": "#242421",
+    "editorWidget.border": "#3d3c37",
+    "editorSuggestWidget.background": "#242421",
+    "editorSuggestWidget.border": "#3d3c37",
+    "editorSuggestWidget.selectedBackground": "#2e2d29",
+    "editorSuggestWidget.highlightForeground": "#8cadff",
+    "editorHoverWidget.background": "#242421",
+    "editorHoverWidget.border": "#3d3c37",
+    "editorRuler.foreground": "#242421",
+    focusBorder: "#8cadff",
+    "scrollbar.shadow": "#00000000",
+    "scrollbarSlider.background": "#3d3c3799",
+    "scrollbarSlider.hoverBackground": "#4a494499",
+    "scrollbarSlider.activeBackground": "#4a4944cc",
+    "editorOverviewRuler.border": "#00000000",
+  },
+});
+
+// Monaco measures its font once, when the first editor mounts. The web font
+// may still be loading then, which leaves the cursor drifting off the text,
+// so measure again once every font is in.
+if (typeof document !== "undefined" && document.fonts) {
+  void document.fonts.ready.then(() => monaco.editor.remeasureFonts());
+}
 
 loader.config({ monaco });
 
 export const EDITOR_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions =
   {
-    fontFamily: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace',
+    fontFamily: '"JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, monospace',
     fontSize: 13.5,
     lineHeight: 21,
     minimap: { enabled: false },

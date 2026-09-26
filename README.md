@@ -85,7 +85,9 @@ You need Python 3.12 or later and Node 20 or later.
    cd frontend && npm install && npm run dev
    ```
 
-Open `http://localhost:5173`. The Vite dev server proxies `/api` to the backend.
+Open `http://localhost:5173`. The Vite dev server proxies `/api` to the backend
+on port 8000. To use a backend on another port, set `API_TARGET`, for example
+`API_TARGET=http://127.0.0.1:8011 npm run dev`.
 Sign in with one of the names in `APP_USERS` and the password in `APP_PASSWORD`.
 
 ## Write a lesson

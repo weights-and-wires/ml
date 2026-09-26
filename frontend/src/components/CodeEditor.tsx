@@ -2,7 +2,8 @@ import Editor, { type OnMount } from "@monaco-editor/react";
 import { useEffect, useRef } from "react";
 
 import { REVEAL_EVENT, type RevealDetail } from "../lib/events";
-import { EDITOR_OPTIONS, THEME } from "../lib/monaco";
+import { EDITOR_OPTIONS, THEMES } from "../lib/monaco";
+import { useTheme } from "../lib/theme";
 import { WIDE, useMediaQuery } from "../lib/useMediaQuery";
 
 type Props = {
@@ -27,6 +28,9 @@ export default function CodeEditor({
   // A phone fits about 35 characters across, so unwrapped code spends most of
   // its time off the right edge. Wide screens keep the lines as written.
   const wide = useMediaQuery(WIDE);
+  const theme = THEMES[useTheme().resolved];
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
 
   // The keyboard commands are registered once, against a ref, so that changing
   // the handler between renders does not re-register them.
@@ -78,7 +82,7 @@ export default function CodeEditor({
 
   const mount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
-    monaco.editor.setTheme(THEME);
+    monaco.editor.setTheme(themeRef.current);
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () =>
       run.current(),
     );
@@ -92,7 +96,7 @@ export default function CodeEditor({
   return (
     <Editor
       language="python"
-      theme={THEME}
+      theme={theme}
       value={value}
       onChange={(next) => onChange(next ?? "")}
       onMount={mount}
@@ -106,7 +110,7 @@ export default function CodeEditor({
         folding: wide,
       }}
       loading={
-        <div className="flex h-full items-center justify-center text-xs text-ink-600">
+        <div className="flex h-full items-center justify-center text-[13px] text-ink-4">
           Loading the editor…
         </div>
       }
