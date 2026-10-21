@@ -120,7 +120,7 @@ Top-k keeps the $k$ largest probabilities, zeros the rest, and divides by the ke
 
 The usual mistake zeros the tail and skips the division.
 
-Nucleus sampling, or top-p, keeps the shortest prefix of a sorted list whose running total reaches $p$, including the token that crosses $p$. For `[0.1, 0.5, 0.05, 0.2, 0.15]` and $p = 0.7`, the sorted values are 0.5, 0.2, 0.15, 0.1, 0.05 at indices 1, 3, 4, 0, 2. Running totals are 0.5, 0.7, 0.85, 0.95, 1.0. The second total hits 0.7, so keep indices 1 and 3. Then $0.5 / 0.7 = 0.7143$ and $0.2 / 0.7 = 0.2857$.
+Nucleus sampling, or top-p, keeps the shortest prefix of a sorted list whose running total reaches $p$, including the token that crosses $p$. For `[0.1, 0.5, 0.05, 0.2, 0.15]` and $p = 0.7$, the sorted values are 0.5, 0.2, 0.15, 0.1, 0.05 at indices 1, 3, 4, 0, 2. Running totals are 0.5, 0.7, 0.85, 0.95, 1.0. The second total hits 0.7, so keep indices 1 and 3. Then $0.5 / 0.7 = 0.7143$ and $0.2 / 0.7 = 0.2857$.
 
 Use `np.argsort`, `np.cumsum`, and `np.searchsorted(cumulative, p, side="left")`. The input arrives unsorted. The usual mistake drops the token that reaches $p$.
 
