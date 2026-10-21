@@ -17,70 +17,40 @@ exercise: 24-seq2seq-attention
 
 # Sequence to sequence with attention
 
-A translation model has two parts. An **encoder** reads the source sentence
-with a recurrent network. A **decoder** writes the output sentence with a
-second recurrent network. In the simplest design, the encoder hands over only
-its final hidden state: one vector meant to summarise the whole input.
+A translation model has two halves. An encoder reads the source. A decoder writes the output. In the plain design, the encoder hands over only its last hidden state, one vector for the whole input.
 
-That's like reading a long paragraph once and then translating it from memory,
-without looking back. It works for short sentences. For long ones, a single
-fixed-size vector can't hold everything, and translation quality drops sharply
-as sentences get longer. This happens even when the gradients are fine.
+That is like translating a paragraph from memory. Short sentences survive. A long sentence does not fit in one fixed vector, and the translation gets worse as the source gets longer. The gradients can be fine. The summary is still too small.
 
-**Attention** lets the decoder look back. At every output step, the decoder
-looks over all of the encoder's hidden states and picks the ones that matter
-right now. In this lesson you build two ways to score that choice, the
-backward pass for one of them, and a small hand-built model that copies its
-input perfectly.
+Attention lets the decoder look back. At every output step it scores every encoder state and blends the matches. You build two scorers, one backward pass, and a copy model with hand-set weights.
 
 ## What you already know
 
-- An encoder RNN turns inputs $x_1, \dots, x_{T_x}$ into hidden states
-  $h_1, \dots, h_{T_x}$, one per source position.
-- The **softmax** turns a list of scores into positive weights that add up to
-  one: $\operatorname{softmax}(z)_i = e^{z_i} / \sum_j e^{z_j}$.
-- A **weighted average** of vectors, with weights that are positive and sum
-  to one, always lies "between" those vectors.
-- The derivative of $\tanh(u)$ is $1 - \tanh(u)^2$.
-- A dot product `a @ b` is large when two vectors point the same way.
+You already have these tools:
 
-## Attention as a soft lookup
+- An encoder turns each source position into a hidden state.
+- A decoder writes one output position at a time from its own state.
+- A dot product multiplies matching entries and adds them. It is large when two vectors point the same way.
+- A softmax turns a list of scores into positive weights that add up to one.
+- The slope of tanh at u is 1 minus tanh(u) squared.
 
-A Python dictionary lookup takes a **query**, finds the **key** that matches
-exactly, and returns its **value**. Attention does a soft version:
+## Two keys and one query
 
-1. Score the query against every key. A higher score means a better match.
-2. Turn the scores into weights with a softmax.
-3. Return the weighted average of the values.
+Picture a library desk. The query is your request, each key is a spine label, and each value is the book's pages. You take a blend, mostly from the labels that match.
 
-Instead of picking one winner, attention blends every value, mostly from the
-best matches. Because every step is smooth, you can train it with ordinary
-backpropagation.
+Use two source positions. The query is [1, 0]. The keys are [1, 0] and [0, 1]. The values are [10, 0] and [0, 10].
 
-> [!KEY]
-> Attention scores a query against every key, turns the scores into weights with
-> a softmax, and returns the weighted average of the values.
+The first dot product is 1 × 1 + 0 × 0 = 1. The second is 1 × 0 + 0 × 1 = 0. A softmax on [1, 0] uses e^1 = 2.718 and e^0 = 1. The sum is 3.718. The weights are 2.718 / 3.718 = 0.7311 and 1 / 3.718 = 0.2689. The blend is 0.7311 × [10, 0] + 0.2689 × [0, 10] = [7.311, 2.689]. The match leans toward the first value.
 
-In a translation model, the query is the decoder's state $s_t$ at output step
-$t$: "what do I need now?" The keys and values are the encoder states $h_i$:
-"here's what's at position $i$". In this exercise the shapes are:
-
-- `query`, shape `(d_s,)`, one decoder state.
-- `keys`, shape `(T_x, d_h)`, one row per source position.
-- `values`, shape `(T_x, d_v)`, one row per source position. Often the same
-  as the keys.
-
-The last two steps are the same for every kind of attention:
+This blend is attention. The weights are the attention weights. The blend is the context vector. The Greek letter alpha, written α, is one weight. The same two steps end every kind of attention:
 
 $$
 \alpha_i = \frac{e^{e_i}}{\sum_{j} e^{e_j}}, \qquad
 c = \sum_{i} \alpha_i \, \text{values}_i
 $$
 
-Read it aloud: the weight $\alpha_i$ for position $i$ is the softmax of the
-scores $e_i$. The **context vector** $c$ is the weighted sum of the value
-rows. In numpy, subtracting the maximum first so that `np.exp` can't
-overflow:
+Alpha_i is the softmax of the scores, and c is the weighted sum of the value rows. Scores 1 and 0 again give [7.311, 2.689].
+
+Subtract the largest score before the exponential, or a large score overflows:
 
 ```python
 weights = np.exp(scores - scores.max())
@@ -88,102 +58,69 @@ weights = weights / weights.sum()
 context = weights @ values
 ```
 
-The starter file gives you this `softmax` already.
+The usual mistake is to forget the subtraction, or to skip dividing by the sum.
 
-> [!KEY]
-> The decoder builds a fresh context from all the encoder states at every output
-> step. It no longer has to squeeze the whole input into one vector.
-
-## Multiplicative attention
-
-The simplest score is the dot product of the query with each key:
+The score can be a plain dot, or a dot with a matrix in the middle when the lengths differ:
 
 $$
 e_i = s^{\top} h_i \qquad \text{or, with a weight matrix,} \qquad e_i = s^{\top} W h_i
 $$
 
-Read it aloud: the dot form multiplies the query by each key and sums, which
-needs the query and key to have the same length. The **general** form puts a
-learned matrix $W$, shape `(d_s, d_h)`, in between, so the lengths can differ.
-In numpy, scoring all keys at once:
+The first form dots query s with key h_i. The second inserts W, shaped `(d_s, d_h)`. An identity W leaves the scores at 1 and 0. You score every key at once:
 
 ```python
-scores = keys @ query              # dot form
-scores = keys @ (W.T @ query)      # general form
+scores = keys @ query                 # dot form
+scores = keys @ (W.T @ query)         # general form
 ```
 
-### Work a dot-product example by hand
+The usual mistake is `if W:` rather than `if W is None:`. An array does not behave like a missing value.
 
-Take two source positions with two-number keys, and values that make the
-result easy to read:
+> [!KEY]
+> Attention scores a query against every key, turns the scores into weights with a softmax, and returns the weighted sum of the values.
 
-$$
-s = [1, 0], \qquad
-\text{keys} = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}, \qquad
-\text{values} = \begin{bmatrix} 10 & 0 \\ 0 & 10 \end{bmatrix}
-$$
+In a translator the query is the decoder state, and the keys and values are the encoder states. Here `query` is `(d_s,)`, `keys` are `(T_x, d_h)`, and `values` are `(T_x, d_v)`.
 
-- Scores: $e_1 = 1 \times 1 + 0 \times 0 = 1$ and $e_2 = 0$.
-- Weights: $e^1 = 2.718$ and $e^0 = 1$, total $3.718$, so
-  $\alpha = [0.7311, 0.2689]$.
-- Context: $0.7311 \times [10, 0] + 0.2689 \times [0, 10] = [7.311, 2.689]$.
+> [!KEY]
+> The decoder builds a fresh context from every encoder state at each output step. The whole input no longer has to fit in one vector.
 
-The query matches the first key, so the context leans toward the first value.
+## Scores from a tiny network
 
-## Additive attention
+Dot products are one way to score. Additive attention uses a tiny network instead. Keep the same query, keys, and values. Let both projections be the identity, and let the learned vector v be [1, 1].
 
-Additive attention scores each key with a tiny neural network. It projects the
-query and the key into a shared space of size $d$, adds them, squashes with
-$\tanh$, and takes a dot product with a learned vector $v$:
+Position 1 adds [1, 0] + [1, 0] = [2, 0]. Then tanh(2) = 0.9640 and tanh(0) = 0, so the score is 0.9640 × 1 + 0 × 1 = 0.9640. Position 2 adds [1, 0] + [0, 1] = [1, 1]. Then tanh(1) = 0.7616 twice, and 0.7616 + 0.7616 = 1.5232.
+
+Subtract the max, 1.5232. The shifted scores are −0.5592 and 0. Then e^{−0.5592} = 0.5717 and e^0 = 1. The sum is 1.5717. The weights are 0.5717 / 1.5717 = 0.3637 and 1 / 1.5717 = 0.6363. Position 2 wins. Two moderate tanh entries add up to more than one large entry.
+
+Flip v to [−1, −1] and the weights swap to 0.6363 and 0.3637, so the matching key wins. The copy task uses a large negative v.
+
+This scorer is additive attention. The vector v sets what counts as a match.
 
 $$
 e_i = v^{\top} \tanh\left(W_1 s + W_2 h_i\right)
 $$
 
-Read it aloud: multiply the query by $W_1$, shape `(d, d_s)`. Multiply key $i$
-by $W_2$, shape `(d, d_h)`. Add the two, apply $\tanh$ entry by entry, and dot
-the result with $v$, shape `(d,)`. That gives one number per key. In numpy,
-for all keys at once:
+W_1, shaped `(d, d_s)`, multiplies the query. W_2, shaped `(d, d_h)`, multiplies the key. Add, apply tanh, and dot with v. Identities and v = [1, 1] give the scores and weights you computed. You score every key in one pass:
 
 ```python
-u = W1 @ query + keys @ W2.T      # shape (T_x, d)
-scores = np.tanh(u) @ v           # shape (T_x,)
+u = W1 @ query + keys @ W2.T      # (T_x, d)
+scores = np.tanh(u) @ v           # (T_x,)
 ```
 
-Here `W1 @ query` has shape `(d,)`, and numpy adds it to every row of
-`keys @ W2.T`. Then you apply the same softmax and weighted sum as before.
+`W1 @ query` has shape `(d,)` and is added to every row. The usual mistake is swapping W_1 and W_2. W_1 goes with the query.
 
 > [!TIP]
-> Write the shape of each result in a comment, as the code above does. When a
-> shape doesn't match the comment, you have usually swapped `W1` and `W2` or
-> dropped a `.T`.
-
-### Work an additive example by hand
-
-Use the same query, keys, and values, with $W_1$ and $W_2$ both the identity
-and $v = [1, 1]$.
-
-- Position 1: $u_1 = [1, 0] + [1, 0] = [2, 0]$, $\tanh(u_1) = [0.9640, 0]$,
-  score $0.9640$.
-- Position 2: $u_2 = [1, 0] + [0, 1] = [1, 1]$, $\tanh(u_2) = [0.7616, 0.7616]$,
-  score $1.5232$.
-- Weights: softmax of $[0.9640, 1.5232]$ is $[0.3637, 0.6363]$.
-
-Surprise: the second position wins, even though the query matches the first
-key. Two moderate entries after $\tanh$ add up to more than one large entry.
-Flip $v$ to $[-1, -1]$ and the scores become $[-0.9640, -1.5232]$, giving
-weights $[0.6363, 0.3637]$. Now the matching key wins. You use exactly this
-trick in the copy task at the end.
+> Write the shape of each result in a comment, as the lines above do. A mismatch usually means the two matrices were swapped, or a `.T` was dropped.
 
 > [!KEY]
-> In additive attention, the learned vector $v$ decides what counts as a good
-> match. A key that equals the query doesn't win on its own.
+> In additive attention, the vector v sets what counts as a match. Equality of the query and the key is not enough.
 
-## The backward pass of additive attention
+## One gradient on the context
 
-The backward pass takes `dcontext`, the gradient on the context vector, shape
-`(d_v,)`, and returns a gradient for every input. Walk the forward pass in
-reverse:
+A gradient is the slope of the loss with respect to each input. Suppose the context gradient is [1, 0], and the weights are the additive ones, 0.3637 and 0.6363. The values are still [10, 0] and [0, 10].
+
+Each value row is scaled by its weight. The outer product gives rows [0.3637, 0] and [0.6363, 0]. Each weight's slope is its value dotted with [1, 0], so the weight gradients are [10, 0]. Their weighted average is 0.3637 × 10 + 0.6363 × 0 = 3.637. The score gradients are 0.3637 × (10 − 3.637) = 2.314 and 0.6363 × (0 − 3.637) = −2.314. They sum to 0.
+
+Write t for tanh(u). The backward formulas are:
 
 $$
 d\text{values} = \alpha \, \text{dcontext}^{\top}, \qquad
@@ -194,12 +131,9 @@ $$
 de_i = \alpha_i \left( d\alpha_i - \sum_j \alpha_j \, d\alpha_j \right)
 $$
 
-Read it aloud. Each value row gets the context gradient scaled by its weight;
-that's an **outer product**, `np.outer`. Each weight's gradient is its value
-row dotted with the context gradient. The softmax backward step subtracts the
-weighted average of those gradients, then scales by the weight.
+Each value row gets the context gradient times its weight, an outer product. Each weight's gradient is its value dotted with the context gradient. The softmax step subtracts the weighted average, then multiplies by the weight. That is the pair 2.314 and −2.314.
 
-Then back through the scoring network. Write $t = \tanh(u)$:
+Then the scoring network:
 
 $$
 dv = t^{\top} de, \qquad
@@ -213,10 +147,7 @@ dW_2 = du^{\top} \text{keys}, \quad
 d\text{keys} = du \, W_2
 $$
 
-Read it aloud: $v$'s gradient sums each $\tanh$ row times its score gradient.
-The gradient on $u$ passes back through $\tanh$. The query was added to every
-row of $u$, so its gradient uses the sum of all rows of $du$. The keys each
-touched only their own row. In numpy:
+v's gradient adds each tanh row times its score gradient. The query was added to every row, so sum `du` before multiplying by the query. Each key touches only its own row. One piece in numpy is:
 
 ```python
 dscores = weights * (dweights - np.sum(weights * dweights))
@@ -224,110 +155,59 @@ du = np.outer(dscores, v) * (1.0 - t ** 2)
 dW1 = np.outer(du.sum(axis=0), query)
 ```
 
+The usual mistake is forgetting 1 − t², or passing the full `du` into `np.outer`.
+
 > [!WARNING]
-> Use `du.sum(axis=0)`, shape `(d,)`, for both `dW1` and `dquery`. If you pass
-> the full `(T_x, d)` array to `np.outer`, it still runs, because `np.outer`
-> flattens its inputs, but `dW1` gets the wrong shape.
+> Sum `du` on axis 0 before `np.outer`. The full `(T_x, d)` array flattens inside `np.outer` and the gradient gets the wrong shape.
 
-## The alignment matrix
+## Where the decoder looked
 
-Run attention once per decoder step and stack the weight rows. You get a
-$T_y \times T_x$ **alignment matrix**: row $t$ says where the decoder looked
-while writing output $t$. Nobody tells the model which words line up. On
-translation, the trained matrix still often traces the word-by-word
-correspondence, so people plot it to see what the model uses.
+Stack one weight row per decoder step. That T_y by T_x array is the alignment matrix. Row t says where the decoder looked while writing output t. On translation the matrix often traces the word pairs, with no labels supplied.
 
-For a copy task, where output $t$ should equal input $t$, the ideal alignment
-matrix is the identity: step $t$ looks only at position $t$.
+For a copy task, output t must equal input t, so the ideal matrix is the identity. With queries and keys at 10 times the identity, identity projections, and v = −10 on every entry, the match scores about −10 and every other position scores about −20. The leftover weight is about e^{−10} = 4.54 × 10^{−5}. A positive v makes the other positions win.
 
 > [!RECAP]
-> - Every form of attention ends the same way: softmax the scores, then take
->   `weights @ values`.
-> - Additive scores are `np.tanh(W1 @ query + keys @ W2.T) @ v`. `W1` goes with
->   the query.
-> - Multiplicative scores are `keys @ query`, or `keys @ (W.T @ query)` when you
->   pass a `W`.
-> - The backward pass runs in reverse: values and weights, the softmax step, the
->   $\tanh$ step, then the two projections.
-> - In the copy task, a negative $v$ makes the matching position win, so the
->   alignment matrix is close to the identity.
+> Carry these facts into the exercise:
+> - Every attention ends the same way: softmax the scores, then `weights @ values`.
+> - Additive scores are `tanh(W1 @ query + keys @ W2.T) @ v`. W_1 goes with the query.
+> - Multiplicative scores are `keys @ query`, or `keys @ (W.T @ query)` when you pass W.
+> - The backward pass runs values, weights, the softmax step, the tanh step, then the two projections.
+> - In the copy task, a negative v makes the matching position win, so the alignment is near the identity.
 
 ## Build it step by step
 
-The checks test the functions in this order.
+The checks test the functions in this order:
 
-1. **`additive_attention(query, keys, values, W1, W2, v)`.** Returns
-   `(context, weights)` with shapes `(d_v,)` and `(T_x,)`. Compute `u`,
-   `scores`, `softmax(scores)`, and `weights @ values`. Common mistake:
-   swapping `W1` and `W2`; here `W1` goes with the query.
-2. **`multiplicative_attention(query, keys, values, W=None)`.** Same return
-   shapes. Use `keys @ query` when `W is None`, otherwise
-   `keys @ (W.T @ query)`. Common mistake: testing `if W:` instead of
-   `if W is None:`, which fails on an array.
-3. **Convex combination.** No new function. The checks confirm your context
-   equals `weights @ values`.
-4. **`attention_backward(dcontext, query, keys, values, W1, W2, v)`.** Rerun
-   the forward pass inside, then return `(dquery, dkeys, dvalues, dW1, dW2, dv)`
-   in that order, each shaped like its input. Use `np.outer`, `.T @`, and
-   `.sum(axis=0)`. Common mistake: forgetting the $1 - t^2$ factor.
-5. **Additive emulates dot.** No new function. With tiny identity matrices for
-   `W1` and `W2`, and `v` set to the query, $\tanh$ acts like a straight line,
-   and additive attention gives the same weights as a scaled dot product. This
-   passes when steps 1 and 2 are right.
-6. **`decode_with_attention(source_tokens, vocab_size)`.** Returns
-   `(decoded, alignment)`: a list of $T_x$ ints and a `(T_x, T_x)` array. Use
-   `10 * np.eye(T_x)` as both the queries and the keys, one-hot rows of
-   `np.eye(vocab_size)` as the values, identity matrices for `W1` and `W2`, and
-   `v = -10 * np.ones(T_x)`. For each step `t`, call your
-   `additive_attention` with query row `t`, store the weights, and append
-   `int(np.argmax(context))`. The matching position gives one saturated
-   $\tanh$ entry, score about $-10$; every other position gives two, score
-   about $-20$, so its weight is about $e^{-10} \approx 4.5 \times 10^{-5}$.
-   Common mistake: a positive `v`, which makes the wrong positions win.
+1. **`additive_attention(query, keys, values, W1, W2, v)`.** Return `(context, weights)` with shapes `(d_v,)` and `(T_x,)`. Compute `u`, the scores, `softmax(scores)`, and `weights @ values`. The usual mistake is swapping `W1` and `W2`. `W1` multiplies the query.
+2. **`multiplicative_attention(query, keys, values, W=None)`.** Return the same shapes. Use `keys @ query` when `W is None`, and `keys @ (W.T @ query)` otherwise. The usual mistake is `if W:`, which fails on an array.
+3. **Convex combination.** There is no separate function. The checks confirm the context equals `weights @ values`, a blend of the value rows.
+4. **`attention_backward(dcontext, query, keys, values, W1, W2, v)`.** Rerun the forward pass, then return `(dquery, dkeys, dvalues, dW1, dW2, dv)`, each shaped like its input. Use `np.outer`, `.T @`, and `.sum(axis=0)`. The usual mistake is dropping the 1 − t² factor, or forgetting to sum `du` before the outer product.
+5. **Additive copies a dot.** There is no separate function. Tiny identity matrices and `v` equal to the query make tanh nearly linear, so the weights match a scaled dot product.
+6. **`decode_with_attention(source_tokens, vocab_size)`.** Return `(decoded, alignment)`: a list of T_x ints and a `(T_x, T_x)` array. Use `10 * np.eye(T_x)` for queries and keys, one-hot rows of `np.eye(vocab_size)` as values, identities for `W1` and `W2`, and `v = -10 * np.ones(T_x)`. At step `t`, call `additive_attention` on query row `t`, store the weights, and append `int(np.argmax(context))`. The usual mistake is a positive `v`.
 
 ## Cost and scaling
 
-The table covers one decoder step against $T_x$ encoder states, with
-attention size $d$.
+One decoder step looks at T_x encoder states, with attention width d. A full output of T_y steps multiplies the work by T_y. The costs are:
 
 | Kind | Work per decoder step | Parameters |
 |---|---|---|
-| Additive | about $T_x \cdot d \, (d_s + d_h)$ | $d (d_s + d_h) + d$ |
-| Multiplicative, general | about $T_x \cdot d_s d_h$ | $d_s d_h$ |
-| Multiplicative, dot | about $T_x \cdot d_h$ | none |
+| Additive | about T_x · d · (d_s + d_h) | d(d_s + d_h) + d |
+| Multiplicative, with W | about T_x · d_s · d_h | d_s d_h |
+| Multiplicative, dot only | about T_x · d_h | none |
 
-A full output of $T_y$ steps multiplies the work by $T_y$. Total attention
-work grows with $T_x \times T_y$. Double both lengths and the work goes up four
-times. Dot-product attention is the fastest in practice, because it's one big
-matrix product with no $\tanh$.
+Total work grows with T_x × T_y. Double both lengths and the work goes up four times. The dot form is one matrix product and has no tanh.
 
 ## Where this breaks
 
-**Repeating itself.** Nothing stops the decoder from looking at the same
-source word at many steps. The symptom is a repeated phrase. **Coverage**
-methods keep a running total of past weights per position and feed it into the
-score.
+Attention fixes what the decoder can see. It still fails in familiar ways:
 
-**The encoder is still sequential.** Attention fixes what the decoder can
-reach. The encoder still builds $h_1, \dots, h_{T_x}$ one step at a time. The
-next lesson builds the encoder out of attention instead.
-
-**Attention can't recover what the encoder dropped.** It only mixes what the
-encoder states hold. If the encoder lost a detail, looking harder won't bring
-it back.
-
-**Cost grows with both lengths.** Long inputs and long outputs together make
-the $T_x \times T_y$ cost add up.
+- The decoder can read the same source word at many steps, and the output repeats a phrase. Coverage adds a running total of past weights into the score.
+- The encoder is still one step at a time. Attention does not speed that chain up. The next lesson replaces the encoder with attention.
+- Attention only mixes what the encoder states hold. A dropped detail does not come back.
+- Work grows with both lengths, so long inputs together with long outputs get expensive.
 
 ## The exercise
 
-You build `additive_attention` and `multiplicative_attention`, the backward
-pass `attention_backward` for the additive form, and `decode_with_attention`,
-a copy-task decoder whose weights you set by hand, with no training.
+You build `additive_attention`, `multiplicative_attention`, `attention_backward` for the additive form, and `decode_with_attention`. The copy decoder uses weights you set by hand. There is no training loop.
 
-The checks confirm both forms return weights that are positive and sum to
-one, and a context that's a weighted average of the values. They compare
-`attention_backward` with finite differences for all six inputs. They confirm
-additive attention matches a scaled dot product when set up to copy one. Last,
-they confirm `decode_with_attention` reproduces the source exactly and that
-its alignment matrix is within 0.01 of the identity.
+The checks confirm positive weights that sum to one, and a context equal to `weights @ values`. They compare `attention_backward` with finite differences on all six inputs. They also match additive attention to a scaled dot product in the copy setup, and they require `decode_with_attention` to reproduce the source with alignment within 0.01 of the identity.

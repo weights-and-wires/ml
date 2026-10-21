@@ -2,283 +2,343 @@
 title: The learning problem
 slug: 01-the-learning-problem
 part: "Part 1 — Foundations"
-summary: What it means for a model to learn, why training error looks better than reality, and how a held-out set keeps you honest.
+summary: Score guesses by hand, hold flats back, fit a curve, and split error into bias, variance, and noise.
 minutes: 45
 gpu: false
 objectives:
-  - Compute the empirical risk of a set of predictions for any per-example loss.
-  - Build a reproducible train/test split and use it to measure honest error.
-  - Fit a polynomial by least squares and explain why training error flatters it.
-  - Estimate squared bias, variance, and noise with a simulation, and explain what each one means.
+  - Score a set of guesses with any per-example loss, then average those scores.
+  - Hold some rows back with a seeded split and measure error only on those rows.
+  - Fit a polynomial by least squares and explain why the training score flatters it.
+  - Estimate squared bias, variance, and noise in a simulation, and say what each part means.
 exercise: 01-the-learning-problem
 ---
 
 # The learning problem
 
-Imagine studying for an exam by memorising last year's paper. You would score perfectly on that paper. On the real exam, with new questions, you might do badly. Machine learning has the same trap. A model that fits the data you gave it is not automatically a model that works on new data.
+A 20 square metre flat rents for £200 a week. A 30 square metre flat rents for £300. A 40 square metre flat rents for £400.
 
-Every method in this course, from a straight-line fit to a large neural network, tries to answer one question. Given a limited set of examples, how do you pick a model that does well on examples it has never seen? Fitting the examples you have is the easy part. Doing well on new ones is the goal.
+The rule "weekly rent equals ten times the size" matches all three. It predicts £500 for a 50 square metre flat whose rent is £650, so it fails on a flat it never saw. That failure is the subject of this course.
 
-In this lesson you learn the words the rest of the course uses for this problem. You measure a model's error, you see why error on the training data is too optimistic, and you split that error into three understandable parts. You also write the code for each idea.
+How do you pick a rule that works on flats you have not seen? By the end you can score a guess by hand and hold flats back so the score is honest. You can fit a simple curve, and explain why a wiggly curve looks perfect on its training flats and fails on the held-back ones.
 
 ## What you already know
 
-- An average of many random draws gets closer to the true mean as you add more draws.
-- The variance of a set of numbers is the average squared distance from their mean.
-- A polynomial like $1 - 2x + 0.5x^2$ is a weighted sum of powers of $x$.
-- In numpy, `a @ b` is matrix multiplication and `a.mean(axis=0)` averages down the rows.
-- Python functions can be passed around as values, such as `lambda p, t: (p - t) ** 2`.
+You already use these five calculations:
 
-## The supervised setup
+- The average of 2, 4, and 6 is 4.
+- An error of 2, squared, is 4. Two errors of 1, squared and added, are 2. Big errors hurt more.
+- Powers: if $x$ is 3, then $x^0$ is 1, $x^1$ is 3, and $x^2$ is 9.
+- A weighted sum: `2*3 + 1*5 = 11`. numpy writes the same idea as `a @ b` when `a` and `b` are arrays.
+- A function can be passed as a value, for example `lambda p, t: (p - t) ** 2`.
 
-In supervised learning you get a set of examples. Each example is an input $x$ and the correct answer $y$, called the target or label. You might have a house's size as $x$ and its price as $y$. You want a function that takes a new $x$ and predicts its $y$.
+## Score one guess
 
-This course writes $n$ for the number of examples. Each input can have $d$ features (numbers describing it). This lesson uses one feature per example, so each $x_i$ is a single number. The prediction for example $i$ is written $\hat{y}_i$, read "y hat".
+You guess 1, 2, 3, and 4. The targets are 1.5, 2.5, 2, and 5.
 
-There is one important assumption. The examples are **i.i.d.**, short for independent and identically distributed. Identically distributed means every example comes from the same source, like cards dealt from the same deck. Independent means one example tells you nothing about how the next was chosen. When this assumption fails, for example because the world changes after you collect your data, every guarantee in this lesson stops applying. Your code still produces numbers, but they no longer mean what you think.
+The first miss is $1-1.5=-0.5$, and $(-0.5)\times(-0.5)=0.25$. The second miss is $2-2.5=-0.5$, and that square is 0.25 too.
 
-### Loss: scoring one prediction
+The third miss is $3-2=1$, so the square is 1. The fourth miss is $4-5=-1$, so the square is 1.
 
-A **loss function** scores a single prediction against its target. Small is good. The two most common losses are the following:
+The four misses and their squares are as follows:
 
-- **Squared loss**: $(\hat{y} - y)^2$. It is used for predicting numbers.
-- **Zero-one loss**: 1 if the prediction is wrong, 0 if it is right. It is used for predicting categories.
+|Guess|Target|Miss|Square|
+|---|---|---|---|
+|1|1.5|-0.5|0.25|
+|2|2.5|-0.5|0.25|
+|3|2|1|1|
+|4|5|-1|1|
 
-In numpy, each loss works on whole arrays at once:
+Those squares are called the squared loss. On row three, $\hat{y}=3$ (y-hat) is the guess and $y=2$ is the target.
+
+The formula is as follows:
+
+$$
+(\hat{y}-y)^2
+$$
+
+Row three gives $(3-2)^2=1$.
+
+Square every row with numpy:
 
 ```python
 squared_error = lambda p, t: (p - t) ** 2
+```
+
+Adding the raw misses $-0.5+-0.5+1+-1$ gives $-1$, because the signs cancel.
+
+Predict categories 1, 0, and 1 against targets 1, 1, and 0. The scores are 0, then 1, then 1. Two of three are wrong, so the average is $2/3$.
+
+That 0-or-1 score is called zero-one loss. Use it for categories, and use squared loss for numbers. With $\ell$ (ell) as the score, the formula is as follows:
+
+$$
+\ell=\begin{cases}0&\text{if }\hat{y}=y\\1&\text{if }\hat{y}\neq y\end{cases}
+$$
+
+The second pair has $\hat{y}=0$ and $y=1$, so the formula gives 1.
+
+Turn mismatches into ones:
+
+```python
 zero_one = lambda p, t: (p != t).astype(float)
 ```
 
-## Risk and empirical risk
+Subtracting makes $0-1=-1$ and $1-0=1$, so both misses no longer count as 1.
 
-The **risk** of a model is its average loss over every example it could ever meet. That is the number you truly care about. You can never compute it, because you never see every possible example.
+## Average those scores
 
-What you can compute is the average loss over the examples you have. This is the **empirical risk**:
+Add the four squares: $0.25+0.25=0.5$, then $0.5+1=1.5$, then $1.5+1=2.5$. Divide by 4 to get $2.5/4=0.625$.
+
+That average is the empirical risk. Here $n=4$, and $\ell(\hat{y}_i,y_i)$ is the score of guess $i$.
+
+The four scores are 0.25, 0.25, 1, and 1. Their average is $\hat{R}$ (R-hat).
+
+The formula is as follows:
 
 $$
-\hat{R} = \frac{1}{n} \sum_{i=1}^{n} \ell(\hat{y}_i, y_i)
+\hat{R}=\frac{1}{n}\sum_{i=1}^{n}\ell(\hat{y}_i,y_i)
 $$
 
-Read it aloud piece by piece:
+The sum is 2.5 and the fraction is $1/4$, so you get 0.625 again.
 
-- $\ell(\hat{y}_i, y_i)$ is the loss for example $i$: how wrong prediction $\hat{y}_i$ is compared to target $y_i$.
-- $\sum_{i=1}^{n}$ adds up that loss over all $n$ examples.
-- $\frac{1}{n}$ divides by $n$, so the whole thing is an average, not a total.
-
-In numpy, it is one line, because the loss already returns one number per example:
+Take the mean in numpy:
 
 ```python
 risk = np.mean(loss(predictions, targets))
 ```
 
-### Worked example
+`np.sum` skips the division and stops at 2.5.
 
-Take four predictions and four targets:
+The true risk is that average over every flat you might meet. You cannot compute it, because you never see every flat.
 
-| $i$ | $\hat{y}_i$ | $y_i$ | $\hat{y}_i - y_i$ | squared loss |
-|---|---|---|---|---|
-| 1 | 1.0 | 1.5 | -0.5 | 0.25 |
-| 2 | 2.0 | 2.5 | -0.5 | 0.25 |
-| 3 | 3.0 | 2.0 | 1.0 | 1.00 |
-| 4 | 4.0 | 5.0 | -1.0 | 1.00 |
-
-The sum of the losses is $0.25 + 0.25 + 1 + 1 = 2.5$. Dividing by $n = 4$ gives an empirical risk of $0.625$.
-
-With zero-one loss, predictions `[1, 0, 1]` against targets `[1, 1, 0]` are right once and wrong twice. The empirical risk is $2/3 \approx 0.667$.
-
-If the model was chosen without looking at these examples, this average is a fair estimate of the true risk. On average over many samples it lands exactly on the risk, and it gets closer as $n$ grows. The next section shows what goes wrong when the model was chosen by looking at them.
+If the rule ignored these four flats, 0.625 is a fair stand-in. Over many draws it lands on the true risk, and it gets closer as you add flats.
 
 > [!KEY]
-> Empirical risk is the average loss on the examples you have. It stands in for the true risk, which you can never compute.
+> Empirical risk is the average score on the flats you have. It stands in for the true risk, which you cannot compute.
 
-## Training error is too optimistic
+## Why the training score flatters you
 
-Training a model means searching for the model with the lowest empirical risk on your training data. This idea is called **empirical risk minimisation**. Least squares, logistic regression, and neural network training all work this way.
+You memorise last year's paper and score 100. On a different paper you score 60, because part of the 100 is luck.
 
-Here is the catch. The winning model was picked because it scored well on those exact examples. Some of that good score is real skill. Some of it is luck: the model happens to fit the random quirks of this particular sample. On new data those quirks are different, so the luck does not carry over.
+Searching for the lowest average on the flats you fit is empirical risk minimisation. Least squares, logistic regression, and neural network training all search this way.
 
-The result, stated in words: on average, a trained model's error on its own training data is lower than its true error. The difference is called the **generalisation gap**. It grows as the model becomes more flexible, because a flexible model has more ways to bend around the quirks. It shrinks as you add more training data.
-
-> [!KEY]
-> Training error flatters the model. The more flexible the model, the wider the gap between its training error and its true error.
-
-Think back to the exam. Grading your memorised answers on last year's paper tells you nothing about the new paper. You need questions you have not seen.
-
-## Held-out data keeps you honest
-
-The fix is to set some data aside before training. You split your examples into two groups:
-
-- A **training set**, which you use to fit the model.
-- A **test set**, also called a held-out set, which you use only to measure error.
-
-The model never saw the test set, so from the test set's point of view the model is fixed. The test error is then a fair, unbiased estimate of the true risk. Unbiased means it is right on average, neither too high nor too low.
+On average the training score is lower than the true risk. That difference is the generalisation gap. A wiggly rule widens the gap, and more training flats shrink it.
 
 > [!KEY]
-> Test error is a fair estimate of true error only because the model never saw the test examples during training.
+> Training error flatters the rule. A more flexible rule widens the gap to the true risk.
 
-This costs you two things:
+This comparison needs one source of flats, and one flat must not determine the next. The short name is i.i.d., for independent and identically distributed.
 
-- A small test set gives a noisy estimate. It is right on average but can be far off on any one split.
-- Every example you put in the test set is one fewer example to train on, so the model gets a little worse.
+Picture one deck. Identically distributed means every card comes from that deck. Independent means you replace the card and shuffle, so the three of hearts says nothing about the next one.
 
-To split fairly, you shuffle the positions $0, 1, \dots, n-1$ into a random order. The first chunk of that order becomes the test set and the rest becomes the training set. You shuffle positions rather than the arrays themselves, so the same shuffle picks matching rows of `x` and `y`. A fixed random seed makes the split the same every time you run it:
+If rents change after you collect them, later flats are a different deck. The printed score is no longer the error you meet.
+
+## Hold some flats back
+
+You have $n=20$ flats and hold back a fraction 0.25. Then $0.25\times20=5$, so you score 5 flats and fit on 15.
+
+The 15 flats you fit are the training set. The 5 you only score are the test set, or held-out set. The score is fair, or unbiased: right on average, neither high nor low.
+
+> [!KEY]
+> The test score estimates the true risk only because the fit never used the test flats.
+
+Five test flats are noisy on one split. Each flat held back is one fewer to fit, so the rule gets a little worse.
+
+Shuffle positions $0,1,\ldots,19$, not the two arrays apart. The same positions keep each size with its rent, and a fixed seed repeats the shuffle.
+
+Shuffle positions in numpy:
 
 ```python
-rng = np.random.default_rng(seed)
-order = rng.permutation(n)   # a shuffled array of 0..n-1
+order = np.random.default_rng(seed).permutation(n)
 ```
 
-With $n = 20$ and a test fraction of $0.25$, the test set has $\lfloor 0.25 \times 20 \rfloor = 5$ examples. The symbol $\lfloor \cdot \rfloor$ means round down to a whole number. The training set gets the other 15.
+Two separate permutations pair a size with the wrong rent.
 
-## A small model family: polynomials
+The test count rounds down: $\lfloor0.25\times20\rfloor=5$. The symbol $\lfloor\cdot\rfloor$ means round down to a whole number.
 
-To see these effects you need models of different flexibility. Polynomials are a good choice. A degree-1 polynomial is a straight line. A degree-9 polynomial can wiggle a lot.
+Of 21 flats, $0.25\times21=5.25$, and the floor is 5. For these 20 flats, 15 train.
 
-A polynomial of degree $p$ is
+## Fit a simple curve
+
+Size $x=2$ with weights 1, 3, and 0.5 uses powers $2^0=1$, $2^1=2$, and $2^2=4$. The guess is $1+3\times2+0.5\times4=1+6+2=9$.
+
+This is a polynomial of degree $p=2$. The weights are $w_0=1$, $w_1=3$, and $w_2=0.5$.
+
+The formula is as follows:
 
 $$
-\hat{y} = w_0 + w_1 x + w_2 x^2 + \dots + w_p x^p
+\hat{y}=w_0+w_1x+w_2x^2+\dots+w_px^p
 $$
 
-Read it aloud: take $x$, raise it to each power from 0 to $p$, multiply each power by its weight $w_j$, and add the results. The weights $w_0, \dots, w_p$ are the numbers you learn. The term $x^0$ is always 1, so $w_0$ plays the role of the bias.
+Those weights at $x=2$ give 9 again. Weight $w_0$ multiplies $x^0=1$, the intercept. The darts story uses the word bias for a different idea.
 
-The trick is to build a table of powers first. Each row is one example and column $j$ holds $x^j$. This table is the **design matrix**, here called `phi`, with shape `(n, p + 1)`. Then every prediction at once is a matrix product:
+A degree-1 polynomial is a straight line. A degree-9 polynomial can wiggle.
+
+Sizes 2 and $-1$ at degree 2 make two rows. Row one is 1, 2, 4. Row two is $(-1)^0=1$, $(-1)^1=-1$, $(-1)^2=1$.
+
+That table is the design matrix $\phi$ (phi, said "fie"):
+
+$$
+\phi=\begin{bmatrix}1&2&4\\1&-1&1\end{bmatrix}
+$$
+
+Build one column per power:
 
 ```python
-phi = x[:, None] ** np.arange(p + 1)[None, :]   # shape (n, p + 1)
-y_hat = phi @ w                                  # shape (n,)
+phi = x[:, None] ** np.arange(p + 1)[None, :]  # (n, p + 1)
+y_hat = phi @ w                                 # (n,)
 ```
+
+`np.arange(p)` drops $x^2$, so the width is 2 instead of 3.
 
 > [!TIP]
-> Print `phi.shape` right after you build it. It should be `(n, p + 1)`. A width of `p` means `np.arange(p)` dropped the highest power.
+> Print `phi.shape` after you build it. It must be `(n, p + 1)`.
 
-For example, with $x = [2, -1]$ and $p = 2$:
+numpy takes $0^0=1$. A 0 in that column deletes the intercept.
 
-$$
-\phi = \begin{bmatrix} 1 & 2 & 4 \\ 1 & -1 & 1 \end{bmatrix}
-$$
-
-Row one is $[2^0, 2^1, 2^2]$ and row two is $[(-1)^0, (-1)^1, (-1)^2]$.
-
-**Least squares** picks the weights $w$ that make the training squared error as small as possible. numpy solves this for you with `np.linalg.lstsq(phi, y, rcond=None)`, which returns the weights as the first item of a tuple. Lesson 2 explains how that solve works inside.
-
-## Bias, variance, and noise
-
-Squared error on a new example can be split into three parts. Each part has a clear meaning, and together they explain why a model that is too simple and a model that is too flexible both do badly.
-
-Picture a darts player. Imagine you could train your model many times, each time on a fresh random training set, and each time ask it to predict at the same input $x$. You would get a cloud of predictions, like darts on a board.
-
-- **Bias** is how far the centre of the cloud is from the bullseye. A too-simple model, like a straight line fit to a curve, misses in the same direction every time.
-- **Variance** is how spread out the cloud is. A too-flexible model chases noise, so it changes a lot from one training set to the next.
-- **Noise** is randomness in the targets themselves. Even a perfect model cannot predict it.
-
-Suppose the targets come from $y = f(x) + \varepsilon$. Here $f$ is the true function and $\varepsilon$ ("epsilon") is random noise with mean 0 and standard deviation $\sigma$ ("sigma"). Write $\hat{f}(x)$ for the prediction of a model trained on one random training set, and $\bar{f}(x)$ ("f bar") for the average of those predictions over many training sets. Then the expected squared error at $x$ is
-
-$$
-\text{expected error} = \big(\bar{f}(x) - f(x)\big)^2 + \text{average of } \big(\hat{f}(x) - \bar{f}(x)\big)^2 + \sigma^2
-$$
-
-Read it aloud piece by piece:
-
-- $\big(\bar{f}(x) - f(x)\big)^2$ is the **squared bias**: the gap between the average prediction and the truth, squared.
-- The average of $\big(\hat{f}(x) - \bar{f}(x)\big)^2$ is the **variance**: how far each prediction sits from the average prediction, squared and averaged.
-- $\sigma^2$ is the **noise**: the variance of the label noise. No model can remove it.
-
-All three parts are zero or positive. Making the model simpler usually raises bias and lowers variance. Making it more flexible does the reverse. Noise stays the same whatever you do.
-
-> [!KEY]
-> Expected squared error is squared bias plus variance plus noise. A too-simple model has high bias, a too-flexible model has high variance, and no model removes the noise.
-
-You cannot train on infinitely many training sets, but you can simulate many. This is a **Monte Carlo** estimate: repeat a random experiment many times and average. Store one row of predictions per trial, then:
+Least squares minimises the sum of squared training misses. Lesson 2 derives the solve:
 
 ```python
-mean_pred = predictions.mean(axis=0)            # f bar, shape (q,)
+w = np.linalg.lstsq(phi, y, rcond=None)[0]
+```
+
+The call returns a tuple. Item 0 is the weights, shape `(p + 1,)`. The whole tuple is the wrong object.
+
+## Why simple curves and wiggly curves fail differently
+
+Four darts land at 0.8, 1.2, 1.0, and 1.4. The bullseye is 1.0.
+
+Add the hits: $0.8+1.2=2$, then $2+1=3$, then $3+1.4=4.4$. Then $4.4/4=1.1$. The gap $1.1-1=0.1$ squares to $0.01$.
+
+Distances from 1.1 are $-0.3$, $0.1$, $-0.1$, and $0.3$. Squares are 0.09, 0.01, 0.01, and 0.09. Their sum is $0.09+0.01+0.01+0.09=0.20$, and $0.20/4=0.05$.
+
+`np.var` divides by 4, the number of darts, not by 3. The wobble has standard deviation $\sigma$ (sigma, said "sig-ma") $=0.2$, and $0.2^2=0.04$. Then $0.01+0.05+0.04=0.10$.
+
+The 0.01 is squared bias, the 0.05 is variance, and the 0.04 is noise. A line misses the same way every time: high bias. A wiggly curve scatters: high variance.
+
+Noise stays, and no curve removes it. Stiffer raises bias and lowers variance. Wigglier does the reverse.
+
+All three pieces are zero or positive.
+
+Here $f(x)=1.0$ is the bullseye, $\bar{f}(x)=1.1$ is the average dart (f bar), and $\hat{f}(x)$ is one dart. Targets add a nudge of mean 0 and standard deviation $\sigma$.
+
+The formula is as follows:
+
+$$
+\text{expected\,error}=\big(\bar{f}(x)-f(x)\big)^2+\text{average\,of\,}\big(\hat{f}(x)-\bar{f}(x)\big)^2+\sigma^2
+$$
+
+$(1.1-1)^2=0.01$, the spread is 0.05, and $\sigma^2=0.04$. The sum is 0.10 again.
+
+Repeating the draw and averaging is a Monte Carlo estimate. Store one row per trial and one column per query point, and average down the trials with `axis=0`:
+
+```python
+mean_pred = predictions.mean(axis=0)  # (q,)
 bias_sq = (mean_pred - true_function(x_query)) ** 2
-variance = predictions.var(axis=0)              # divides by the number of trials
+variance = predictions.var(axis=0)    # divide by the trial count
 noise = np.full_like(x_query, noise_std ** 2)
 ```
 
+`axis=1` returns one number per trial.
+
 > [!WARNING]
-> `predictions` has one row per trial and one column per query point. Reduce with `axis=0`, down the trials. The result should have shape `(q,)`, one entry per query point.
+> Use `axis=0`: one row per trial, one column per query point. The result must have shape `(q,)`.
 
-### Worked example
+> [!KEY]
+> Expected squared error is squared bias plus variance plus noise. Stiff means high bias, wiggly means high variance, and noise stays.
 
-Say the true value at one point is $f(x) = 1.0$, the noise standard deviation is $\sigma = 0.2$, and four trials give predictions $0.8, 1.2, 1.0, 1.4$.
-
-1. Average prediction: $(0.8 + 1.2 + 1.0 + 1.4) / 4 = 4.4 / 4 = 1.1$.
-2. Squared bias: $(1.1 - 1.0)^2 = 0.01$.
-3. Distances from the average: $-0.3, 0.1, -0.1, 0.3$. Squared: $0.09, 0.01, 0.01, 0.09$. Their sum is $0.2$, and dividing by 4 gives a variance of $0.05$.
-4. Noise: $0.2^2 = 0.04$.
-5. Expected error: $0.01 + 0.05 + 0.04 = 0.10$.
-
-The variance here divides by the number of trials, 4, which is what `np.var` does by default.
+Remember:
 
 > [!RECAP]
-> - Empirical risk is `np.mean` of the per-example losses, returned as a `float`.
-> - Training error is optimistic, so you measure honest error on a held-out test set.
-> - A fair split shuffles positions once with a seeded generator and indexes `x` and `y` with the same positions.
-> - The design matrix has column $j$ equal to $x^j$, shape `(n, p + 1)`, and least squares finds the weights.
-> - Bias-variance: one row of predictions per trial, then squared bias and variance down `axis=0`, plus noise $\sigma^2$.
+> - Return empirical risk as `float(np.mean(scores))`.
+> - Score a held-out set. The training score is too kind.
+> - Shuffle positions once, then index `x` and `y` together.
+> - Column $j$ of the design matrix is $x^j$, shape `(n, p + 1)`.
+> - Reduce bias and variance on `axis=0`. Noise is $\sigma^2$.
 
 ## Build it step by step
 
-Build the functions in this order. It matches the order the checks test them.
+The checks call the functions in this order.
 
-1. **`empirical_risk(predictions, targets, loss)`**. It takes two arrays of shape `(n,)` and a loss function, and returns a single Python `float`. Call `loss` on the two arrays to get one loss per example, then take `np.mean`. The common mistake is returning a numpy scalar or 0-d array instead of a `float`; wrap the result in `float(...)`.
-
-2. **`polynomial_features(x, degree)`**. It takes `x` of shape `(n,)` and returns a matrix of shape `(n, degree + 1)` whose column `j` is `x ** j`. Use `np.arange(degree + 1)` for the powers and broadcasting (`x[:, None]` against a row of powers). The common mistake is `np.arange(degree)`, which drops the highest power.
-
-3. **`fit_polynomial(x, y, degree)`**. It takes `x` and `y` of shape `(n,)` and returns weights of shape `(degree + 1,)`. Build the design matrix with your step 2 function and pass it to `np.linalg.lstsq(phi, y, rcond=None)`. The common mistake is returning the whole tuple from `lstsq`; you need only its first item.
-
-4. **`train_test_split(x, y, test_size, seed)`**. It returns `(x_train, y_train, x_test, y_test)`. Compute the test count with `int(np.floor(test_size * n))`, make `np.random.default_rng(seed).permutation(n)`, take the first chunk as test positions and the rest as training positions, and index both `x` and `y` with them. The common mistake is shuffling `x` and `y` separately, which breaks the pairing between inputs and targets.
-
-5. **`bias_variance_decomposition(true_function, noise_std, x_query, degree, n_train, n_trials, x_domain, seed)`**. It returns three arrays `(bias_sq, variance, noise)`, each of shape `(q,)`, where `q` is the length of `x_query`. The shape of the code is as follows:
+1. **`empirical_risk(predictions, targets, loss)`** takes two `(n,)` arrays and a loss, and returns one Python `float`:
 
    ```python
-   rng = np.random.default_rng(seed)
-   predictions = np.empty((n_trials, len(x_query)))
-   for trial in range(n_trials):
-       # draw n_train inputs uniformly from x_domain with rng.uniform
-       # make targets: true_function(x_train) + noise_std * rng.normal(...)
-       # fit a polynomial, then store its predictions at x_query in this row
-       ...
-   # reduce down axis 0 for bias_sq and variance; noise is noise_std ** 2
+   scores = loss(predictions, targets)  # (n,)
+   # Return float(mean(scores)).
    ```
 
-   The common mistake is averaging over the wrong axis. Each row is one trial, so average down `axis=0` to get one number per query point. Another is using $\sigma$ instead of $\sigma^2$ for the noise term.
+   A numpy scalar fails the check.
+
+2. **`polynomial_features(x, degree)`** returns shape `(n, degree + 1)`, and column `j` is `x ** j`:
+
+   ```python
+   powers = np.arange(degree + 1)
+   # x[:, None] ** powers[None, :]
+   ```
+
+   `np.arange(degree)` drops the last column.
+
+3. **`fit_polynomial(x, y, degree)`** returns weights of shape `(degree + 1,)` from `(n,)` arrays:
+
+   ```python
+   phi = polynomial_features(x, degree)
+   # np.linalg.lstsq(phi, y, rcond=None)[0]
+   ```
+
+   The whole tuple is not the weight vector.
+
+4. **`train_test_split(x, y, test_size, seed)`** returns `(x_train, y_train, x_test, y_test)`. Take `int(np.floor(test_size * n))` test rows:
+
+   ```python
+   order = np.random.default_rng(seed).permutation(len(x))
+   # Prefix tests. The rest trains. Index x and y alike.
+   ```
+
+   Separate shuffles of `x` and `y` break pairs.
+
+5. **`bias_variance_decomposition(true_function, noise_std, x_query, degree, n_train, n_trials, x_domain, seed)`** returns three shape `(q,)` arrays:
+
+   ```python
+   predictions = np.empty((n_trials, len(x_query)))
+   # Each row: uniform draw, noise, fit, predict at x_query.
+   # Reduce on axis 0. Noise is noise_std ** 2.
+   ```
+
+   `axis=1` collapses query points. Skipping the square stores 0.2, not 0.04.
 
 ## Cost and scaling
 
-In plain words, everything here grows in a straight line with the number of examples, except the least-squares fit, which also grows with the square of the number of weights. The simulation repeats the fit once per trial, so it is the slowest part.
+Scoring and splitting grow like the number of flats. The fit also grows with the square of the number of weights, and the simulation repeats it once per trial.
 
-The table uses $n$ for examples, $p$ for the polynomial degree, $T$ for trials, and $q$ for query points.
+Here $n$ counts flats, $p$ is the degree, $T$ counts trials, and $q$ counts query points. Growth is as follows:
 
-| Step | Work grows with | Notes |
+|Step|Work grows with|Notes|
 |---|---|---|
-| Empirical risk | $n$ | One loss per example, then an average. |
-| Train/test split | $n$ | One shuffle of positions. |
-| Polynomial features | $n \times p$ | One entry per example per power. |
-| Least-squares fit | $n \times p^2$ | Small for the degrees used here. |
-| Bias-variance simulation | $T$ times one fit | The predictions array uses $T \times q$ numbers of memory. |
+|Empirical risk|$n$|One mean.|
+|Train/test split|$n$|One shuffle.|
+|Polynomial features|$n\times p$|One column per power.|
+|Least-squares fit|$n\times p^2$|Usual degrees.|
+|Bias-variance simulation|$T$ fits|Memory $T\times q$.|
 
-Doubling $T$ doubles the run time. It makes the estimates only about 1.4 times more precise, because simulation error shrinks with the square root of the number of trials.
+Doubling $T$ doubles the run time. Precision improves only about 1.4 times, because simulation error shrinks with the square root of the trial count.
 
 ## Where this breaks
 
-**The data changes after you train.** Every fairness result here assumes new data comes from the same source as the training data. If customers, sensors, or seasons change, your test error no longer predicts real error. Monitor performance after deployment and retrain on recent data.
+**Collected rents go stale.** Later flats are another deck, so the test score misses the error you meet. Fit again on recent rents.
 
-**You tune on the test set.** If you try many models and keep the one with the best test score, the test set has become part of the search. Its score is now optimistic, just like training error. Use a separate validation set for choosing models, and touch the test set once at the end.
+**You pick the best test score.** That score turns optimistic. Choose rules on a validation set, and touch the test set once.
 
-**The test set is tiny.** A test error from ten examples is fair on average but can be wildly off. With little data, use cross-validation, covered in lesson 7, which averages over several splits.
+**The test set is tiny.** Ten flats are fair on average and wild on one split. Use cross-validation from lesson 7.
 
-**A few huge errors dominate.** If the loss sometimes takes enormous values, the average needs many more examples before it settles. Look at the spread of per-example losses, not only their mean.
+**A few huge misses dominate.** The average settles slowly. Look at the spread of per-flat scores as well as the mean.
 
-**High-degree polynomials become unstable.** Powers like $x^{25}$ are tiny or huge, so the fit can swing wildly between training points. That is exactly the high-variance behaviour this lesson describes.
+**A high power blows up.** $x^{25}$ is tiny or huge, so the curve swings between training flats. That swing is high variance.
 
 ## The exercise
 
-You build the four tools of the learning problem and one experiment. The tools are `empirical_risk`, `train_test_split`, `polynomial_features`, and `fit_polynomial`. The experiment is `bias_variance_decomposition`, which trains many polynomials on fresh random training sets and returns the squared bias, variance, and noise at each query point.
+You build `empirical_risk`, `polynomial_features`, `fit_polynomial`, `train_test_split`, and `bias_variance_decomposition`.
 
-The checks first test each tool on its own. They confirm that `empirical_risk` averages squared and zero-one losses, that `polynomial_features` builds the right table of powers, that `fit_polynomial` recovers an exact polynomial when there is no noise, and that `train_test_split` uses every example exactly once and gives the same split for the same seed. Then they test the lessons of the chapter: training error is lower than held-out error for a flexible model, bias plus variance plus noise matches an independent measurement of the total error, the noise term equals `noise_std ** 2`, and raising the degree lowers bias while raising variance.
+`empirical_risk` must average squared loss and zero-one loss. `polynomial_features` must build $1, x, x^2, \ldots$ up to the degree. `fit_polynomial` must recover an exact polynomial with no noise.
+
+`train_test_split` must use every row once, keep pairs, and repeat for one seed. A wiggly fit must score lower on training rows than on held-out rows.
+
+Bias, variance, and noise must sum to a separate Monte Carlo total. Noise must equal `noise_std ** 2`. A higher degree must lower bias and raise variance.

@@ -2,14 +2,14 @@
 title: Gradient descent
 slug: 03-gradient-descent
 part: "Part 1 — Foundations"
-summary: Walk downhill on a loss one step at a time, pick a safe step size, and use momentum to get there far faster.
+summary: Walk downhill on a bowl, keep each step at or under 2/L, and use momentum to take fewer steps.
 minutes: 60
 gpu: false
 objectives:
-  - Compute a quadratic loss and its gradient, and check the gradient numerically.
-  - Build fixed-step gradient descent and explain why a step above 2 / L blows up.
-  - Compute the best step size along the gradient in closed form.
-  - Build heavy-ball momentum and Nesterov's method, and measure their speedup.
+  - Compute a quadratic loss and its gradient, and check the gradient with a small nudge.
+  - Run fixed-step gradient descent and explain why a step above 2/L blows up.
+  - Compute the best step along the gradient in closed form.
+  - Run heavy-ball momentum and Nesterov's method, and measure how much faster they are.
 exercise: 03-gradient-descent
 prereqs:
   - 02-linear-regression
@@ -17,211 +17,305 @@ prereqs:
 
 # Gradient descent
 
-In lesson 2 you solved least squares in one go, with a formula. Most losses in machine learning have no such formula. Logistic regression and neural networks are two examples. For those, you need a method that finds the minimum step by step.
+You stand on a hillside in fog. You cannot see the valley. You can feel the slope under your feet, so you step downhill, feel the slope again, and repeat.
 
-Gradient descent is that method. Picture yourself on a foggy hillside, trying to reach the valley floor. You can't see the valley, but you can feel which way the ground slopes under your feet. So you take a step downhill, feel the slope again, and repeat.
+Lesson 2 found the bottom of a squared-error bowl with one formula. Logistic regression and a neural network have no such formula. You walk.
 
-This lesson answers two practical questions. How big should each step be? And how many steps does it take? You also build momentum, a small change that often cuts the number of steps from thousands to tens.
+By the end you can choose a safe step, and you can add momentum so the walk takes far fewer steps.
 
 ## What you already know
 
-- Least squares has the loss $\tfrac{1}{2}\lVert Xw - y\rVert^2$ and gradient $X^\top(Xw - y)$ (lesson 2).
-- A derivative tells you how fast a function changes as you nudge its input.
-- A symmetric matrix has real eigenvalues, and its eigenvectors point along its main axes.
-- The condition number is the ratio of the largest to the smallest stretch factor (lesson 2).
+Five facts you can check with a pencil:
 
-## The loss you practise on
+- Half the sum of squared misses is the lesson 2 loss. On three points, one bad line had loss 0.5.
+- Lesson 1 averaged four squared losses, 0.25, 0.25, 1, and 1, and got 0.625. That average is the empirical risk.
+- The bowl `(w - 3) ** 2` equals 0 at $w=3$ and 1 at $w=4$. The slope at the bottom is 0.
+- Lesson 2 solved a 2 by 2 system. Multiplying that matrix by a vector is `A @ w`.
+- The condition number there was about 6.79, the big stretch divided by the small stretch.
 
-You test every method on one simple bowl-shaped function, a quadratic:
+## Score a tiny bowl
+
+The two entries of $w$ are the weights. In lesson 1, weights 2 and 1 on 3 and 5 made 11.
+
+Stand at $(w_1,w_2)$. The height is half of $w_1^2+10w_2^2$, minus $w_1+10w_2$.
+
+At $(0,0)$ every term is 0, so the height is 0. At $(1,1)$ the half is $0.5\times(1+10)=5.5$, and you subtract $1+10=11$. The height is $5.5-11=-5.5$.
+
+This shape is a quadratic. The loss here is lesson 2's half-sum, not lesson 1's average of 0.625.
+
+In symbols:
 
 $$
-f(w) = \tfrac{1}{2} w^\top A w - b^\top w
+f(w)=\tfrac12 w^\top Aw-b^\top w
 $$
 
-Read it aloud: $w$ is a vector of length $d$. $A$ is a $d \times d$ symmetric matrix with all eigenvalues positive, which makes $f$ a bowl with one lowest point. $b$ is a vector of length $d$. The first term is a curved bowl, and the second term tilts it.
+$A$ is the diagonal matrix with entries 1 and 10, and $b$ is $(1,10)$. At $(1,1)$, $A$ times $(1,1)$ is $(1,10)$. The dot with $(1,1)$ is 11, and $0.5\times11-11=-5.5$ again.
 
-Least squares is exactly this shape, with $A = X^\top X$ and $b = X^\top y$, so everything here carries over.
+The bottom is $(1,1)$, because $A$ times $(1,1)$ equals $b$. Call that point $w^\star$. Lesson 2 found it with the normal equations.
+
+Least squares is this bowl with $A=X^\top X$ and $b=X^\top y$. Those rows are the training set, 15 of 20 in lesson 1. Write the height as follows:
 
 ```python
-loss = 0.5 * w @ A @ w - b @ w
+loss = 0.5 * (w @ A @ w) - b @ w  # then wrap it as a Python float
 ```
 
-The gradient is the vector of partial derivatives, one per entry of $w$. It points in the direction of steepest uphill. For this function it is
+Drop the 0.5 and the height at $(0,1)$ is 0. The true height there is $5-10=-5$.
+
+## Feel the slope
+
+Nudge the second weight by 1. The heights at $(0,1)$ and $(0,-1)$ are $-5$ and $5-(-10)=15$, so the slope is $(-5-15)/2=-10$.
+
+Nudge the first weight by 1. The heights at $(1,0)$ and $(-1,0)$ are $0.5-1=-0.5$ and $0.5-(-1)=1.5$, so the slope is $(-0.5-1.5)/2=-1$.
+
+The slope at $(0,0)$ is $(-1,-10)$. This vector is the gradient, written $\nabla f$ and read "grad". It points uphill.
+
+In symbols:
 
 $$
-\nabla f(w) = Aw - b
+\nabla f(w)=Aw-b
 $$
 
-Read it aloud: multiply $A$ by $w$ and subtract $b$. The gradient is zero exactly at the bottom of the bowl, $w^\star$, where $Aw^\star = b$.
+At $(0,0)$ that is $-b$, which is $(-1,-10)$, the same vector. It is zero at $w^\star$, where $Aw^\star=b$. Compute the slope as follows:
 
 ```python
-grad = A @ w - b
+grad = A @ w - b  # shape (d,)
 ```
 
-### Check a gradient numerically
-
-A wrong gradient is the most common bug in optimisation code. You can catch it with a finite difference. Nudge one entry of $w$ by a tiny amount $h$, see how much $f$ changes, and divide by $h$. That approximates one entry of the gradient. The checks do this for you, so a sign error or a missing $\tfrac{1}{2}$ shows up at once.
+Drop the minus on $b$ and the slope at $(0,0)$ is $(1,10)$. You then walk uphill.
 
 > [!TIP]
-> To check one entry by hand, use a two-sided difference: `(f(w + h * e) - f(w - h * e)) / (2 * h)`. Here `e` is all zeros except a 1 at that entry, and `h` is about `1e-6`. It is more accurate than a one-sided nudge.
+> For a check, use `(f(w + h * e) - f(w - h * e)) / (2 * h)`. Here `e` is 0 except a 1 in one entry, and `h` is about `1e-6`.
 
-## Fixed-step gradient descent
+## Take one downhill step
 
-Each step moves a little way downhill:
+From $(0,0)$, subtract $0.1$ times $(-1,-10)$. You land at $(0.1,1.0)$.
+
+The height there is $0.5\times(0.01+10)-(0.1+10)=5.005-10.1=-5.095$.
+
+This walk is gradient descent. The step size is $\alpha$ (alpha, said "al-fa"), here $0.1$, also called the learning rate. $w_0$ is $(0,0)$, and $w_k$ is the point after $k$ steps.
+
+In symbols:
 
 $$
-w_{k+1} = w_k - \alpha \, \nabla f(w_k)
+w_{k+1}=w_k-\alpha\nabla f(w_k)
 $$
 
-Read it aloud: the next point $w_{k+1}$ is the current point $w_k$ minus the step size $\alpha$ times the gradient at $w_k$. The minus sign turns "uphill" into "downhill". The step size is also called the learning rate.
+Plug in $\alpha=0.1$ and the slope $(-1,-10)$. You get $(0.1,1.0)$ again. Take the step as follows:
 
 ```python
-for k in range(iters):
-    w = w - step * grad(w)
+w = w - step * grad(w)  # shape (d,)
 ```
 
-### How big a step is safe
+Add the slope instead of subtracting it, and you step to $(-0.1,-1)$, which is uphill.
 
-The bowl has a steepest direction and a flattest direction. Its steepness in each direction is an eigenvalue of $A$. Call the largest eigenvalue $L$ and the smallest $\mu$ (the Greek letter mu).
+## See a step that blows up
 
-Too big a step overshoots the valley and lands higher up the opposite side. Each overshoot is bigger than the last, and the method blows up. For a quadratic, this happens when the step exceeds $2/L$.
+Try step $0.3$ from $(0,0)$. You land at $(0.3,3.0)$. The steep answer is 1, so the miss grew from 1 to 2.
 
-> [!KEY]
-> The steepest direction, with eigenvalue $L$, limits the step. A fixed step above $2/L$ blows up, and $1/L$ is the safe, standard choice.
+The slope there is $(0.3-1,\,30-10)=(-0.7,20)$. Subtract $0.3$ times that slope and you land at $(0.51,-3)$, a steep miss of 4.
 
-### How many steps it takes
+The steep misses go 1, 2, 4. They double.
 
-With step $1/L$, the error along the flattest direction shrinks by a factor of $1 - \mu/L$ every step. The error is the distance from $w_k$ to $w^\star$.
+An eigenvalue is a stretch along one axis. Here they are 1 and 10, real numbers along the two axes, because $A$ is symmetric. The largest is $L=10$, and the smallest is $\mu$ (mu, said "mew") $=1$.
 
-The ratio $\kappa = L/\mu$ is the condition number of $A$. When $\kappa = 100$, the error shrinks by a factor of $0.99$ per step. That is slow: you need several hundred steps to gain a few digits. As a rule, fixed-step gradient descent needs a number of steps proportional to $\kappa$.
-
-The reason is that one step size must serve every direction. It has to be small enough for the steep direction, which makes it tiny for the flat one. You zigzag down a narrow valley.
+A step above $2/L$ blows up. Here $2/L=0.2$, so $0.3$ is past it, and the misses double because $|1-0.3\times10|=2$. The safe step is $1/L=0.1$.
 
 > [!KEY]
-> Plain gradient descent needs a number of steps proportional to $\kappa = L/\mu$. One step size has to suit both the steepest and the flattest direction.
+> The steepest eigenvalue $L$ limits the step. A fixed step above $2/L$ blows up, and $1/L$ is the safe choice.
 
-## A worked example by hand
+Take the safe step $0.1$. The slope at $(0.1,1)$ is $(0.1-1,\,0)=(-0.9,0)$. Subtract $0.1$ times that slope and you land at $(0.19,1.0)$.
 
-Take $A = \begin{bmatrix} 1 & 0 \\ 0 & 10 \end{bmatrix}$ and $b = (1, 10)$. The minimum is at $w^\star = (1, 1)$. Here $\mu = 1$ and $L = 10$. Start at $w_0 = (0, 0)$ with step $\alpha = 0.1$, which is $1/L$.
+The flat answer is 1. The flat misses are 1, then 0.9, then 0.81. Each factor is 0.9, which is $1-\mu/L$.
 
-1. The gradient at $w_0$ is $A w_0 - b = (-1, -10)$.
-2. The first step gives $w_1 = (0, 0) - 0.1 \cdot (-1, -10) = (0.1, 1.0)$.
-3. The loss there is $f(w_1) = \tfrac{1}{2}(0.1^2 + 10 \cdot 1^2) - (0.1 + 10) = 5.005 - 10.1 = -5.095$.
-4. The gradient at $w_1$ is $(0.1 - 1, 10 - 10) = (-0.9, 0)$.
-5. The second step gives $w_2 = (0.1 + 0.09, 1.0) = (0.19, 1.0)$.
+Using $2L=20$ as the limit, instead of $2/L$, picks a step that explodes at once.
 
-The steep second coordinate reached its answer in one step. The flat first coordinate crawls: its error goes $1, 0.9, 0.81$, shrinking by $1 - \mu/L = 0.9$ each time.
+## Count the steps
 
-## The best step along the gradient
+The ratio $L/\mu=10/1=10$ is the condition number, written $\kappa$ (kappa, said "kap-pa"). It is the big stretch divided by the small one. Lesson 2's matrix had condition number about 6.79.
 
-Instead of a fixed step, you can choose the step that goes furthest downhill along the current gradient direction $g$. This is called exact line search. For a quadratic it has a closed form:
+In symbols:
 
 $$
-\alpha = \frac{g^\top g}{g^\top A g}
+\kappa=L/\mu
 $$
 
-Read it aloud: the top is the squared length of the gradient. The bottom measures how curved the bowl is along that direction. A sharply curved direction gets a short step.
+Plug in 10 and 1 and you get 10. With step $1/L$, the flat miss shrinks by $1-\mu/L$ each step. When $\kappa=100$, that factor is 0.99.
+
+The number of steps is proportional to $\kappa$. One step size must suit the steep axis and the flat axis, so you zigzag.
+
+> [!KEY]
+> Plain gradient descent needs a number of steps proportional to $\kappa=L/\mu$. One step size has to suit both axes.
+
+## Pick the best step on the line
+
+At $(0,0)$ the slope $g$ is $(-1,-10)$. Its squared length is $1+100=101$. $A$ times $g$ is $(-1,-100)$, and the dot with $g$ is $1+1000=1001$.
+
+The best step on that line is $101/1001$, about 0.1009. This choice is exact line search. It minimises the height along the downhill direction.
+
+In symbols:
+
+$$
+\alpha=\frac{g^\top g}{g^\top Ag}
+$$
+
+Plug in 101 and 1001 and you get about 0.1009 again. A sharp direction gets a short step. Compute the step as follows:
 
 ```python
 alpha = (g @ g) / (g @ A @ g)
 ```
 
-In the worked example, at $w_0$ the gradient is $g = (-1, -10)$. Then $g^\top g = 101$ and $g^\top A g = 1 + 1000 = 1001$, so $\alpha = 101/1001 \approx 0.1009$.
+Flip the fraction and the step is about 9.9, far above 0.2, so the walk blows up.
 
-## Momentum: the heavy ball
+## Add the last step
 
-Imagine rolling a heavy ball down the valley instead of walking. The ball builds up speed along the flat direction, where the slope keeps pointing the same way. In the steep direction, the back-and-forth pushes cancel out. The heavy-ball method adds exactly that memory of the last step:
+With step 0.1, the first step has no past, so you still land at $(0.1,1.0)$. The plain second step lands at $(0.19,1.0)$.
+
+Add half of the step you took, half of $(0.1,1.0)$, which is $(0.05,0.5)$. You land at $(0.24,1.5)$.
+
+That fraction is the momentum $\beta$ (beta, said "bay-ta"). Here $\beta=0.5$, a sample value. It speeds up on the flat axis.
+
+In symbols, and with $w_{-1}$ treated as $w_0$:
 
 $$
-w_{k+1} = w_k - \alpha \, \nabla f(w_k) + \beta \, (w_k - w_{k-1})
+w_{k+1}=w_k-\alpha\nabla f(w_k)+\beta(w_k-w_{k-1})
 $$
 
-Read it aloud: take a normal gradient step, then add $\beta$ times the step you took last time. $\beta$ is the momentum, a number between 0 and 1. For the very first step there is no previous step, so treat $w_{-1}$ as equal to $w_0$.
+Plug in $(0.1,1)$, slope $(-0.9,0)$, $\alpha=0.1$, and $\beta=0.5$. You get $(0.24,1.5)$ again. Update the point as follows:
 
 ```python
 w_next = w - step * grad(w) + momentum * (w - w_prev)
-w_prev, w = w, w_next
 ```
+
+Set `w_prev = w` first and the extra term is 0, so you get the plain point $(0.19,1.0)$.
 
 > [!WARNING]
-> Compute `w_next` before you touch `w_prev`. If you set `w_prev = w` first, then `w - w_prev` is zero and the momentum term disappears. The tuple assignment updates both at once, in the right order.
+> Compute `w_next` before you change `w_prev`. The line `w_prev, w = w, w_next` updates both in the right order.
 
-With well-chosen values, the number of steps drops from about $\kappa$ to about $\sqrt{\kappa}$. When $\kappa = 10{,}000$, that is the gap between about 10,000 steps and about 100. For a quadratic, the best settings are
+The best settings use $L=10$ and $\mu=1$. $\sqrt{10}\approx3.162$, the sum with 1 is about 4.162, and $4/4.162^2$ is about 0.231. The gap $2.162/4.162$ is about 0.519, and that square is about 0.270.
+
+In symbols:
 
 $$
-\alpha = \frac{4}{(\sqrt{L} + \sqrt{\mu})^2}, \quad \beta = \left(\frac{\sqrt{L} - \sqrt{\mu}}{\sqrt{L} + \sqrt{\mu}}\right)^2
+\alpha=\frac{4}{(\sqrt{L}+\sqrt{\mu})^2},\quad\beta=\left(\frac{\sqrt{L}-\sqrt{\mu}}{\sqrt{L}+\sqrt{\mu}}\right)^2
 $$
 
-```python
-step = 4 / (np.sqrt(L) + np.sqrt(mu)) ** 2
-momentum = ((np.sqrt(L) - np.sqrt(mu)) / (np.sqrt(L) + np.sqrt(mu))) ** 2
-```
+Plug in $L=10$ and $\mu=1$ and you get about 0.231 and 0.270 again. The same step is $(2/(\sqrt{L}+\sqrt{\mu}))^2$, because $2^2=4$.
 
 > [!KEY]
-> Momentum remembers the last step, so it speeds up along the flat direction and cancels the zigzag in the steep one. That cuts the step count from about $\kappa$ to about $\sqrt{\kappa}$.
+> Momentum keeps the last step. It speeds up on the flat axis and cancels the steep zigzag, cutting the step count from about $\kappa$ to about $\sqrt{\kappa}$.
 
-Continue the worked example with $\alpha = 0.1$ and $\beta = 0.5$. The first step equals plain gradient descent, $w_1 = (0.1, 1.0)$. The second step is $w_2 = (0.1, 1.0) - 0.1 \cdot (-0.9, 0) + 0.5 \cdot (0.1, 1.0) = (0.24, 1.5)$.
+## Look ahead, then step
 
-## Nesterov's method: look before you leap
+From $(0.1,1.0)$, add half of $(0.1,1.0)$. You look ahead to $(0.15,1.5)$. The slope there is $(0.15-1,\,15-10)=(-0.85,5)$.
 
-Nesterov's method changes one thing. It first jumps ahead along the momentum, and only then measures the slope at that look-ahead point:
+Subtract $0.1$ times that slope from $(0.15,1.5)$. You land at $(0.235,1.0)$.
+
+This is Nesterov's method. You measure the slope at the look-ahead point.
+
+In symbols, again with $w_{-1}=w_0$:
 
 $$
-y_k = w_k + \beta \, (w_k - w_{k-1}), \qquad w_{k+1} = y_k - \alpha \, \nabla f(y_k)
+y_k=w_k+\beta(w_k-w_{k-1}),\qquad w_{k+1}=y_k-\alpha\nabla f(y_k)
 $$
 
-Read it aloud: $y_k$ is where momentum alone would carry you. Take the gradient step from $y_k$, using the gradient at $y_k$, not at $w_k$. Again, treat $w_{-1}$ as $w_0$.
+Plug in the look-ahead $(0.15,1.5)$ and the slope $(-0.85,5)$. You get $(0.235,1.0)$ again. Step from the look-ahead as follows:
 
 ```python
 y = w + momentum * (w - w_prev)
 w_next = y - step * grad(y)
 ```
 
-A common setting is $\alpha = 1/L$ and $\beta = (\sqrt{L} - \sqrt{\mu})/(\sqrt{L} + \sqrt{\mu})$. It also needs about $\sqrt{\kappa}$ steps, and it behaves better than the heavy ball on functions that are not quadratics.
+Take the slope at $w$ instead of at $y$, and you get the heavy-ball point $(0.24,1.5)$.
 
-In the worked example with $\alpha = 0.1$ and $\beta = 0.5$, $w_1 = (0.1, 1.0)$ again. Then $y_1 = (0.1, 1.0) + 0.5 \cdot (0.1, 1.0) = (0.15, 1.5)$. The gradient there is $(-0.85, 5)$, so $w_2 = (0.15 + 0.085, 1.5 - 0.5) = (0.235, 1.0)$.
+A usual choice is step $1/L=0.1$ and momentum $(\sqrt{L}-\sqrt{\mu})/(\sqrt{L}+\sqrt{\mu})$, about 0.519, not squared. It also takes about $\sqrt{\kappa}$ steps, and it behaves better when the loss is not a bowl.
 
 > [!RECAP]
-> - For the quadratic, the loss is $\tfrac{1}{2} w^\top A w - b^\top w$ and the gradient is $Aw - b$.
-> - A gradient step is $w - \alpha \nabla f(w)$. It is safe at $\alpha = 1/L$ and blows up above $2/L$.
-> - Exact line search uses $\alpha = g^\top g / g^\top A g$.
-> - The heavy ball adds $\beta (w_k - w_{k-1})$. Nesterov takes its gradient at the look-ahead point $y_k$. Both start with $w_{-1} = w_0$.
-> - Every trajectory has shape `(iters + 1, d)`, with `w0` in row 0.
+> - The loss is $\tfrac12 w^\top Aw-b^\top w$, and the gradient is $Aw-b$.
+> - A step is $w-\alpha\nabla f(w)$. It is safe at $1/L$ and blows up above $2/L$.
+> - Exact line search uses $(g^\top g)/(g^\top Ag)$.
+> - Heavy ball adds $\beta$ times the last step. Nesterov takes the slope at the look-ahead point.
+> - Every path has shape `(iters + 1, d)`, with `w0` in row 0.
 
 ## Build it step by step
 
-The checks test the functions in this order. Every trajectory is an array of shape `(iters + 1, d)`, with row 0 equal to `w0` and row `k` the point after `k` steps.
+The checks call the functions in this order:
 
-1. **`quadratic_loss_and_grad(A, b, w)`** returns a tuple `(loss, grad)`: a float and an array of shape `(d,)`. Use `w @ A @ w`, `b @ w`, and `A @ w - b`. Common mistake: forgetting the `0.5` in the loss, or returning a numpy scalar instead of `float(loss)`.
-2. **`exact_line_search_step(A, grad_vec)`** returns a float, the closed-form step above. Two dot products and a division. Common mistake: flipping the fraction.
-3. **`gradient_descent(grad, w0, step, iters)`** returns the trajectory. `grad` is a function you call as `grad(w)`. Allocate with `np.empty((iters + 1, d))`, store `w0` in row 0, then loop. Common mistake: returning only the last point, or storing `iters` rows instead of `iters + 1`.
-4. **`heavy_ball(grad, w0, step, momentum, iters)`** returns the trajectory. Keep two variables, `w` and `w_prev`, both starting as copies of `w0`. Common mistake: updating `w_prev` before you use it, which makes the momentum term zero.
-5. **`nesterov(grad, w0, step, momentum, iters)`** returns the trajectory. Same bookkeeping as the heavy ball, plus the look-ahead point `y`. Common mistake: evaluating the gradient at `w` instead of `y`.
+1. **`quadratic_loss_and_grad(A, b, w)`** takes $A$ of shape `(d, d)`, and $b$ and $w$ of shape `(d,)`. It returns a float loss and a gradient of shape `(d,)`:
 
-Use `w0.copy()` so you never change the caller's array.
+   ```python
+   # loss = 0.5 * (w @ A @ w) - b @ w, then float(...)
+   # grad = A @ w - b
+   ```
+
+   Dropping the 0.5, or returning a numpy scalar, fails the check.
+
+2. **`exact_line_search_step(A, grad_vec)`** returns one float, $(g^\top g)/(g^\top Ag)$:
+
+   ```python
+   # (grad_vec @ grad_vec) / (grad_vec @ A @ grad_vec)
+   ```
+
+   Flipping the fraction returns a step that is far too long.
+
+3. **`gradient_descent(grad, w0, step, iters)`** returns the path. `grad` is a function you call as `grad(w)`:
+
+   ```python
+   path = np.empty((iters + 1, len(w0)))
+   # Row 0 is w0.copy(). Each later row is w - step * grad(w).
+   ```
+
+   Returning only the last point, or `iters` rows, fails the shape check.
+
+4. **`heavy_ball(grad, w0, step, momentum, iters)`** returns the path. Keep `w` and `w_prev`, both copies of `w0`:
+
+   ```python
+   # w_next = w - step * grad(w) + momentum * (w - w_prev)
+   # Then w_prev, w = w, w_next
+   ```
+
+   Updating `w_prev` first makes the momentum term 0.
+
+5. **`nesterov(grad, w0, step, momentum, iters)`** returns the path. Same two copies, plus a look-ahead point `y`:
+
+   ```python
+   # y = w + momentum * (w - w_prev)
+   # w_next = y - step * grad(y)
+   ```
+
+   The gradient at `w`, instead of at `y`, follows the heavy-ball rule.
 
 ## Cost and scaling
 
-Each step costs one gradient evaluation. For the quadratic, that is one matrix-vector product with $A$, about $d^2$ operations. For least squares from data, the gradient $X^\top(Xw - y)$ costs about $2nd$. The number of steps is what differs.
+Each step costs one gradient. For this bowl that is one product $A w$, about $d^2$ operations, where $d$ is the number of weights. For least squares the gradient $X^\top(Xw-y)$ costs about $2nd$, with $n$ training rows.
 
-| Method | Steps to gain a fixed number of digits | Extra memory |
+The path stores $(\text{iters}+1)\times d$ numbers. Real training keeps only the current point. When $\kappa=10000$, plain descent takes about 10000 steps and momentum takes about 100.
+
+The three walks compare as follows:
+
+|Method|Steps for a fixed gain|Extra memory|
 |---|---|---|
-| Gradient descent, step $1/L$ | about $\kappa$ | none |
-| Heavy ball | about $\sqrt{\kappa}$ | one previous point |
-| Nesterov | about $\sqrt{\kappa}$ | one previous point |
-
-The trajectory array costs $(\text{iters} + 1) \times d$ numbers. Real training code keeps only the current point.
+|Gradient descent, step $1/L$|about $\kappa$|none|
+|Heavy ball|about $\sqrt{\kappa}$|one previous point|
+|Nesterov|about $\sqrt{\kappa}$|one previous point|
 
 ## Where this breaks
 
-- **Step too big.** Above $2/L$ the loss grows every step and reaches infinity. If your loss goes up, halve the step.
-- **Step too small.** The method crawls. Try a larger step, or estimate $L$ from the largest eigenvalue of $A$.
-- **Badly scaled features.** They make $\kappa$ large, which makes every method slow. Standardise your features first.
-- **The loss is not a bowl.** On functions with many valleys, the step counts above no longer hold, and you may stop in a poor valley. Neural networks live here.
-- **Momentum overshoots.** Too much momentum makes the path spiral past the minimum. Lower $\beta$ if the loss oscillates.
+**Step too big.** Above $2/L$ the loss grows every step. If the loss goes up, halve the step.
+
+**Step too small.** The walk crawls. Take a larger step, or estimate $L$ from the largest eigenvalue of $A$.
+
+**Badly scaled features.** They make $\kappa$ large, so every method slows down. Standardise each feature first.
+
+**The loss is not a bowl.** Many valleys break the step counts, and you can stop in a poor one. Neural networks live here.
+
+**Momentum overshoots.** Too much momentum makes the path swing past the bottom. Lower $\beta$ if the loss oscillates.
 
 ## The exercise
 
-You build five functions: `quadratic_loss_and_grad`, `exact_line_search_step`, `gradient_descent`, `heavy_ball`, and `nesterov`. Each method returns its whole path, so the checks can inspect every step.
+You build `quadratic_loss_and_grad`, `exact_line_search_step`, `gradient_descent`, `heavy_ball`, and `nesterov`.
 
-The checks confirm that your gradient matches a finite difference and that your line-search step is the closed form above. They run gradient descent with a step of $2.1/L$ and expect it to blow up. With step $1/L$, the error along the flat direction must shrink by exactly $1 - \mu/L$ per step. The heavy ball and Nesterov must follow their update rules exactly. Finally, with the best settings, the heavy ball must reach a target accuracy roughly $\sqrt{\kappa}$ times faster than plain gradient descent.
+The loss must equal $0.5\,w^\top Aw-b^\top w$, and the gradient must match a finite difference. The line-search step must be the closed form, and a local minimiser along that line.
+
+A step of $2.1/L$ must make the error grow, and the path must have one more row than the number of steps. With step $1/L$, the flat error must shrink by exactly $1-\mu/L$ each step.
+
+`heavy_ball` and `nesterov` must follow their updates exactly, with the first step equal to a plain step. With the best heavy-ball step $(2/(\sqrt{L}+\sqrt{\mu}))^2$ and the squared momentum, the heavy ball must beat plain descent by about $\sqrt{\kappa}$.

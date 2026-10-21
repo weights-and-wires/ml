@@ -17,68 +17,58 @@ exercise: 25-self-attention
 
 # Self-attention
 
-In the previous lesson, a decoder looked back at a separate encoder. Self-attention
-uses the same lookup, but every word in a sentence looks at every other word in
-the same sentence. Each word asks a question, every word offers an answer, and
-each word collects a blend of the answers that fit its question best.
+In the last lesson a decoder looked at a separate encoder. Self-attention uses the same lookup inside one sentence. Every token supplies a query, a key, and a value, and collects a blend of the values that match its query.
 
-This matters because a recurrent network reads one word at a time. It can't
-start word 10 until it has finished word 9. Self-attention has no such chain.
-Every position does its lookup at the same moment, so a GPU can compute the
-whole sentence in parallel.
+A recurrent net reads one token at a time. Token 10 waits for token 9. Self-attention has no such chain. Every position does its lookup at the same moment, so the whole sentence can run in parallel.
 
-In this lesson you build that lookup in numpy, step by step. You add a fix that
-keeps the numbers well behaved, split the work into several heads, hide the
-future from each word, and count what it all costs.
+You build the scaled lookup, the heads, the mask, and the flop count.
 
 ## What you already know
 
-- Attention scores a query against every key, turns the scores into weights
-  with a softmax, and returns the weighted average of the values.
-- The softmax turns a list of numbers into positive weights that sum to one.
+You already have these tools:
+
+- A dot product multiplies matching entries and adds them. It is large when two vectors point the same way.
+- A softmax turns a list of scores into positive weights that add up to one.
 - A matrix product `A @ B` multiplies rows of `A` by columns of `B`.
-- The backward pass pushes a gradient from a layer's output back to its inputs.
-- A gradient is the list of slopes of the loss with respect to each input.
+- A gradient is the list of slopes of the loss with respect to each input. The backward pass pushes it from the output back to the inputs.
 
-## Scaled dot-product attention
+## A dot product that is too large
 
-Think of a library. Your query is what you're looking for. Each book has a key,
-its label on the spine, and a value, its contents. You compare your query with
-every label, and you take more from the books whose labels match best.
+Picture two tokens, cat and sat. Each query and each key is 64 copies of one number. That width is d_k.
 
-In self-attention the sequence has $T$ positions (tokens). Each position is a
-row of $X$, a $T \times d$ matrix, where $d$ is the model width. Three learned
-weight matrices turn each row into a query, a key, and a value:
+The cat query is 0.25 in every entry. The cat key is 1 in every entry. One product is 0.25 × 1 = 0.25. Sixty-four of them sum to 64 × 0.25 = 16. The sat key is 0.5 in every entry. One product is 0.25 × 0.5 = 0.125, and 64 × 0.125 = 8.
+
+The sat query is 0.125 in every entry. Its dot with the cat key is 64 × 0.125 = 8. Its dot with the sat key is 64 × 0.0625 = 4. The unscaled score matrix, one row per query, is:
+
+$$
+\begin{bmatrix} 16 & 8 \\ 8 & 4 \end{bmatrix}
+$$
+
+Softmax the first row, [16, 8]. You get e^{16} = 8886110.52 and e^8 = 2980.96. The sum is 8889091.48. Then 8886110.52 / 8889091.48 = 0.9997 and 2980.96 / 8889091.48 = 0.0003. That is a spike. A small nudge of 16 barely moves the weights, so the gradient is nearly 0.
+
+The width caused the spike. Variance is the average squared distance from the mean. With mean 0 and variance 1 in each entry, the dot product has variance d_k, so a typical score grows like the square root of d_k. At width 64, scores near 8 are ordinary. Dividing by 64 would crush a match. Dividing by 8 brings a typical score near 1.
+
+Divide the matrix by 8:
+
+$$
+\begin{bmatrix} 2 & 1 \\ 1 & 0.5 \end{bmatrix}
+$$
+
+Softmax of [2, 1]: e^2 = 7.3891 and e^1 = 2.7183. The sum is 10.1074. The weights are 7.3891 / 10.1074 = 0.7311 and 2.7183 / 10.1074 = 0.2689. Sat keeps a real share.
+
+This division is scaled dot-product attention. Three learned matrices turn each token row of X into a query, a key, and a value. The whole lookup is:
 
 $$
 Q = X W_Q, \qquad K = X W_K, \qquad V = X W_V
 $$
 
-Read aloud: the query matrix $Q$ is the input $X$ times the weight matrix
-$W_Q$, and the same for keys and values. Each result has one row per position.
-
-```python
-Q = X @ Wq   # (T, d_k)
-K = X @ Wk   # (T, d_k)
-V = X @ Wv   # (T, d_v)
-```
-
-Then attention itself is one line of maths:
-
 $$
 \operatorname{Attention}(Q, K, V) = \operatorname{softmax}\!\left(\frac{Q K^{\top}}{\sqrt{d_k}}\right) V
 $$
 
-Read it piece by piece:
+Q K transpose is the table of dots. Divide by the square root of d_k, softmax each row, and mix the values. These queries and keys are Q and K. With value rows [1, 0] and [0, 1], the first output row is [0.7311, 0.2689].
 
-- $Q K^{\top}$ is a $T \times T$ table of scores. Entry $(i, j)$ is the dot
-  product of query $i$ with key $j$: how well position $j$ matches what
-  position $i$ is looking for.
-- $d_k$ is the width of each query and key. You divide every score by
-  $\sqrt{d_k}$.
-- The softmax runs along each row, so each position's weights are positive and
-  sum to one.
-- Multiplying by $V$ gives each position a weighted average of the value rows.
+The other scaled row, [1, 0.5], softmaxes to 0.6225 and 0.3775. You write the layer as follows:
 
 ```python
 scores = Q @ K.T / np.sqrt(Q.shape[-1])   # (T, T)
@@ -86,266 +76,140 @@ weights = softmax(scores, axis=-1)        # each row sums to 1
 output = weights @ V                      # (T, d_v)
 ```
 
-> [!TIP]
-> After the softmax, check `np.allclose(weights.sum(axis=-1), 1)`. If it fails,
-> your softmax ran along the wrong axis.
-
-### Why divide by the square root of d_k
-
-A dot product adds up $d_k$ products. If each query and key entry is a random
-number with average 0 and spread 1, the sum has a variance of $d_k$. Variance
-measures how spread out a number is, so the typical size of a score grows like
-$\sqrt{d_k}$. With $d_k = 64$, scores of size 8 are common.
-
-Large scores are bad for the softmax. One score wins by a mile, its weight
-goes to almost 1, and every other weight goes to almost 0. At that point the
-softmax is flat: nudging a score barely changes the output, so the gradient is
-close to zero and learning stalls. Dividing by $\sqrt{d_k}$ brings the typical
-score back to size 1, whatever the width.
+Subtract the row max before the exponential. Scores [900, 0] become [0, −900], and the weights are [1, 0]. The usual mistake is to leave the dots unscaled.
 
 > [!KEY]
-> Without the $\sqrt{d_k}$ scale, scores grow with the key width. The softmax
-> then puts almost all its weight on one position, and its gradient vanishes.
+> Without the square-root scale, scores grow with the key width. The softmax then puts almost all of its weight on one position, and its gradient vanishes.
 
-### The softmax, safely
+> [!TIP]
+> After the softmax, check that each row sums to 1. A failed check means the softmax ran on the wrong axis.
 
-The softmax of a row $z$ is $e^{z_j}$ divided by the sum of $e^{z}$ over the
-row. Computing $e^{900}$ overflows to infinity. The fix: subtract the row's
-largest value first. That doesn't change the answer, because the same factor
-cancels from top and bottom, but now the biggest exponent is $e^0 = 1$.
+## Narrow slices, side by side
 
-```python
-shifted = z - z.max(axis=axis, keepdims=True)
-e = np.exp(shifted)
-p = e / e.sum(axis=axis, keepdims=True)
-```
+One head has one match rule. Multi-head attention runs several narrower attentions side by side.
 
-### A worked example
+Take width d = 4 and two heads, so each head is d_k = 2 columns wide. A query row [1, 0, 0, 1] splits into [1, 0] and [0, 1]. Head 0 reads columns 0 and 1. Head 1 reads columns 2 and 3. Each head divides by the square root of 2, which is 1.4142, not by the square root of 4.
 
-Take $T = 2$ positions with $d_k = 2$, and let $Q = K = V = X$, where
+On the 2 by 2 identity, divide the diagonal 1 by 1.4142 to get 0.7071. Softmax of [0.7071, 0] uses e^{0.7071} = 2.0281 and e^0 = 1. The sum is 3.0281, so the weights are 0.6698 and 0.3302.
 
-$$
-X = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}
-$$
-
-1. Scores: $Q K^{\top}$ is the identity matrix. Divide by $\sqrt{2} \approx 1.4142$
-   to get $\begin{bmatrix} 0.7071 & 0 \\ 0 & 0.7071 \end{bmatrix}$.
-2. Softmax of row 0, $[0.7071, 0]$: $e^{0.7071} = 2.0281$ and $e^0 = 1$. The
-   sum is $3.0281$, so the weights are $[0.6698, 0.3302]$. Row 1 is the mirror
-   image, $[0.3302, 0.6698]$.
-3. Output: row 0 is $0.6698 \cdot [1, 0] + 0.3302 \cdot [0, 1] = [0.6698, 0.3302]$.
-   Row 1 is $[0.3302, 0.6698]$.
-
-Each position mostly keeps itself, but blends in a third of its neighbour.
-
-## Multi-head attention
-
-One attention step has one idea of "similar". A word might care about several
-things at once: which word is its subject, which word came right before it,
-which words share its topic. Multi-head attention runs $h$ smaller attentions,
-called heads, side by side. Each head can learn a different idea of similarity.
-
-Here is the recipe. Project the whole input once with $(d, d)$ matrices. Cut
-the columns of $Q$, $K$, and $V$ into $h$ equal slices of width $d_k = d / h$.
-Run attention on each slice. Glue the $h$ outputs back together along the
-columns, and multiply by one more matrix, $W_O$, which mixes the heads:
+You place the head outputs side by side and multiply by one more matrix, W_O:
 
 $$
 \operatorname{MultiHead}(X) = \operatorname{Concat}(\text{head}_1, \dots, \text{head}_h)\, W_O
 $$
 
-Read aloud: head $i$ is ordinary attention on the $i$-th slice of columns.
-Concatenate means placing the head outputs side by side, which gives a
-$T \times d$ matrix again. $W_O$ is $d \times d$.
+Each head is ordinary attention on its slice. Concatenation restores width d, and W_O mixes the heads. One head is single-head attention followed by W_O.
 
 ```python
 d_k = d // heads
 lo, hi = i * d_k, (i + 1) * d_k
-out_i, _ = scaled_dot_product_attention(Q[:, lo:hi], K[:, lo:hi], V[:, lo:hi], mask)
+out_i, _ = scaled_dot_product_attention(
+    Q[:, lo:hi], K[:, lo:hi], V[:, lo:hi], mask
+)
 out = np.concatenate(head_outputs, axis=-1) @ Wo
 ```
 
-Each head divides its scores by $\sqrt{d_k}$ using its own slice width, not the
-full $d$. With one head, the slice is the whole matrix, so multi-head attention
-with `heads=1` equals single-head attention followed by $W_O$.
-
-Splitting into heads costs nothing extra. You do the same projections, and the
-$h$ narrow score tables together take the same work as one wide one.
+The usual mistake is slicing rows instead of columns.
 
 > [!KEY]
-> Each head runs ordinary attention on its own $d / h$ columns. You get several
-> ideas of similarity for the same number of flops as one wide head.
+> Each head runs ordinary attention on its own d / h columns. You get several match rules for the same work as one wide head.
 
-## Causal masking
+## A cover over future tokens
 
-A language model predicts the next word. When it writes word 3, words 4 and
-onward don't exist yet. So in training, position $t$ must not peek at any
-position after $t$. It's like a test where you cover the answers below the
-line you're on.
+A language model predicts the next token. Position t must not read any position after t.
 
-You block the future by adding a mask $M$ to the scores before the softmax:
+Take the scaled cat row, scores [2, 1]. Add a mask entry of 0 on the legal key and minus infinity on the future key. The row becomes [2, −∞]. Because e^{−∞} = 0, the weights are [1, 0], and the output is the first value alone, [1, 0]. For two positions the mask is:
 
 $$
-\operatorname{softmax}\!\left(\frac{Q K^{\top}}{\sqrt{d_k}} + M\right) V,
-\qquad
-M_{t,j} = \begin{cases} 0 & j \le t \\ -\infty & j > t \end{cases}
+M = \begin{bmatrix} 0 & -\infty \\ 0 & 0 \end{bmatrix}
 $$
 
-Read aloud: the mask is 0 wherever position $t$ may look (itself and
-everything before it) and minus infinity wherever it looks ahead. Since
-$e^{-\infty} = 0$, a forbidden position gets weight exactly 0, and the softmax
-shares the full weight of 1 among the allowed positions.
+Add M to the scaled scores, then softmax, then multiply by the values. M is 0 on legal keys, including the token itself, and −∞ on future keys. The allowed weights still sum to 1.
 
 ```python
 mask = np.zeros((T, T))
-mask[np.triu_indices(T, k=1)] = -np.inf   # strictly above the diagonal
+mask[np.triu_indices(T, k=1)] = -np.inf
 ```
 
+Add the mask before the softmax. Softmax [2, 1] first and the weights are 0.7311 and 0.2689. Zero the future weight afterwards and you have [0.7311, 0], which sums to 0.7311. The future score already changed the first weight through the denominator. The usual mistake is `k=0`, which masks the diagonal, leaves position 0 with no key, and returns NaN.
+
 > [!WARNING]
-> Use `k=1`, not `k=0`. With `k=0` the diagonal is masked too, so position 0
-> has nothing left to look at and its softmax returns NaN.
-
-For $T = 3$, the mask is
-
-$$
-M = \begin{bmatrix} 0 & -\infty & -\infty \\ 0 & 0 & -\infty \\ 0 & 0 & 0 \end{bmatrix}
-$$
-
-Apply a $T = 2$ mask to the worked example. Row 0 becomes $[0.7071, -\infty]$,
-so its weights are $[1, 0]$ and its output is $[1, 0]$. Row 1 has nothing
-masked, so it stays $[0.3302, 0.6698]$.
-
-Why before the softmax and not after? If you zeroed the weights after the
-softmax, the denominator would still include the future positions. The weights
-left behind would sum to less than 1, and the future would still have leaked
-into them through that sum.
+> Use `k=1`, not `k=0`. With `k=0` the diagonal is masked, position 0 has nothing to look at, and its row becomes NaN.
 
 > [!KEY]
-> Add the mask to the scores before the softmax. Future positions then get
-> weight exactly 0, and the allowed weights still sum to one.
+> Add the mask to the scores before the softmax. Future positions then get weight 0, and the allowed weights still sum to 1.
 
-## Order doesn't exist yet
+## Order is not in the lookup
 
-Shuffle the rows of $X$. Each of $Q$, $K$, and $V$ is computed row by row, so
-their rows shuffle the same way. The softmax works row by row too. The result:
-without a mask, the output is the same set of rows, shuffled in the same
-order. Self-attention on its own can't tell "dog bites man" from "man bites
-dog". The next lesson fixes this by adding position information to $X$.
+Swap the two rows of X. Queries, keys, and values swap the same way, and so does the output when there is no mask. "Cat sat" and "sat cat" produce the same blends in swapped order. Self-attention has no order of its own. The next lesson adds position to X.
 
-## Backward pass
+## One gradient through the scale
 
-To train, you need the gradient of the loss with respect to $Q$, $K$, and $V$.
-Call the upstream gradient on the output `dout` (shape $T \times d_v$). Work
-backwards through each forward line, one at a time:
+Use the softened weights [0.7311, 0.2689], value rows [1, 0] and [0, 1], and an upstream gradient [1, −1] on that output row. Because the values are the identity, the weight gradient is also [1, −1].
 
-1. `output = weights @ V`. So `dV = weights.T @ dout` and
-   `dweights = dout @ V.T`.
-2. `weights = softmax(scores)`. For each row, the softmax gradient is
-   `dscores = weights * (dweights - rowsum)`, where `rowsum` is the sum over
-   the row of `weights * dweights`.
-3. `scores = Q @ K.T / sqrt(d_k)`. So `dQ = dscores @ K / sqrt(d_k)` and
-   `dK = dscores.T @ Q / sqrt(d_k)`.
+The weighted row sum is 0.7311 − 0.2689 = 0.4622. Then 0.7311 × (1 − 0.4622) = 0.3932 and 0.2689 × (−1 − 0.4622) = −0.3932. A softmax row sends back a score gradient that sums to 0.
 
-The mask has no gradient of its own. Masked positions have weight 0, so their
-`dscores` is 0 too.
+Going backward, one line at a time:
+
+1. `output = weights @ V`, so `dV = weights.T @ dout` and `dweights = dout @ V.T`.
+2. For each row, `dscores = weights * (dweights - rowsum)`, with `rowsum` the sum of `weights * dweights`.
+3. `scores = Q @ K.T / sqrt(d_k)`, so `dQ = dscores @ K / sqrt(d_k)` and `dK = dscores.T @ Q / sqrt(d_k)`.
+
+The plug-in is [0.3932, −0.3932]. A masked position has weight 0, so its score gradient is 0. The usual mistake is dropping `1 / sqrt(d_k)` on `dQ` and `dK`.
 
 > [!RECAP]
-> - Scores are $Q K^{\top} / \sqrt{d_k}$, a $(T_q, T_k)$ table, and the softmax
->   runs along each row.
-> - Subtract each row's maximum before `np.exp`, so large scores never overflow.
-> - The causal mask is 0 on and below the diagonal and $-\infty$ above it, added
->   before the softmax.
-> - Multi-head attention slices columns into heads of width $d / h$, attends on
->   each, concatenates, and multiplies by $W_O$.
-> - The backward pass undoes `weights @ V`, then the softmax, then the scaled
->   product, keeping the $1 / \sqrt{d_k}$ factor.
+> Carry these facts into the exercise:
+> - Scores are Q K transpose, divided by the square root of d_k, and the softmax runs along each row.
+> - Subtract each row's maximum before `np.exp`, so large scores stay finite.
+> - The causal mask is 0 on and below the diagonal and −∞ strictly above it, added before the softmax.
+> - Multi-head attention slices columns into width d / h, attends, concatenates, and multiplies by W_O.
+> - The backward pass undoes `weights @ V`, then the softmax, then the scaled product, and keeps the 1 / sqrt(d_k) factor.
 
 ## Build it step by step
 
-The checks test your functions in this order.
+The checks test the functions in this order:
 
-1. **`causal_mask(T)`** returns a $(T, T)$ float array: 0 on and below the
-   diagonal, `-np.inf` strictly above. Start with `np.zeros((T, T))` and set
-   the upper triangle with `np.triu_indices(T, k=1)`. Common mistake: using
-   `k=0`, which also masks the diagonal, so position 0 has nothing to look at
-   and its row becomes all NaN.
-2. **`softmax(x, axis=-1)`** takes any shape and returns the same shape. Use
-   `np.max`, `np.exp`, and `np.sum` along `axis`, all with `keepdims=True`.
-   Common mistake: forgetting `keepdims`, so the division broadcasts along the
-   wrong axis.
-3. **`scaled_dot_product_attention(q, k, v, mask=None)`** takes `q` of shape
-   $(T_q, d_k)$, `k` of $(T_k, d_k)$, and `v` of $(T_k, d_v)$. It returns a
-   tuple `(output, weights)` with shapes $(T_q, d_v)$ and $(T_q, T_k)$. Take
-   $d_k$ from `q.shape[-1]`. Common mistake: adding the mask after the softmax.
-4. **`multi_head_attention(x, Wq, Wk, Wv, Wo, heads, mask=None)`** takes `x`
-   of shape $(T, d)$ and four $(d, d)$ matrices, and returns $(T, d)$. Project,
-   loop over heads slicing columns, call your attention function with the same
-   mask for every head, concatenate with `np.concatenate(..., axis=-1)`, then
-   multiply by `Wo`. Common mistake: slicing rows instead of columns.
-5. **`attention_backward(dout, q, k, v, mask=None)`** recomputes the forward
-   pass, then follows the three backward steps above. It returns `(dq, dk, dv)`
-   with the same shapes as `q`, `k`, and `v`. Common mistake: forgetting the
-   `1 / sqrt(d_k)` factor on `dq` and `dk`.
-6. **`attention_flops(T, d, heads)`** returns the integer
-   `8*T*d**2 + 4*T**2*d`. The `heads` argument is accepted but not used.
+1. **`causal_mask(T)`.** Return `(T, T)`, with 0 on and below the diagonal and `-np.inf` past it. Use `np.triu_indices(T, k=1)`. The usual mistake is `k=0`, which masks the diagonal and makes position 0 NaN.
+2. **`softmax(x, axis=-1)`.** Keep the input shape. Use `np.max`, `np.exp`, and `np.sum` along `axis`, all with `keepdims=True`. The usual mistake is dropping `keepdims`, so the division broadcasts on the wrong axis.
+3. **`scaled_dot_product_attention(q, k, v, mask=None)`.** `q` is `(T_q, d_k)`, `k` is `(T_k, d_k)`, and `v` is `(T_k, d_v)`. Return `(output, weights)`, shapes `(T_q, d_v)` and `(T_q, T_k)`. Read d_k from `q.shape[-1]`. Add the mask before the softmax. The usual mistake is adding it afterwards.
+4. **`multi_head_attention(x, Wq, Wk, Wv, Wo, heads, mask=None)`.** `x` is `(T, d)` and each weight matrix is `(d, d)`. Return `(T, d)`. Project, loop over column slices, call attention with the same mask on every head, concatenate on the last axis, then multiply by `Wo`. The usual mistake is slicing rows.
+5. **`attention_backward(dout, q, k, v, mask=None)`.** Recompute the forward pass, then the three backward steps. Return `(dq, dk, dv)` with the same shapes as `q`, `k`, and `v`. The usual mistake is forgetting `1 / sqrt(d_k)` on `dq` and `dk`.
+6. **`attention_flops(T, d, heads)`.** Return the integer `8*T*d**2 + 4*T**2*d`. The `heads` argument is accepted and unused.
 
 ## Cost and scaling
 
-A flop is one multiply or one add. Multiplying a $p \times q$ matrix by a
-$q \times r$ matrix takes $2pqr$ flops. Count the pieces of one layer:
+A flop is one multiply or one add. A p by q matrix times a q by r matrix costs 2pqr flops. One layer splits as follows:
 
 | Piece | Flops | Grows with |
 |---|---|---|
-| Four projections: $Q$, $K$, $V$, and $W_O$ | $4 \times 2Td^2 = 8Td^2$ | length times width squared |
-| Scores $QK^{\top}$ plus weighted sum with $V$ | $2 \times 2T^2 d = 4T^2 d$ | length squared times width |
+| Projections Q, K, V, and W_O | 8 T d² | T times d² |
+| Scores plus the mix with V | 4 T² d | T² times d |
 
-Add them to get the total:
+The total is:
 
 $$
 \text{flops} = 8 T d^2 + 4 T^2 d
 $$
 
-Read aloud: eight times length times width squared, plus four times length
-squared times width. The number of heads isn't in it. For $T = 16$ and $d = 4$,
-that's $8 \cdot 16 \cdot 16 + 4 \cdot 256 \cdot 4 = 2048 + 4096 = 6144$.
+The head count is absent. For T = 16 and d = 4, you get 8 × 16 × 16 + 4 × 256 × 4 = 6144.
 
 ```python
 flops = 8 * T * d**2 + 4 * T**2 * d
 ```
 
-Once $T$ is larger than $2d$, the second term wins. Doubling the sequence
-length then roughly quadruples the cost. Memory grows the same way: each head
-keeps a $T \times T$ weight table for the backward pass.
+Once T is larger than 2d, the second term wins, and doubling the length roughly quadruples the cost. Each head also stores a T by T table for the backward pass.
 
 ## Where this breaks
 
-- **Long sequences get expensive fast.** The $T^2$ term dominates at thousands
-  of tokens, in both time and memory. People use tricks that compute attention
-  in tiles without storing the full table, or approximate attention with
-  cheaper patterns.
-- **No sense of order.** As you saw, shuffled input gives shuffled output.
-  Every real model adds position information to the input.
-- **One layer, one lookup.** A single layer can copy or average information
-  between any two positions in one step. It can't chain two lookups, like
-  "find the word before the word that matches me". Stacking layers gives the
-  model that chain.
-- **A fully masked row.** If a row of the mask is all $-\infty$, the softmax
-  divides 0 by 0 and returns NaN. A causal mask always leaves the diagonal
-  open, so this only happens with other masks.
+The lookup fails in four familiar ways:
+
+- The T squared term dominates at thousands of tokens, in time and in memory. Tiled attention avoids storing the full table.
+- Shuffled input gives shuffled output. Position has to be added to the input.
+- One layer can mix any two positions in one step. It cannot chain two lookups. Stacking layers gives that chain.
+- A mask row of all −∞ makes the softmax divide 0 by 0 and return NaN. A causal mask leaves the diagonal open.
 
 ## The exercise
 
-You build self-attention from its parts: `causal_mask`, `softmax`,
-`scaled_dot_product_attention`, `multi_head_attention`, `attention_backward`,
-and `attention_flops`. Everything works on a single sequence with no batch
-dimension.
+You build `causal_mask`, `softmax`, `scaled_dot_product_attention`, `multi_head_attention`, `attention_backward`, and `attention_flops`. Every array is one sequence, with no batch axis.
 
-The checks confirm that the mask has the right pattern, that `softmax` stays
-finite at logits of 900 and sums to one along the axis you ask for, and that
-attention weights form valid rows. They check that changing later positions
-never changes earlier outputs under the causal mask, that one-head multi-head
-attention matches single-head attention times `Wo`, and that shuffling the
-input shuffles the output the same way. Finally, they compare
-`attention_backward` against finite differences, a numerical estimate of the
-gradient, and check that `attention_flops` matches the formula for every head
-count.
+The checks confirm the mask, a finite softmax at 900 that sums to 1, and valid attention rows. Under the causal mask, positions after t do not change earlier outputs. One head matches single-head attention times `Wo`. Shuffling the input shuffles the output. `attention_backward` matches finite differences, and `attention_flops` matches the formula for every head count.

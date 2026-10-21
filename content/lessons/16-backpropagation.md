@@ -2,13 +2,13 @@
 title: Backpropagation as reverse-mode AD
 slug: 16-backpropagation
 part: "Part 3 — Neural networks"
-summary: Build a tiny autodiff engine that records a computation and runs the chain rule backwards to get every gradient in one pass.
+summary: "Record a calculation on a tape and walk the chain rule backwards so one pass returns every gradient."
 minutes: 70
 gpu: false
 objectives:
   - Explain how backpropagation applies the chain rule from the loss back to every input.
   - Build the backward rule for addition, multiplication, matrix products, ReLU, and sum.
-  - Compute the softmax-cross-entropy loss and its gradient with respect to the logits.
+  - Compute the softmax cross-entropy loss and its gradient with respect to the logits.
   - Build a topological sort so every gradient is complete before it flows further.
   - Check any gradient against a finite-difference estimate.
 prereqs:
@@ -18,187 +18,141 @@ exercise: 16-backpropagation
 
 # Backpropagation as reverse-mode AD
 
-To train a network, you need the gradient of the loss with respect to every
-weight. The **gradient** is the list of partial derivatives: for each weight,
-how much the loss changes when you nudge that weight a little. In earlier
-lessons you worked out gradients by hand, one model at a time. That does not
-scale to networks with millions of weights.
+Training needs a slope of the loss for every weight. A gradient is that list of slopes. Nudge one input by 0.01 and the output moves by about 0.03, and that slope is 3. Hand-written slopes do not reach millions of weights.
 
-**Backpropagation** does the work for you. During the forward pass, it records
-every operation, like writing each step of a recipe on a card. Then it walks
-the cards backwards, applying the chain rule at each step. One backward pass
-gives the gradient for every weight at once, for about the cost of one more
-forward pass.
+Backpropagation records each operation, then walks those steps backwards with the chain rule. One walk returns every slope, for about the cost of one more forward pass.
 
-This is called **reverse-mode automatic differentiation** (AD). In this lesson
-you build a small version of the engine inside PyTorch: a `Tensor` class that
-records operations and runs them in reverse.
+You can build that walk. A value remembers its operation, and a backward method returns slope to the inputs.
 
 ## What you already know
 
-- The chain rule: if $y = f(u)$ and $u = g(x)$, then $\frac{dy}{dx} = \frac{dy}{du} \cdot \frac{du}{dx}$.
-- A forward pass through an MLP is a chain of matrix products, bias adds, and ReLUs.
-- Softmax turns a row of scores into probabilities that add up to 1.
-- A finite difference, $(f(x+h) - f(x-h)) / 2h$, estimates a derivative.
-- Numpy broadcasting stretches a `(m,)` bias across every row of an `(n, m)` matrix.
+Five earlier ideas are enough to start:
 
-## The graph and the tape
+- The chain rule multiplies slopes. If $y = f(u)$ and $u = g(x)$, then $dy/dx = (dy/du)\cdot(du/dx)$.
+- A forward pass is a chain of matrix products, bias adds, and ReLUs.
+- Softmax turns scores into probabilities that add to 1. Scores of 0 and 0 become 0.5 and 0.5.
+- A finite difference $(f(x+h)-f(x-h))/(2h)$ estimates a slope.
+- Broadcasting stretches a bias of shape `(m,)` across an `(n, m)` matrix.
 
-Every value in the computation becomes a node. A node remembers three things:
+## Walk one product and one sum backwards
 
-- `value`: the number or array it holds.
-- `grad`: the gradient of the final loss with respect to this node. It starts as zeros of the same shape.
-- `_children`: the nodes it was computed from, plus a small function `_backward_fn` that knows how to pass gradient back to them.
+Take $a = 3$ and $b = 2$. Multiply first: $p = a \times b = 6$. Then add: $c = p + a = 9$. The tape holds a multiply, then an add.
 
-Take $c = a \times b + a$ with $a = 3$ and $b = 2$. The forward pass builds two
-nodes: $p = a \times b = 6$ and $c = p + a = 9$.
+The slope of $c$ in itself is 1. Addition passes it through, so $p$ receives 1 and $a$ receives 1. Multiplication gives each input the incoming slope times the other input. From $p$, $a$ receives $1 \times 2 = 2$ and $b$ receives $1 \times 3 = 3$. The value $a$ was used twice, so $1 + 2 = 3$. The slope in $b$ is 3.
 
-The backward pass starts at the output. The gradient of $c$ with respect to
-itself is 1. Then each node hands gradient to its children:
+Expand to check. $c = ab + a$. With $b = 2$ this is $3a$, so the slope in $a$ is $b + 1 = 3$. The slope in $b$ is $a = 3$.
 
-- $c = p + a$: addition passes the gradient through unchanged. So $p$ gets 1 and $a$ gets 1.
-- $p = a \times b$: multiplication gives each input the gradient times the *other* input. So $a$ gets $1 \times 2 = 2$ and $b$ gets $1 \times 3 = 3$.
-- $a$ was used twice, so its contributions add: $1 + 2 = 3$.
+This tape is **reverse-mode automatic differentiation**. The map from an output slope to input slopes is a **vector-Jacobian product** (VJP). You never build the full table of partial derivatives. Write the incoming slope as $\bar{z}$.
 
-You can check this by hand: $c = ab + a$, so $\frac{\partial c}{\partial a} = b + 1 = 3$ and $\frac{\partial c}{\partial b} = a = 3$.
+One multiply has a second trap. At $a = 3$, $a \times a = 9$. Each factor contributes $1 \times 3 = 3$, so the total is $3 + 3 = 6$, which is $2a$. Overwrite instead of add, and you keep only 3.
 
-That last step is the most important rule in the engine.
-
-> [!KEY]
-> Gradients accumulate. A node used in several places gets the sum of all its contributions, so every backward function uses `+=`, never `=`.
-
-## The backward rule for each operation
-
-Each operation needs one backward rule. The rule takes the gradient arriving
-at the output, written $\bar{z}$ ("z-bar"), and turns it into gradients for the
-inputs. This is called a **vector-Jacobian product**. The **Jacobian** is the
-full table of partial derivatives of the output with respect to the input. You
-never build that table. Each rule computes its product with $\bar{z}$ directly.
-
-### Addition and multiplication
-
-For $z = x + y$ and $z = x \odot y$, where $\odot$ means elementwise
-multiplication:
+For an add and an elementwise product, the rules are
 
 $$
 z = x + y:\quad \bar{x} \mathrel{+}= \bar{z},\ \ \bar{y} \mathrel{+}= \bar{z}
 \qquad\qquad
-z = x \odot y:\quad \bar{x} \mathrel{+}= \bar{z} \odot y,\ \ \bar{y} \mathrel{+}= \bar{z} \odot x
+z = x \odot y:\quad \bar{x} \mathrel{+}= \bar{z} \odot y,\ \ \bar{y} \mathrel{+}= \bar{z} \odot x .
 $$
 
-Read it aloud: addition copies the incoming gradient to both inputs.
-Multiplication gives each input the incoming gradient times the other input.
+The $\mathrel{+}=$ adds onto the slope already stored. Plug in $\bar{c} = 1$. The add gives $\bar{p} \mathrel{+}= 1$ and $\bar{a} \mathrel{+}= 1$. The multiply gives $\bar{a} \mathrel{+}= 2$ and $\bar{b} \mathrel{+}= 3$. Stored $\bar{a}$ is 3:
 
 ```python
-self.grad += _unbroadcast(out.grad, self.value.shape)                  # add
-self.grad += _unbroadcast(out.grad * other.value, self.value.shape)    # mul
+self.grad += _unbroadcast(out.grad, self.value.shape)
+self.grad += _unbroadcast(out.grad * other.value, self.value.shape)
 ```
 
-**Broadcasting needs one extra step.** When you add a bias `b` of shape `(m,)`
-to `X` of shape `(n, m)`, numpy copies `b` into all $n$ rows. Each copy
-contributes to the loss, so the bias gradient is the sum of the incoming
-gradient over those rows. The provided `_unbroadcast(grad, shape)` does that
-summing for you. Call it in `__add__` and `__mul__` before every `+=`.
+The usual mistake is `=` instead of `+=`.
 
 > [!KEY]
-> When numpy broadcasts a value into many copies, the value's gradient is the sum of the gradients of all the copies.
+> Gradients accumulate. Every backward rule uses `+=`.
 
-### Matrix product
+## Pass a slope through each operation
 
-For $Z = A B$, with $A$ of shape `(n, k)` and $B$ of shape `(k, m)`:
+**Broadcasting** sums the copies. Add bias $[10, 20]$ onto two rows. Suppose the incoming slope has rows $(1, 2)$ and $(3, 4)$. The bias slope is the column sum, $[1+3,\ 2+4] = [4, 6]$. Call `_unbroadcast` in `__add__` and `__mul__` before every `+=`:
+
+```python
+bias_grad = out.grad.sum(axis=0)
+```
+
+The usual mistake is a slope of shape `(n, m)` on a bias of shape `(m,)`.
+
+> [!KEY]
+> A copied value's gradient is the sum of the gradients of the copies.
+
+A matrix product uses a transpose. Take $A = [1, 2]$ and $B = [3, 4]$. Then $Z = 1\cdot 3 + 2\cdot 4 = 11$. Slopes in $A$ are 3 and 4. Slopes in $B$ are 1 and 2.
+
+For $Z = AB$, with shapes `(n, k)` and `(k, m)`,
 
 $$
-\bar{A} \mathrel{+}= \bar{Z} B^\top, \qquad \bar{B} \mathrel{+}= A^\top \bar{Z}
+\bar{A} \mathrel{+}= \bar{Z} B^\top, \qquad \bar{B} \mathrel{+}= A^\top \bar{Z} .
 $$
 
-Read it aloud: the gradient for $A$ is the incoming gradient times $B$
-transposed. The gradient for $B$ is $A$ transposed times the incoming gradient.
-A quick way to remember: the shapes only fit one way. $\bar{Z}$ is `(n, m)`,
-and you need `(n, k)` for $\bar{A}$, so multiply by $B^\top$, which is `(m, k)`.
-
-> [!TIP]
-> A gradient always has the same shape as the value it belongs to. When you forget where a transpose goes, write down the shapes and pick the only product that fits.
+With $\bar{Z} = 1$ you recover $\bar{A} = [3, 4]$ and $\bar{B} = [1, 2]$:
 
 ```python
 self.grad += out.grad @ other.value.T
 other.grad += self.value.T @ out.grad
 ```
 
-### ReLU and sum
+The usual mistake is a transpose on the wrong factor. A gradient has the same shape as its value.
 
-ReLU lets gradient through where its input was positive and blocks it
-elsewhere. Sum turns an array into one number, and every entry contributed
-with weight 1, so each entry gets the incoming gradient.
+ReLU passes slope where the input was positive. Take $x = [-1, 2]$ and incoming slope $[5, 7]$. The mask is $[0, 1]$, so the outgoing slope is $[0, 7]$.
+
+A sum gives every entry weight 1. Take $x = [1, 2, 3]$, sum 6. Incoming slope 4 means every entry receives 4.
 
 $$
 z = \operatorname{relu}(x):\quad \bar{x} \mathrel{+}= \bar{z} \odot [x > 0]
 \qquad\qquad
-z = \textstyle\sum_i x_i:\quad \bar{x} \mathrel{+}= \bar{z} \cdot \mathbf{1}
+z = \textstyle\sum_i x_i:\quad \bar{x} \mathrel{+}= \bar{z} \cdot \mathbf{1} .
 $$
 
-Read it aloud: $[x > 0]$ is 1 where $x$ is positive and 0 elsewhere.
-$\mathbf{1}$ is an array of ones with the shape of $x$.
+Plug in. ReLU returns $[0, 7]$. Sum returns $[4, 4, 4]$:
 
 ```python
-self.grad += out.grad * (self.value > 0)          # relu
-self.grad += out.grad * np.ones_like(self.value)  # sum
+self.grad += out.grad * (self.value > 0)
+self.grad += np.ones_like(self.value) * out.grad
 ```
 
-## The order of the backward pass
+The usual mistake is masking ReLU with the output. The rule names the input.
 
-A node may be used by several later nodes. You must collect all of its
-gradient before it passes gradient on to its own children. Otherwise it
-forwards an incomplete number.
+> [!TIP]
+> When a transpose is in doubt, keep the only product whose shapes fit.
 
-A **topological order** solves this. It lists nodes so that every node comes
-after all the nodes it was built from. Walk that list in reverse and every
-node is finished before you reach its children.
+## Finish a node before you leave it
+
+A node must collect every contribution before it passes slope onward.
+
+Take $a = 2$, $b = a \times a = 4$, $c = a + a = 4$, and $d = b + c = 8$. Then $d = a^2 + 2a$, so the slope at 2 is $4 + 2 = 6$.
+
+Walk it. $d$ sends 1 to $b$ and 1 to $c$. The square sends $1 \times 2$ on each factor, so $b$ contributes 4 to $a$. The add contributes 2. The total is 6. Stop after the square and you have only 4.
+
+A **topological order** lists each node after its inputs. Visit children, then append, and skip an id you have already seen:
+
+```python
+# if id(node) not in visited: visit children, then topo.append(node)
+```
+
+One valid order is $a$, $b$, $c$, $d$. Reversed, you run $d$, $c$, $b$, $a$. Both 4 and 2 land on $a$ before it passes slope on.
+
+The usual mistake is running a node after only one user has written a slope. Set the output slope to ones, then call `_backward_fn` on `reversed(topo)`.
 
 > [!KEY]
-> Run the backward functions in reverse topological order. Each node then has its full gradient before it passes any of it on.
+> Reverse topological order gives each node its full gradient before that node passes any slope on.
 
-You build the order with a **depth-first search**: visit a node's children
-first, then append the node. Keep a set of visited nodes so a shared node is
-added only once.
+## Turn scores into a loss
 
-```python
-def build(node):
-    if id(node) not in visited:
-        visited.add(id(node))
-        for child in node._children:
-            build(child)
-        topo.append(node)
-```
+**Logits** are one score per class. Softmax turns them into probabilities. Cross-entropy is minus the log of the correct class. The loss is the mean over $n$ rows.
 
-After building `topo`, set the output's `grad` to ones and call each node's
-`_backward_fn` in `reversed(topo)`.
+Take $z = [2, 1, 0]$, class 0. Subtract the row max 2, leaving $[0, -1, -2]$. Exponentials: $1$, $0.367879$, $0.135335$. Sum: $1.503214$. Divide: $1/1.503214 = 0.665241$, $0.367879/1.503214 = 0.244728$, and $0.135335/1.503214 = 0.090030$.
 
-### The diamond
-
-Take $b = a \times a$, $c = a + a$, and $d = b + c$, with $a = 2$. The node
-$a$ feeds both $b$ and $c$, and both feed $d$. By hand,
-$d = a^2 + 2a$, so $\frac{dd}{da} = 2a + 2 = 6$. With the right order, $d$
-passes 1 to both $b$ and $c$. Then $b$ passes $1 \times 2 + 1 \times 2 = 4$
-to $a$, and $c$ passes $1 + 1 = 2$, for a total of 6. The checks use this exact graph.
-
-## Softmax cross-entropy
-
-A classifier outputs one score per class, called **logits**. Softmax turns
-logits $z$ into probabilities $p$. Cross-entropy is the loss: minus the log of
-the probability given to the correct class. For $n$ examples with labels
-$y_i$, the loss is the mean:
+The loss is $-\log 0.665241 = 0.407606$. Subtract 1 on class 0 and the slope is $[-0.334759,\ 0.244728,\ 0.090030]$.
 
 $$
 p_{ic} = \frac{e^{z_{ic}}}{\sum_{c'} e^{z_{ic'}}}, \qquad
-\text{loss} = -\frac{1}{n} \sum_{i=1}^{n} \log p_{i y_i}
+\text{loss} = -\frac{1}{n} \sum_{i=1}^{n} \log p_{i y_i} .
 $$
 
-Read it aloud: for row $i$, exponentiate every score and divide by the row
-total to get probabilities. Take the probability of the correct class, take
-its log, flip the sign, and average over the $n$ rows.
-
-To avoid overflow, subtract each row's largest score first. It cancels in the
-fraction, so the answer is unchanged:
+Subtracting the row maximum cancels in the fraction. Do it anyway, or `np.exp` overflows. With $n = 1$ you recover loss $0.407606$:
 
 ```python
 m = z.max(axis=1, keepdims=True)
@@ -206,22 +160,13 @@ log_probs = (z - m) - np.log(np.exp(z - m).sum(axis=1, keepdims=True))
 loss = -log_probs[np.arange(n), labels].mean()
 ```
 
-> [!WARNING]
-> `log_probs[np.arange(n), labels]` picks one entry per row. `log_probs[:, labels]` picks an `(n, n)` block instead, and its mean is the wrong loss.
-
-The gradient with respect to the logits is short and worth remembering:
+The usual mistake is `log_probs[:, labels]`, an `(n, n)` block. Use `np.arange(n)` with `labels`.
 
 $$
-\frac{\partial\, \text{loss}}{\partial z} = \frac{1}{n}\left(p - \text{onehot}(y)\right)
+\frac{\partial\, \text{loss}}{\partial z} = \frac{1}{n}\left(p - \text{onehot}(y)\right) .
 $$
 
-Read it aloud: take the probability matrix, subtract 1 at each row's correct
-class, and divide by $n$. The $\frac{1}{n}$ is there because the loss is a
-mean, not a sum. `onehot(y)` is a matrix with a 1 at the correct class of each
-row and 0 elsewhere.
-
-> [!KEY]
-> The gradient of mean softmax cross-entropy with respect to the logits is $(p - \text{onehot}(y)) / n$: the predicted probabilities minus the true ones, divided by $n$.
+Divide by $n$ because the loss is a mean. With $n = 1$ the slope is $[-0.334759,\ 0.244728,\ 0.090030]$ again:
 
 ```python
 g = probs.copy()
@@ -229,104 +174,131 @@ g[np.arange(n), labels] -= 1.0
 g /= n
 ```
 
-### Worked example by hand
+The usual mistake is a missing `/ n`.
 
-One example, logits $z = [2, 1, 0]$, correct class 0.
+> [!KEY]
+> The gradient of mean softmax cross-entropy in the logits is $(p - \text{onehot}(y)) / n$.
 
-- Exponentials: $e^2 = 7.389$, $e^1 = 2.718$, $e^0 = 1$. The total is $11.107$.
-- Probabilities: $p = [0.6652, 0.2447, 0.0900]$.
-- Loss: $-\log 0.6652 = 0.4076$.
-- Gradient: $[0.6652 - 1, 0.2447, 0.0900] / 1 = [-0.3348, 0.2447, 0.0900]$.
+> [!WARNING]
+> `log_probs[:, labels]` is an `(n, n)` block. Index one entry per row.
 
-The gradient pushes the correct score up (negative gradient) and the others
-down.
+## Check a slope with two nudges
 
-## Checking gradients with finite differences
+Fix $b = 2$, so $c = 3a$. At $a = 3$ and $h = 0.001$ the two values are $3 \times 3.001 = 9.003$ and $3 \times 2.999 = 8.997$. The gap $0.006$ divided by $0.002$ is $3$.
 
-To check any gradient, nudge one input by a small $h$ both ways and measure
-the change in the loss:
+That two-sided nudge is a **central difference**:
 
 $$
-\frac{\partial\, \text{loss}}{\partial w} \approx \frac{\text{loss}(w + h) - \text{loss}(w - h)}{2h}
+\frac{\partial\, \text{loss}}{\partial w} \approx \frac{\text{loss}(w + h) - \text{loss}(w - h)}{2h} .
 $$
 
-Read it aloud: evaluate the loss slightly above and slightly below $w$,
-subtract, and divide by the gap $2h$. With $h$ around $10^{-5}$, the estimate
-is usually correct to 6 or more digits. Much smaller $h$ makes it worse,
-because rounding errors in the subtraction take over. This costs two forward
-passes per weight, so it is a test, not a training method.
+Near $h = 10^{-5}$ you usually get about 6 digits. A tiny $h$ loses the gap to rounding. Two passes per weight make this a test:
+
+```python
+(loss(w + h) - loss(w - h)) / (2 * h)
+```
+
+The usual mistake is a one-sided nudge. Its error shrinks like $h$, not like $h^2$.
 
 > [!RECAP]
-> - Every backward function adds to `grad` with `+=`, so a node used twice collects both contributions.
-> - Addition copies $\bar{z}$ to both inputs, multiplication scales it by the other input, and both call `_unbroadcast` before the `+=`.
-> - For a matrix product, $\bar{A} = \bar{Z} B^{\top}$ and $\bar{B} = A^{\top} \bar{Z}$. ReLU masks with `self.value > 0`, and sum spreads $\bar{z}$ over ones.
-> - `backward` builds a topological order by depth-first search, sets the output's `grad` to ones, and calls `_backward_fn` in `reversed(topo)`.
-> - Softmax cross-entropy computes the loss with the stable log-sum-exp and sends $(p - \text{onehot}(y)) / n$ back to the logits.
+> Keep these five facts in hand:
+> - Every backward rule uses `+=`. Addition and multiplication call `_unbroadcast` first.
+> - A matrix product multiplies by the other factor, transposed. ReLU masks with `self.value > 0`. Sum spreads the slope over ones.
+> - `backward` visits children first, sets the output slope to ones, and runs `_backward_fn` in reverse.
+> - Softmax cross-entropy subtracts the row max and sends $(p - \text{onehot}(y))/n$ to the logits.
+> - On $c = ab + a$ at $a = 3$, $b = 2$, and $h = 0.001$, the central difference returns 3.
 
 ## Build it step by step
 
-Build the pieces in the order the checks test them.
+`_unbroadcast` is already written. Build these nine pieces:
 
-1. **`Tensor.__init__`.** Already written. It stores `value` as a float array and `grad` as zeros of the same shape. Read it so you know the fields.
-2. **`__add__(self, other)`.** Coerce `other` with `Tensor._coerce`. Build `out = Tensor(self.value + other.value, children=(self, other))`. Define an inner `_backward()` that adds `_unbroadcast(out.grad, ...)` to each operand's `grad`, and assign it to `out._backward_fn`. Return `out`. Common mistake: skipping `_unbroadcast`, so a `(m,)` bias gets a `(n, m)` gradient.
-3. **`__mul__(self, other)`.** Same pattern. Each operand gets `out.grad` times the other operand's `value`, unbroadcast. Common mistake: multiplying by the operand's own value.
-4. **`__matmul__(self, other)`.** Both are 2-D. Use `out.grad @ other.value.T` and `self.value.T @ out.grad`. No unbroadcast is needed. Common mistake: putting the transpose on the wrong side. Check the shapes.
-5. **`relu(self)`.** One child. Multiply `out.grad` by the mask `self.value > 0`. Common mistake: masking with the output instead of the input. For ReLU both give the same mask, but reading the input is the habit to keep.
-6. **`sum(self)`.** Returns a scalar `Tensor`. Backward spreads `out.grad` over `np.ones_like(self.value)`.
-7. **`backward(self)`.** Build `topo` with the depth-first search above, set `self.grad = np.ones_like(self.value)`, and call `_backward_fn` for each node in `reversed(topo)`. Common mistake: using `=` instead of `+=` in any backward function. The checks for `a * a` and the diamond catch it.
-8. **`softmax_cross_entropy(logits, labels)`.** Compute the loss in numpy with the stable log-sum-exp. Return a scalar `Tensor` with `children=(logits,)`. Its backward adds `out.grad * (probs - onehot) / n` to `logits.grad`. Common mistake: forgetting to divide by `n`, or computing `np.exp(z)` without subtracting the row maximum.
-9. **`mlp_loss_and_grad(params, X, y)`.** Wrap each `W` and `b` in a `Tensor`. Here `W` has shape `(in, out)`, so each layer is `h @ W + b`, the transpose of the lesson 15 convention. Apply `.relu()` after every layer except the last. Pass the last output to `softmax_cross_entropy`, call `.backward()` once, and return `(float(loss.value), grads)`, where `grads` copies each `W.grad` and `b.grad`. Common mistake: applying ReLU to the logits.
+1. **`Tensor.__init__`** is already written. It stores a float `value` and a zero `grad` of the same shape. The fields are as follows:
+
+    ```python
+    def __init__(self, value, children=()):
+        # Float value, zero grad, children saved.
+    ```
+
+2. **`__add__`** coerces with `Tensor._coerce`, builds `out` from the sum, and adds `_unbroadcast(out.grad, shape)` into each `grad`. The usual mistake is a bias slope of shape `(n, m)`:
+
+    ```python
+    def __add__(self, other):
+        # children=(self, other). += unbroadcast(out.grad).
+    ```
+
+3. **`__mul__`** gives each side `out.grad` times the other value, then unbroadcasts. The usual mistake is using a value's own entries:
+
+    ```python
+    def __mul__(self, other):
+        # += unbroadcast(out.grad * other value).
+    ```
+
+4. **`__matmul__`** uses `out.grad @ other.value.T` and `self.value.T @ out.grad` on 2-dimensional tensors. The usual mistake is the wrong transpose:
+
+    ```python
+    def __matmul__(self, other):
+        # No unbroadcast. Gradients match value shapes.
+    ```
+
+5. **`relu`** multiplies `out.grad` by `self.value > 0`. The usual mistake is masking with the output:
+
+    ```python
+    def relu(self):
+        # One child. Mask with the input.
+    ```
+
+6. **`sum`** returns a scalar and spreads `out.grad` with `np.ones_like`. The usual mistake is returning a vector:
+
+    ```python
+    def sum(self):
+        # out.grad on every entry.
+    ```
+
+7. **`backward`** builds `topo` depth-first, sets `self.grad` to ones, and calls `_backward_fn` on `reversed(topo)`. `a * a` at 3 and the diamond at 2 both expect 6. The usual mistake is `=`:
+
+    ```python
+    def backward(self):
+        # Children first, then append. Ones, then reverse.
+    ```
+
+8. **`softmax_cross_entropy(logits, labels)`** returns a scalar whose only child is `logits`. Backward adds `out.grad * (probs - onehot) / n`. The usual mistake is a missing `/ n` or a missing row max:
+
+    ```python
+    def softmax_cross_entropy(logits, labels):
+        # Stable log-sum-exp. One child: logits.
+    ```
+
+9. **`mlp_loss_and_grad(params, X, y)`** returns `(float(loss.value), grads)`. `W` is `(in, out)`, so the layer is `h @ W + b`. Use `.relu()` on every layer except the last, then copy both grads. The usual mistake is a ReLU on the logits:
+
+    ```python
+    def mlp_loss_and_grad(params, X, y):
+        # Fresh tensors. Hidden ReLU only. Copy both grads.
+    ```
 
 ## Cost and scaling
 
-Reverse mode is cheap in time and hungry for memory. The table compares the
-ways to get a gradient for a network with $P$ parameters.
+For $P$ parameters, the three routes line up as follows:
 
 | Method | Time for all $P$ gradients | Extra memory |
 |---|---|---|
-| Backpropagation (reverse mode) | about 2 to 3 forward passes | every stored activation |
-| Forward mode | about $P$ forward passes | small |
-| Finite differences | $2P$ forward passes | small |
+| Backpropagation, reverse mode | About 2 to 3 forward passes | Every stored activation |
+| Forward mode | About $P$ forward passes | Small |
+| Finite differences | $2P$ forward passes | Small |
 
-Forward mode pushes a nudge from one input forward to the output, so you need
-one pass per input. Reverse mode pulls the gradient from the single loss back
-to every input at once. With one loss and millions of weights, reverse mode
-wins by a huge margin.
-
-The price is memory. The backward pass needs the forward values, such as `A`
-and `B` in a matrix product, so you keep every layer's activations until the
-backward pass uses them. Memory grows with depth times batch size.
-**Checkpointing** trades time for memory: it stores only some activations and
-recomputes the rest during the backward pass.
+With one loss and large $P$, reverse mode wins. Memory grows with depth times batch size. **Checkpointing** stores some activations and recomputes the rest.
 
 ## Where this breaks
 
-**Overwriting instead of accumulating.** Using `=` in a backward function gives
-wrong gradients whenever a value is used twice. Always use `+=`.
+Five failures show up in practice:
 
-**Forgetting to zero gradients.** A `grad` keeps growing across calls to
-`backward`. Real libraries make you reset it before each step. In this
-exercise you build fresh `Tensor` objects on every call, so each one starts at
-zero.
-
-**Kinks.** ReLU has no derivative at exactly 0. Engines pick 0, which is fine in
-practice, but a finite-difference check that lands on a kink disagrees.
-
-**Overflow in softmax.** Large logits make `np.exp` return infinity. Subtract
-the row maximum first.
-
-**Running out of memory.** Deep networks with large batches store too many
-activations. Use smaller batches or checkpointing.
+- `=` drops every contribution except the last. Use `+=`.
+- A `grad` keeps growing across calls. This exercise builds fresh tensors, so each `grad` starts at zero.
+- ReLU has no slope at 0. Engines pick 0. A finite difference on that kink disagrees.
+- Large logits make `np.exp` overflow. Subtract the row maximum first.
+- Large batches store too many activations. Use smaller batches, or checkpoint.
 
 ## The exercise
 
-You implement `Tensor.__add__`, `Tensor.__mul__`, `Tensor.__matmul__`,
-`Tensor.relu`, `Tensor.sum`, `Tensor.backward`, `softmax_cross_entropy`, and
-`mlp_loss_and_grad` in `starter.py`. The helper `_unbroadcast` is provided.
+You implement `Tensor.__add__`, `Tensor.__mul__`, `Tensor.__matmul__`, `Tensor.relu`, `Tensor.sum`, `Tensor.backward`, `softmax_cross_entropy`, and `mlp_loss_and_grad`. `Tensor.__init__` and `_unbroadcast` are already written.
 
-The checks confirm that a `Tensor` starts with a zero gradient and that each
-operation's gradient matches finite differences, including a broadcast bias.
-They test that `a * a` gives 6 at $a = 3$, that the diamond gives 6 at
-$a = 2$, and that the softmax-cross-entropy gradient equals
-$(p - \text{onehot}(y)) / n$. The last check compares `mlp_loss_and_grad` with
-finite differences on a small two-layer network.
+Checks: a tensor starts with a zero gradient of the same shape. Each operation matches finite differences, including a broadcast bias. `a * a` at 3 gives 6. The diamond at 2 gives 6. The softmax gradient equals $(p - \text{onehot}(y))/n$. `mlp_loss_and_grad` matches finite differences on a small two-layer net.

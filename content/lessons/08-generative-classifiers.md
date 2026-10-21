@@ -2,7 +2,7 @@
 title: Generative classifiers
 slug: 08-generative-classifiers
 part: "Part 2 — Classical machine learning"
-summary: Learn what each class looks like, then classify with Bayes' rule. The Gaussian version turns out to be logistic regression.
+summary: Describe each class, classify with Bayes' rule, and see a shared Gaussian become logistic regression.
 minutes: 60
 gpu: false
 objectives:
@@ -18,87 +18,61 @@ exercise: 08-generative-classifiers
 
 # Generative classifiers
 
-Logistic regression learns the boundary between classes directly. It never asks what a typical cat photo or a typical spam email looks like. It only asks which side of a line a point falls on.
+Logistic regression draws a boundary. It never builds a picture of a typical point in each class. You sometimes want that picture.
 
-A generative classifier works the other way round. It first learns a description of each class on its own: where the class sits, how spread out it is, and how common it is. To classify a new point, it asks each class "how likely were you to produce this point?" and picks the class with the best answer.
+A generative classifier learns each class on its own, then asks which class was more likely to produce a new point. With a bell-shaped cloud per class, the boundary is the same kind of straight cut as logistic regression.
 
-This lesson builds two generative classifiers. The first, Gaussian discriminant analysis, models each class as a bell-shaped cloud. You will see that it produces exactly the same kind of boundary as logistic regression. The second, naive Bayes, makes a strong simplifying assumption that lets it scale to thousands of features, such as the words in an email.
+You will fit that Gaussian model, turn it into logistic weights, and fit a lighter naive Bayes model for many features, including word counts.
 
 ## What you already know
 
-- Logistic regression predicts $p(y = 1 \mid x) = \sigma(w^{\top}x + b)$, where $\sigma(z) = 1 / (1 + e^{-z})$ is the sigmoid.
-- A probability distribution over classes has non-negative entries that add up to 1.
-- Bayes' rule turns $p(x \mid y)$ into $p(y \mid x)$: multiply by the prior $p(y)$ and divide by $p(x)$.
-- Working with log probabilities avoids tiny numbers underflowing to zero.
-- The mean of a set of vectors is their sum divided by how many there are.
+These five ideas are the ones this lesson uses:
 
-## The idea: describe each class, then compare
+- Logistic regression predicts $p(y = 1 \mid x) = \sigma(w^{\top}x + b)$. The sigmoid sends a score of 0 to 0.5.
+- Class probabilities are non-negative and add to 1, as with 0.2 and 0.8.
+- Bayes' rule turns $p(x \mid y)$ into $p(y \mid x)$ by multiplying by the prior $p(y)$ and dividing by $p(x)$.
+- A log keeps a tiny probability usable. A probability of 0.001 has natural log about $-6.9$.
+- The mean of the numbers 1 and 3 is $(1 + 3) / 2 = 2$.
 
-Think of a sorting office that gets parcels from two warehouses. Each warehouse ships parcels of a typical weight and size. When an unlabelled parcel arrives, you ask which warehouse would most plausibly have shipped it. You also account for the fact that one warehouse ships far more parcels than the other.
+## Compare classes with Bayes' rule
 
-That is Bayes' rule. Write $K$ for the number of classes, labelled $0, 1, \ldots, K-1$. For each class $k$ you need two things:
+Two warehouses ship parcels. Half come from each. At a weight of 3 kg, warehouse 0 has density 0.2 and warehouse 1 has density 0.05.
 
-- The **prior** $\pi_k = p(y = k)$: how common class $k$ is before you look at $x$.
-- The **class-conditional density** $p(x \mid y = k)$: how likely class $k$ is to produce a point that looks like $x$.
+Unnormalised scores are $0.5 \times 0.2 = 0.1$ and $0.5 \times 0.05 = 0.025$. The total is 0.125. Warehouse 0 gets $0.1 / 0.125 = 0.8$. Warehouse 1 gets 0.2.
 
-Then the **posterior**, the probability of class $k$ after seeing $x$, is
+That comparison is *Bayes' rule*. For class $k$, with prior $\pi_k = p(y = k)$ and class density $p(x \mid y = k)$,
 
 $$
 p(y = k \mid x) = \frac{\pi_k \, p(x \mid y = k)}{\sum_{j} \pi_j \, p(x \mid y = j)} .
 $$
 
-Read it aloud: take class $k$'s prior times its density at $x$. Do the same for every class. Divide class $k$'s number by the total, so all the posteriors add up to 1.
+The numerator is prior times density. The denominator makes the class probabilities add to 1. In logs, that division is a log-sum-exp:
 
-In code you work with logs. The numerator becomes a sum, and the division becomes a subtraction of a **log-sum-exp**, the log of the total:
+$$
+\log p(y = k \mid x) = \log \pi_k + \log p(x \mid y = k) - \log\sum_j \exp(\log \pi_j + \log p(x \mid y = j)).
+$$
 
-```python
-joint = np.log(priors)[None, :] + log_density        # shape (n, K)
-log_post = joint - logsumexp(joint, axis=1)[:, None]  # each row sums to 1 after exp
-```
+The same densities return posteriors 0.8 and 0.2. Numpy subtracts a log-sum-exp from `np.log(priors) + log_density`.
+
+The usual mistake is normalising along the wrong axis, so a row no longer sums to 1.
 
 > [!TIP]
-> Check your output with `np.exp(log_post).sum(axis=1)`. Every entry should be 1 up to rounding. If not, check that the log-sum-exp runs along `axis=1`.
+> `np.exp(log_post).sum(axis=1)` is 1 for every row, up to rounding.
 
-A model like this is called **generative** because it describes how to generate $x$ for each class. Logistic regression is **discriminative**: it models $p(y \mid x)$ directly and ignores how $x$ is spread out.
+Building $p(x \mid y)$ is *generative*. Logistic regression models $p(y \mid x)$ only.
 
 > [!KEY]
-> A generative classifier learns a prior and a density for each class. Bayes' rule then turns them into the probability of each class given $x$.
+> A generative classifier multiplies a prior by a class density. Bayes' rule turns that into $p(y \mid x)$.
 
-## Gaussian discriminant analysis
+## Fit one shared Gaussian cloud
 
-Gaussian discriminant analysis (GDA) says each class is a cloud of points shaped like a bell curve in $d$ dimensions, a **multivariate Gaussian**. Each class gets its own centre, the **mean** $\mu_k$, a vector of length $d$. All classes share one **covariance matrix** $\Sigma$, a $d \times d$ matrix that says how spread out the cloud is along each direction and how features move together.
+Gaussian discriminant analysis, or GDA, gives every class a bell cloud in $d$ dimensions. Class $k$ has a mean vector $\mu_k$. All classes share one covariance $\Sigma$.
 
-The log density of a Gaussian at a point $x$ is
+Take one feature and four points. Class 0 has 1 and 3. Class 1 has 5 and 7.
 
-$$
-\log p(x \mid y = k) = -\frac{d}{2}\log(2\pi) - \frac{1}{2}\log\det\Sigma - \frac{1}{2}(x - \mu_k)^{\top}\Sigma^{-1}(x - \mu_k) .
-$$
+Priors are $2/4 = 0.5$ and $0.5$. Means are $(1+3)/2 = 2$ and $(5+7)/2 = 6$. Gaps from each point's own class mean are $-1, 1, -1, 1$. Squared gaps sum to 4. Divide by $n = 4$ to get $\Sigma = 1$.
 
-Read it piece by piece:
-
-- $-\frac{d}{2}\log(2\pi)$ is a constant that only depends on the number of features.
-- $\log\det\Sigma$ is the log of the determinant of $\Sigma$. A wider cloud has a larger determinant, so each point in it is a little less likely.
-- $(x - \mu_k)^{\top}\Sigma^{-1}(x - \mu_k)$ is the **Mahalanobis distance** squared. It is the squared distance from $x$ to the centre, measured in units of the cloud's spread. Far points get a large number, so a very negative log density.
-
-### Compute it without inverting the matrix
-
-Inverting $\Sigma$ is slow and loses accuracy. Instead, use the **Cholesky factor**: a lower-triangular matrix $L$ with $L L^{\top} = \Sigma$. Two facts make it useful:
-
-- If you solve $L z = x - \mu_k$ for $z$, then the Mahalanobis term equals $z^{\top} z$, the plain sum of squares of $z$.
-- $\log\det\Sigma = 2\sum_i \log L_{ii}$, twice the sum of the logs of the diagonal of $L$.
-
-In numpy and scipy, for all $n$ points at once:
-
-```python
-L = cholesky(cov, lower=True)                         # (d, d)
-log_det = 2.0 * np.sum(np.log(np.diag(L)))
-z = solve_triangular(L, (X - means[k]).T, lower=True) # (d, n)
-maha = np.sum(z**2, axis=0)                           # (n,)
-```
-
-## Fit the model: counting and averaging
-
-Fitting GDA needs no gradient descent. The **maximum likelihood estimates**, the parameters that make the training data most probable, are plain averages. Write $n_k$ for the number of training points in class $k$.
+Those are the *maximum likelihood estimates*:
 
 $$
 \pi_k = \frac{n_k}{n}, \qquad
@@ -106,48 +80,41 @@ $$
 \Sigma = \frac{1}{n}\sum_{i=1}^{n}(x_i - \mu_{y_i})(x_i - \mu_{y_i})^{\top} .
 $$
 
-Read them aloud:
+$n_k$ is the class count. Divide $\Sigma$ by $n$, not by $n - 1$ or $n_k$. The four points return $\pi = 0.5$, means 2 and 6, and $\Sigma = 1$.
 
-- The prior is the fraction of training points in class $k$.
-- The mean is the average of the points in class $k$.
-- The **pooled covariance** subtracts from every point the mean of its own class, then averages the outer products over all $n$ points. It divides by $n$, not by $n - 1$ and not by $n_k$.
+Numpy adds `diff.T @ diff` for `diff = X[y == k] - means[k]`, then divides by `n` once.
 
-> [!KEY]
-> Fitting GDA is counting and averaging, with no gradient descent. Priors are class fractions, means are class averages, and the pooled covariance divides by $n$.
-
-In numpy, for each class:
-
-```python
-mask = y == k
-priors[k] = mask.sum() / n
-means[k] = X[mask].mean(axis=0)
-diff = X[mask] - means[k]
-cov += diff.T @ diff      # add this class's sum; divide by n once at the end
-```
+The usual mistake is dividing by $n - 1$, by $n - K$, or by each $n_k$.
 
 > [!WARNING]
-> Subtract each point's own class mean, not the overall mean of `X`. The overall mean mixes the distance between the class centres into the spread, and the covariance comes out too big.
+> Subtract each point's own class mean. The overall mean folds the gap between centres into the spread, and $\Sigma$ comes out too big.
 
-### A worked example
+> [!KEY]
+> Fitting GDA is counting and averaging. The pooled covariance divides by $n$.
 
-Take one feature ($d = 1$) and four points. Class 0 has $x = 1$ and $x = 3$. Class 1 has $x = 5$ and $x = 7$.
+The log density at a point $x$ is
 
-- Priors: $\pi_0 = 2/4 = 0.5$ and $\pi_1 = 0.5$.
-- Means: $\mu_0 = (1 + 3)/2 = 2$ and $\mu_1 = (5 + 7)/2 = 6$.
-- Covariance: the differences from each point's own class mean are $-1, 1, -1, 1$. Their squares add up to $4$. Divide by $n = 4$ to get $\Sigma = 1$.
+$$
+\log p(x \mid y = k) = -\frac{d}{2}\log(2\pi) - \frac{1}{2}\log\det\Sigma - \frac{1}{2}(x - \mu_k)^{\top}\Sigma^{-1}(x - \mu_k) .
+$$
 
-Now classify $x = 3$. The constant is $-\frac{1}{2}\log(2\pi) = -0.9189$, and $\log\det\Sigma = 0$.
+The last term is squared *Mahalanobis distance*. A larger $\det\Sigma$ means a wider cloud.
 
-| Class | Mahalanobis term | Log density | Plus $\log\pi_k = -0.6931$ |
-|---|---|---|---|
-| 0 | $(3-2)^2 = 1$ | $-0.9189 - 0.5 = -1.4189$ | $-2.1121$ |
-| 1 | $(3-6)^2 = 9$ | $-0.9189 - 4.5 = -5.4189$ | $-6.1121$ |
+At $x = 3$ and $d = 1$, the constant is $-\frac12\log(2\pi) \approx -0.9189$, and $\log\det\Sigma = 0$. Class 0 has distance $1$, so the log density is $-0.9189 - 0.5 = -1.4189$. Class 1 has distance $9$, so $-0.9189 - 4.5 = -5.4189$. Add $\log 0.5 \approx -0.6931$ to get $-2.1121$ and $-6.1121$.
 
-The log-sum-exp of the last column is $-2.1121 + \log(1 + e^{-4}) = -2.0939$. Subtract it to get log posteriors of $-0.0181$ for class 0 and $-4.0181$ for class 1. As probabilities, that is $0.982$ and $0.018$. The point at $x = 3$ is almost certainly class 0.
+Do not invert $\Sigma$. A lower-triangular *Cholesky factor* $L$ satisfies $L L^{\top} = \Sigma$. Solving $L z = x - \mu_k$ makes the Mahalanobis term $z^{\top} z$. And $\log\det\Sigma = 2\sum_i \log L_{ii}$.
 
-## GDA is logistic regression in disguise
+Here $\Sigma = 1$, so $L = 1$, $z = x - \mu_k$, and class 0 has $z^2 = 1$. That is the same $-1.4189$.
 
-With two classes and a shared covariance, something neat happens. When you take the log of the posterior ratio, the quadratic parts $x^{\top}\Sigma^{-1}x$ from the two classes are identical and cancel. What is left is linear in $x$. So the posterior is a sigmoid of a linear score:
+Numpy calls `cholesky` and `solve_triangular`.
+
+The usual mistake is dropping the $1/2$ on the Mahalanobis term. Unlike the $d$ term, it does not cancel across classes.
+
+The log-sum-exp of $-2.1121$ and $-6.1121$ is about $-2.0939$. Probabilities are about 0.982 and 0.018, so $x = 3$ is class 0.
+
+## Turn two classes into logistic regression
+
+With two classes and one shared $\Sigma$, the quadratic pieces $x^{\top}\Sigma^{-1}x$ cancel. The posterior is a sigmoid of a straight score:
 
 $$
 p(y = 1 \mid x) = \sigma(w^{\top}x + b), \qquad
@@ -155,120 +122,130 @@ w = \Sigma^{-1}(\mu_1 - \mu_0), \qquad
 b = \log\frac{\pi_1}{\pi_0} - \frac{1}{2}\mu_1^{\top}\Sigma^{-1}\mu_1 + \frac{1}{2}\mu_0^{\top}\Sigma^{-1}\mu_0 .
 $$
 
-Read it aloud:
+$w$ runs from $\mu_0$ to $\mu_1$, with less weight on a wide direction. The bias holds the log prior ratio and the two centre terms.
 
-- The weight vector points from the class 0 centre to the class 1 centre, adjusted by the inverse covariance so that directions with a lot of spread count for less.
-- The bias has three parts: the log of how much more common class 1 is, minus half of class 1's centre measured through $\Sigma^{-1}$, plus half of class 0's.
+On the four points, $w = 4$ and $b = 0 - 18 + 2 = -16$. At $x = 3$ the score is $-4$, and $\sigma(-4) \approx 0.018$, the class-1 posterior. At $x = 4$ the score is 0 and the probability is 0.5.
 
-In numpy:
+Numpy is `np.linalg.inv(cov) @ (mu1 - mu0)` for $w$.
 
-```python
-P = np.linalg.inv(cov)                     # fine here: d is small, done once
-w = P @ (mu1 - mu0)
-b = np.log(pi1 / pi0) - 0.5 * mu1 @ P @ mu1 + 0.5 * mu0 @ P @ mu0
-```
-
-Check it on the worked example. $w = (6 - 2)/1 = 4$ and $b = 0 - 0.5 \cdot 36 + 0.5 \cdot 4 = -16$. At $x = 3$ the score is $4 \cdot 3 - 16 = -4$, and $\sigma(-4) = 0.018$. That matches the class 1 posterior from the table. At $x = 4$, halfway between the centres, the score is 0 and the probability is exactly 0.5.
+The usual mistake is `means[0] - means[1]`, because $w$ must use $\mu_1 - \mu_0$.
 
 > [!KEY]
-> With two classes and a shared covariance, GDA's posterior is a sigmoid of a linear score. It draws the same kind of straight boundary as logistic regression.
+> Two classes and one shared covariance make GDA a logistic regression. The boundary is a straight cut.
 
-If each class had its own covariance, the quadratic parts would not cancel. The boundary would then curve, and you would get quadratic discriminant analysis. This lesson only uses the shared version.
+Separate covariances leave a curve, called quadratic discriminant analysis. This lesson shares one covariance.
 
-## Naive Bayes
+## Drop the covariance with naive Bayes
 
-A $d \times d$ covariance gets huge when $d$ is large. With 10,000 words as features, it has 100 million entries. **Naive Bayes** avoids it by assuming that, once you know the class, every feature is independent of every other. This is called **conditional independence**. The density of $x$ then becomes a product of one small density per feature, and its log is a sum.
+Ten thousand words make a covariance of about $10^8$ entries. *Naive Bayes* treats features as independent given the class, so the log density is a sum. The assumption is often false and the probabilities too sharp, but the class ranking is often still useful.
 
-The assumption is usually false. The words "free" and "prize" appear together in spam far more than chance would predict. Naive Bayes still ranks classes well in practice, even though its probabilities come out overconfident.
-
-### Gaussian naive Bayes
-
-For continuous features, give each class and each feature its own one-dimensional Gaussian. You need a mean and a variance for every (class, feature) pair:
+For continuous features, each class and feature gets its own one-dimensional Gaussian:
 
 $$
 \mu_{kj} = \text{mean of feature } j \text{ over class } k, \qquad
 \sigma^2_{kj} = \frac{1}{n_k}\sum_{i:\, y_i = k}(x_{ij} - \mu_{kj})^2 .
 $$
 
-The variance divides by $n_k$, the class size. That is what `np.var` does by default. Unlike GDA, nothing is shared: each class gets its own spread. If a feature is constant inside a class, its variance is zero, and dividing by it later breaks. So you raise every variance to at least a small floor:
+On class 0, with values 1 and 3, the mean is 2 and the sum of squared gaps is 2. Divide by $n_k = 2$ to get variance 1. Dividing by $n = 4$ gives the wrong 0.5. `np.var` divides by $n_k` by default. A constant feature has variance 0, so you floor every variance.
 
-```python
-means[k] = X[mask].mean(axis=0)
-variances[k] = np.maximum(X[mask].var(axis=0), var_floor)
-```
+Numpy is `np.maximum(X[y == k].var(axis=0), var_floor)`.
 
-### Word-count naive Bayes and Laplace smoothing
+The usual mistake is `ddof=1`, which divides by $n_k - 1$.
 
-For text, each example is a row of word counts over a vocabulary of $V$ words. The multinomial model gives each class $k$ a probability $\theta_{kj}$ for each word $j$. Write $c_{kj}$ for the total count of word $j$ across all class $k$ documents. The raw estimate is $c_{kj}$ divided by the total word count of the class.
-
-That raw estimate has a trap. A word that never appeared in class $k$ gets probability zero. One such word in a test email sends the log score to minus infinity, no matter how strong the other evidence is. **Laplace smoothing** fixes this by pretending you saw every word $\alpha$ extra times:
+Each text row is word counts over $V$ words. A count of 0 would zero the whole row's probability. *Laplace smoothing* adds $\alpha$ to every word:
 
 $$
 \theta_{kj} = \frac{c_{kj} + \alpha}{\sum_{j'} c_{kj'} + \alpha V} .
 $$
 
-Read it aloud: add $\alpha$ to every word's count in the class. The denominator is the new total, the old total plus $\alpha$ for each of the $V$ words. Each class's probabilities then add up to 1. The prior is the class fraction, as before.
+$c_{kj}$ is the total count of word $j$ in class $k$. The denominator adds $\alpha$ once per word.
 
-```python
-counts = X[mask].sum(axis=0)           # (V,) total counts for class k
-smoothed = counts + alpha
-log_theta[k] = np.log(smoothed / smoothed.sum())
-log_priors[k] = np.log(mask.sum() / n)
-```
+With $V = 3$ and $\alpha = 1$, counts $[2, 0, 1]$ become $[3, 1, 2]$, total 6, so $\theta_0 = [1/2, 1/6, 1/3]$. The unseen word gets $1/6$.
 
-Work a small example with $V = 3$ and $\alpha = 1$. Class 0 has two documents with counts $[2, 0, 1]$ and $[0, 0, 0]$. Summed, that is $[2, 0, 1]$. Add 1 to get $[3, 1, 2]$, which totals 6. So $\theta_0 = [0.5, 0.1667, 0.3333]$. Word 2 never appeared in class 0, yet it still gets probability $1/6$ instead of zero.
+Numpy is `np.log((counts + alpha) / (counts + alpha).sum())`.
+
+The usual mistake is adding $\alpha$ only in the denominator, or smoothing each row before the sum.
 
 > [!KEY]
-> Laplace smoothing adds $\alpha$ to every word count before you normalise. No word ever gets probability zero, so one unseen word can't wipe out all the other evidence.
+> Laplace smoothing adds $\alpha$ to every count before you normalise. No word gets probability 0.
 
-## When the generative model wins
+## See when the extra picture helps
 
-GDA uses more information than logistic regression. It also models how $x$ is spread out, not just the boundary. When the data really is Gaussian with a shared covariance, that extra information pays off. GDA reaches a good boundary with fewer training examples.
+Move the point 7 out to 100. The class-1 mean jumps from 6 to $(5 + 100) / 2 = 52.5$, and the boundary moves with it. A logistic gradient only sees $p - y$. A point with probability 0.99 and label 1 contributes 0.01, so it barely pulls.
 
-When the assumption is wrong, the extra information misleads. A few far-away outliers drag the class means and blow up the covariance, because both are plain averages. GDA's boundary then settles in the wrong place, and more data does not fix it. Logistic regression only assumes the log-odds are linear, so it barely moves for a point already far on the correct side. The rule of thumb: with little data, trust the model whose assumptions you believe. With a lot of data, the less assuming model usually wins.
+If the clouds really share one Gaussian covariance, GDA reaches a good boundary with fewer rows. Outliers pull the averages, and more rows do not fix a wrong shape. With little data, trust the assumptions you believe. With many rows, fewer assumptions usually win.
+
+Keep these checks in mind:
 
 > [!RECAP]
-> - The log posterior is the log prior plus the log density, minus a log-sum-exp across the classes.
-> - GDA fits priors $n_k / n$, one mean per class, and one pooled covariance divided by $n$.
-> - With the Cholesky factor $L$, the Mahalanobis term is $z^{\top} z$ where $L z = x - \mu_k$, and $\log\det\Sigma = 2\sum_i \log L_{ii}$.
+> - The log posterior is the log prior plus the log density, minus a log-sum-exp across classes.
+> - GDA fits priors $n_k / n$, one mean per class, and one covariance divided by $n$.
+> - With Cholesky $L$, the Mahalanobis term is $z^{\top} z$ where $L z = x - \mu_k$, and $\log\det\Sigma = 2\sum_i \log L_{ii}$.
 > - For two classes, $w = \Sigma^{-1}(\mu_1 - \mu_0)$, and $b$ adds the log prior ratio to the two centre terms.
-> - Gaussian naive Bayes keeps a floored variance per class and feature. Word-count naive Bayes adds $\alpha$ to each count, then normalises each class.
+> - Gaussian naive Bayes floors a variance per class and feature. Word counts add $\alpha$, then normalise.
 
 ## Build it step by step
 
-Work through the functions in the order the checks test them.
+Build the five functions in the order the checks test them:
 
-1. **`fit_gda(X, y)`.** Takes `X` of shape `(n, d)` and integer labels `y` of shape `(n,)`. Returns `means` `(K, d)`, `cov` `(d, d)`, and `priors` `(K,)`. Get `K` as `int(y.max()) + 1`. Loop over classes with a boolean mask, use `.mean(axis=0)`, and add `diff.T @ diff` into `cov`. The most common mistake is dividing the covariance by `n - 1`, by `n - K`, or by each `n_k`. Divide the total once by `n`.
-2. **`gda_log_posterior(X, means, cov, priors)`.** Returns an `(n, K)` array of log posteriors. Factor once with `cholesky(cov, lower=True)`. For each class, call `solve_triangular` on `(X - means[k]).T`, square and sum over axis 0, and build the log density from the formula. Add `np.log(priors[k])`. Then subtract a stable log-sum-exp across axis 1: take the row maximum out before calling `np.exp`. The common mistake is forgetting the `-0.5 * log_det` or the $d/2 \log(2\pi)$ term. They cancel in the posterior, but a missing factor of 0.5 on the Mahalanobis term does not.
-3. **`gda_to_logistic(means, cov, priors)`.** Two classes only. Returns `w` of shape `(d,)` and `b` as a Python `float`. Use the formulas above directly. The common mistake is flipping the sign: `w` uses `means[1] - means[0]`, because the sigmoid gives the probability of class 1.
-4. **`fit_naive_bayes_gaussian(X, y, var_floor)`.** Returns `means` `(K, d)`, `variances` `(K, d)`, and `priors` `(K,)`. Use `.mean(axis=0)`, `.var(axis=0)`, and `np.maximum` with the floor. The common mistake is using `ddof=1`. Keep the default, which divides by $n_k$.
-5. **`fit_naive_bayes_multinomial(X, y, alpha)`.** Returns `log_theta` `(K, V)` and `log_priors` `(K,)`. Sum counts with `.sum(axis=0)` over the class's rows, add `alpha`, normalise, then take `np.log`. The common mistake is smoothing each document before summing, or adding `alpha` only to the denominator.
+1. **`fit_gda(X, y)`**. Takes `X` of shape `(n, d)` and integer labels `y` of shape `(n,)`. Returns `means` `(K, d)`, `cov` `(d, d)`, and `priors` `(K,)`. Set `K = int(y.max()) + 1`. The common mistake is dividing the covariance by anything other than `n`. One class adds this block:
+
+```python
+means[k] = X[mask].mean(axis=0)   # shape (d,)
+cov += diff.T @ diff               # shape (d, d), divide by n at the end
+```
+
+2. **`gda_log_posterior(X, means, cov, priors)`**. Returns shape `(n, K)`. Factor once with `cholesky(cov, lower=True)`, solve `(X - means[k]).T`, and subtract a row log-sum-exp. The common mistake is a missing $1/2$ on the Mahalanobis term. One class looks like this:
+
+```python
+z = solve_triangular(L, (X - means[k]).T, lower=True)  # shape (d, n)
+maha = np.sum(z ** 2, axis=0)                           # shape (n,)
+```
+
+3. **`gda_to_logistic(means, cov, priors)`**. Two classes only. Returns `w` of shape `(d,)` and `b` as a Python float. The common mistake is swapping the class means. The weight uses this difference:
+
+```python
+w = np.linalg.inv(cov) @ (means[1] - means[0])  # shape (d,)
+```
+
+4. **`fit_naive_bayes_gaussian(X, y, var_floor)`**. Returns `means` `(K, d)`, `variances` `(K, d)`, and `priors` `(K,)`. Use `.var(axis=0)` and `np.maximum` with the floor. The common mistake is `ddof=1`. One class looks like this:
+
+```python
+variances[k] = np.maximum(X[mask].var(axis=0), var_floor)  # shape (d,)
+```
+
+5. **`fit_naive_bayes_multinomial(X, y, alpha)`**. Takes counts `X` of shape `(n, V)`. Returns `log_theta` `(K, V)` and `log_priors` `(K,)`. Sum the class rows, add `alpha`, divide by the new total, and take `np.log`. The common mistake is smoothing each row before the sum. One class looks like this:
+
+```python
+smoothed = X[mask].sum(axis=0) + alpha          # shape (V,)
+log_theta[k] = np.log(smoothed / smoothed.sum())
+```
 
 ## Cost and scaling
 
-Every estimate is a single pass of averaging, so fitting is fast. The table uses $n$ training points, $d$ features, $K$ classes, and $m$ query points.
+Times below use $n$ rows, $d$ features, $K$ classes, and $m$ queries:
 
 | Step | Time | Memory |
 |---|---|---|
-| Fit GDA | grows with $n d^2$ (one outer product per point) | $K d + d^2$ |
-| Predict with GDA | $d^3$ once to factor, then $m K d^2$ | $d^2$ |
-| Fit Gaussian naive Bayes | grows with $n d$ | $K d$ |
-| Fit word-count naive Bayes | grows with the number of nonzero counts | $K V$ |
+| Fit GDA | grows like $n d^2$ | $Kd + d^2$ |
+| Predict with GDA | $d^3$ once, then $m K d^2$ | $d^2$ |
+| Fit Gaussian naive Bayes | grows like $n d$ | $Kd$ |
+| Fit word-count naive Bayes | grows like the nonzero counts | $KV$ |
 
-GDA's cost is dominated by the $d \times d$ covariance. Doubling the features makes it four times as big and eight times as slow to factor. Naive Bayes never builds that matrix, which is why it handles vocabularies of tens of thousands of words.
+Doubling $d$ makes the factor about eight times slower. Naive Bayes never builds that matrix.
 
 ## Where this breaks
 
-**Features that are not bell-shaped.** Skewed or categorical features break the Gaussian assumption. Transform the features, such as taking a log of a skewed quantity, or use a naive Bayes model that suits the feature type.
+**Features that are not bell-shaped.** Skew or categories break the Gaussian. Take a log, or switch to a matching naive Bayes model.
 
-**A covariance that cannot be factored.** When $d$ gets close to the number of training points, the covariance becomes singular and the Cholesky factor fails. Add a small multiple of the identity matrix to `cov`. This is the same trade that ridge regression makes.
+**A covariance you cannot factor.** When $d$ nears $n$, Cholesky fails. Add a small multiple of the identity to `cov`.
 
-**Correlated features in naive Bayes.** Copy a feature twice, and naive Bayes counts its evidence twice. The probabilities get more extreme and the boundary shifts. Remove near-duplicate features before fitting.
+**Copied features.** Naive Bayes counts a duplicated column twice, and the probabilities get sharper. Drop near-duplicates first.
 
-**Outliers.** Means and covariances are averages, so one extreme point pulls them hard. The last check in the exercise shows GDA losing to logistic regression for exactly this reason. Remove outliers or use a discriminative model.
+**Outliers.** One extreme row pulls the averages. The last check shows GDA losing to logistic regression. Drop the row, or use a discriminative model.
 
 ## The exercise
 
-You build shared-covariance GDA from scratch, then both kinds of naive Bayes. Implement `fit_gda` to return the class means, pooled covariance, and priors. Implement `gda_log_posterior` to return log posteriors computed through a Cholesky factor. Implement `gda_to_logistic` to return the logistic `w` and `b` for a two-class model. Then implement `fit_naive_bayes_gaussian` and `fit_naive_bayes_multinomial`.
+You implement `fit_gda`, `gda_log_posterior`, `gda_to_logistic`, `fit_naive_bayes_gaussian`, and `fit_naive_bayes_multinomial`.
 
-The checks confirm output shapes and that the priors sum to one. They compare your estimates against a direct computation, and check that each row of your log posterior exponentiates to a valid distribution matching an independent Gaussian density. They confirm that your logistic `w` and `b` reproduce GDA's decisions to machine precision, and that Laplace smoothing normalises every row. The last two checks show GDA beating logistic regression on Gaussian data, and losing once outliers break the assumption.
+The checks confirm shapes, priors that sum to 1, and estimates that match a direct maximum likelihood computation. They check that each log-posterior row exponentiates to a distribution and matches an independent Gaussian density. They check that `w` and `b` reproduce GDA's decisions, and that Laplace smoothing normalises every row. The last checks show GDA beating logistic regression on Gaussian data, and losing once outliers break that assumption.

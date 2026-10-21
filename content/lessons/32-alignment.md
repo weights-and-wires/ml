@@ -17,374 +17,235 @@ exercise: 32-alignment
 
 # Alignment: reward models, PPO, and DPO
 
-Pretraining teaches a model to predict the next word of internet text.
-Supervised fine-tuning then teaches it to copy example answers that people
-wrote. Both copy a target. Neither ever learns that one answer is *better*
-than another. A thorough answer and a curt one that start the same way look
-alike to a copying objective.
+Pretraining predicts the next word. Supervised fine-tuning copies answers people wrote. Both copy a target. A careful answer and a short one that start the same way look alike to that loss.
 
-People struggle to write the perfect answer, but they're good at comparing
-two. "Answer A is better than answer B" is cheap to collect and fairly
-reliable. This lesson turns comparisons like that into a training signal.
+People struggle to write one perfect answer. They can say which of two answers they prefer. "B is better than A" is cheap to collect.
 
-You build three pieces. A reward model learns a score from comparisons. A
-closed-form rule says what the best policy looks like if you want high
-reward without drifting far from the original model. DPO then trains toward
-that best policy directly, with no sampling loop. PPO, the older method, is
-described in words.
+A policy is the model used as a rule that gives each answer a probability. You turn preferences into a reward, then into a loss. You compute one comparison probability, the best policy on a leash, and direct preference optimisation (DPO), which trains that policy with no sampling loop. Proximal policy optimisation (PPO) is the older loop, and it stays in words.
 
 ## What you already know
 
-- Supervised fine-tuning minimises cross-entropy against a fixed target
-  answer.
-- The sigmoid $\sigma(z) = 1 / (1 + e^{-z})$ squashes any number into a
-  probability between 0 and 1.
-- A log-probability is the logarithm of a probability. It's always zero or
-  negative.
-- A softmax turns a vector of scores into probabilities that sum to one.
-- LoRA makes it cheap to keep several fine-tuned copies of one model in
-  memory.
+This lesson uses five ideas from earlier work:
 
-In this lesson, a *policy* is the language model viewed as a rule for picking
-answers. $\pi(y \mid x)$ is the probability the policy gives answer $y$ to
-prompt $x$.
+- Supervised fine-tuning minimises cross-entropy against a fixed answer.
+- A sigmoid squashes any real number into a value between 0 and 1.
+- A softmax turns scores into probabilities that sum to one.
+- LoRA keeps several fine-tuned copies of one model cheaply in memory.
+- A loss you can differentiate gives a direction for each trained number.
 
-## Learn a reward from comparisons
+## Start from one preference
 
-Think of chess ratings. You never see a player's "true skill", only who beat
-whom. A rating system assigns each player a number so that the gap between
-two numbers predicts who wins. The Bradley-Terry model does the same for
-answers.
+A person reads two answers and says B is better than A. Give B reward 2 and A reward 0. The gap is 2.
 
-Suppose a reward $r$ scores each answer. The data is pairs: for each prompt, a
-*chosen* answer $y_w$ that a person preferred, and a *rejected* answer $y_l$.
-The model says the chance a person prefers the chosen one is
+The sigmoid $\sigma$ (sigma, pronounced SIG-muh) is $\sigma(z) = 1 / (1 + e^{-z})$. Here $e^{-2} \approx 0.1353$, so $1 + 0.1353 = 1.1353$ and $1 / 1.1353 \approx 0.8808$. The chance the preference picks B is about 0.881. A gap of 0 gives 0.5.
+
+This rule is the Bradley-Terry model. With $r_w$ the preferred reward and $r_l$ the other one,
 
 $$
 p(\text{chosen wins}) = \sigma(r_w - r_l)
 $$
 
-Read it as: take the reward gap, chosen minus rejected, and squash it with a
-sigmoid. A gap of 0 gives even odds, 0.5. A gap of 3 gives about 0.95.
+The probability is a sigmoid of the gap, preferred minus rejected. Rewards 2 and 0 give $\sigma(2) \approx 0.8808$ again. The usual mistake treats the raw gap as a probability.
 
-To train the reward, maximise the probability of the preferences you
-observed. As a loss to minimise, that's the average of the negative log over
-$n$ pairs:
+## Average the negative log
+
+Training uses many pairs. Preferred rewards `[2, 0]` and rejected rewards `[1, 1]` have gaps `[1, -1]`. Then $\sigma(1) = 0.7311$ and $\sigma(-1) = 0.2689$. The negative logs are 0.3133 and 1.3133. The mean is $(0.3133 + 1.3133) / 2 = 0.8133$. The wrong-way pair costs much more.
+
+A log probability is the logarithm of a probability, so it is zero or negative. The loss is the average of those negative logs:
 
 $$
 \text{loss} = \frac{1}{n} \sum_{i=1}^{n} -\log \sigma(z_i), \qquad z_i = r_{w,i} - r_{l,i}
 $$
 
-Read it as: for each pair, find the gap $z$, take minus the log of its
-sigmoid, and average. A big correct gap costs almost nothing. A big wrong gap
-costs about the size of the gap. Two numpy tricks keep this stable:
-$-\log \sigma(z) = \log(1 + e^{-z})$, and `np.log1p(x)` computes $\log(1 +
-x)$ accurately.
-
-```python
-z = reward_chosen - reward_rejected
-loss = np.mean(np.log1p(np.exp(-z)))   # fine for moderate z; see step 1
-```
+Average $-\log \sigma(z)$ over the pairs. A large correct gap costs almost nothing, and a large wrong gap costs about the size of the gap. Use `np.log1p(np.exp(-z))`. The two pairs give 0.8133 again.
 
 > [!WARNING]
-> When $z$ is large and negative, `np.exp(-z)` overflows to `inf`. For
-> `z < 0`, use the equal form $-z + \log(1 + e^{z})$ instead.
+> When $z$ is large and negative, `np.exp(-z)` overflows. For `z < 0`, use $-z + \log(1 + e^{z})$.
 
-### The gradient
+The usual mistake sums the pairs. Tied rewards, gap 0, give exactly $\log 2 \approx 0.6931$.
 
-The *gradient* tells you how the loss changes when you nudge each input. The
-derivative of $-\log \sigma(z)$ with respect to $z$ is $\sigma(z) - 1$. The
-loss is an average, so each pair's share carries a $1/n$. And $z$ goes up when
-$r_w$ goes up and down when $r_l$ goes up. So:
+> [!TIP]
+> Test equal rewards first. The loss on a tie is $\log 2$.
+
+## Push the chosen reward up
+
+A gradient says how much the loss changes when you nudge one input. The derivative of $-\log \sigma(z)$ in $z$ is $\sigma(z) - 1$, and the mean puts a $1/n$ on each pair:
 
 $$
 \frac{\partial\, \text{loss}}{\partial r_{w,i}} = \frac{\sigma(z_i) - 1}{n}, \qquad
 \frac{\partial\, \text{loss}}{\partial r_{l,i}} = -\frac{\sigma(z_i) - 1}{n}
 $$
 
-Read it as: $\sigma(z) - 1$ is always negative, so the loss falls when you
-raise the chosen reward. It's close to $-1$ when the pair is ranked wrong and
-close to 0 when it's already ranked right by a wide margin. Pairs the model
-already gets right barely move it.
+$\sigma(z) - 1$ is negative or zero, so raising the preferred reward lowers the loss. It is near $-1$ when the pair is ranked wrong, and near 0 when the margin is already wide. On the two pairs the preferred gradients are $[(0.7311 - 1) / 2,\ (0.2689 - 1) / 2] = [-0.1345,\ -0.3655]$. The rejected gradients flip the sign. The wrong pair gets the bigger push. The usual mistake forgets the $1/n$.
 
-### Worked example
-
-Two pairs: rewards chosen $[2, 0]$, rejected $[1, 1]$.
-
-- Gaps: $z = [1, -1]$
-- Sigmoids: $\sigma(1) = 0.7311$, $\sigma(-1) = 0.2689$
-- Per-pair loss: $-\log 0.7311 = 0.3133$ and $-\log 0.2689 = 1.3133$
-- Mean loss: $(0.3133 + 1.3133) / 2 = 0.8133$
-- Gradient for chosen: $[(0.7311 - 1)/2, (0.2689 - 1)/2] = [-0.1345,
-  -0.3655]$. For rejected, the same values with the sign flipped.
-
-The second pair, ranked wrong, gets the bigger push.
-
-> [!TIP]
-> Test the tied case first. Equal rewards give a gap of 0, so the loss should
-> be exactly $\log 2 \approx 0.6931$.
-
-### Only gaps matter
-
-The loss sees rewards only through differences. Add the same number to both
-answers for one prompt, and nothing changes. So the reward is fixed only up
-to a constant per prompt. That slack looks like a flaw here. DPO turns it into
-a feature.
+The loss sees only differences. Add one constant to both rewards for a prompt and nothing changes.
 
 > [!KEY]
-> The Bradley-Terry loss sees only the reward gap $r_w - r_l$. Adding the same
-> constant to both rewards for a prompt changes nothing.
+> The Bradley-Terry loss sees only the gap $r_w - r_l$. One constant added to both rewards for a prompt changes nothing.
 
-## Find the best policy on a leash
+## Reweight the reference policy
 
-A reward model alone isn't enough. If you push a policy to maximise it with
-no limits, the policy finds tricks that score well and read badly. This is
-called *reward hacking*. The fix is a leash: stay close to a *reference
-policy* $\pi_{\text{ref}}$, usually the supervised fine-tuned model, while
-chasing reward.
-
-The leash is measured with the KL divergence. For two probability lists $p$
-and $q$ over the same answers,
+Pushing reward with no limit raises answers that score well and read badly. That failure is reward hacking. The leash is a reference policy $\pi_{\text{ref}}$, usually the supervised model. The Greek letter $\pi$ (pi, pronounced PIE) names a policy. Distance from it is a KL divergence:
 
 $$
 \text{KL}(p \,\|\, q) = \sum_i p_i \log \frac{p_i}{q_i}
 $$
 
-Read it as: for each answer, weight the log of the ratio by $p$'s probability,
-and add up. It's 0 when $p$ and $q$ match and positive otherwise. Terms with
-$p_i = 0$ count as 0. In numpy: `np.sum(np.where(p > 0, p * np.log(p / q),
-0.0), axis=-1)`. For $p = [0.2, 0.3, 0.5]$ and $q = [0.1, 0.4, 0.5]$:
-$0.2 \log 2 + 0.3 \log 0.75 + 0 = 0.1386 - 0.0863 = 0.0523$.
+Add $p_i \log(p_i / q_i)$. A term with $p_i = 0$ counts as 0. For $p = [0.2, 0.3, 0.5]$ and $q = [0.1, 0.4, 0.5]$, the sum is $0.2 \log 2 + 0.3 \log 0.75 = 0.0523$. Mask with `np.where(p > 0, ...)`.
 
-The goal is to maximise average reward minus $\beta$ times this KL, where
-$\beta$ is a positive number you pick. Solving that with calculus gives an
-exact best policy:
+Maximise average reward minus $\beta$ times this KL. The Greek letter $\beta$ (beta, pronounced BEE-tuh) is a positive number you choose. The best policy is
 
 $$
 \pi^*(y \mid x) = \frac{\pi_{\text{ref}}(y \mid x) \exp(r(x, y) / \beta)}{Z(x)}
 $$
 
-Read it piece by piece:
+Multiply the reference probability by $\exp(r / \beta)$ and divide by $Z(x)$, the prompt's total. A softmax exponentiates scores and divides by their total. In logs this is a softmax of `ref_logprobs + rewards / beta`.
 
-- Start from the reference probability of each answer.
-- Multiply by $\exp(\text{reward} / \beta)$, which boosts high-reward answers.
-- Divide by $Z(x)$, the total of those products over all answers for this
-  prompt, so the result sums to one.
-
-With log-probabilities, that's a softmax of `ref_logprobs + rewards / beta`:
-
-```python
-logits = ref_logprobs + rewards / beta
-logits = logits - logits.max(axis=-1, keepdims=True)
-```
-
-$\beta$ is the length of the leash. When $\beta$ is huge, $r / \beta$ is near
-0 and $\pi^*$ equals the reference: the policy never moves. When $\beta$ is
-tiny, the best answer's boost dwarfs the rest and $\pi^*$ puts everything on
-the highest-reward answer: no leash at all.
+Reference probabilities `[0.5, 0.3, 0.2]`, rewards `[1, 0, 0]`, and $\beta = 1$ give boosts `[2.7183, 1, 1]` and products `[1.3591, 0.3, 0.2]`. Then $Z = 1.8591$ and $\pi^* = [0.7311,\ 0.1614,\ 0.1076]$. A huge $\beta$ keeps $\pi^*$ on the reference. A tiny $\beta$ puts the mass on the highest reward. The usual mistake normalises the whole array instead of `axis=-1`. Summing $Z(x)$ over every sentence is out of reach, which is why PPO and DPO exist.
 
 > [!KEY]
-> The best policy is the reference reweighted by $\exp(r / \beta)$. A large
-> $\beta$ keeps it close to the reference, and a small $\beta$ lets it chase
-> reward.
+> The best policy reweights the reference by $\exp(r / \beta)$. A large $\beta$ stays near the reference. A small $\beta$ chases reward.
 
-### Worked example
+> [!WARNING]
+> A term $0 \log 0$ in the KL sum is `nan` in numpy. Count that term as 0.
 
-Three answers with reference probabilities $[0.5, 0.3, 0.2]$, rewards $[1, 0,
-0]$, and $\beta = 1$:
+## Describe PPO without building it
 
-- Boosts: $[e^1, e^0, e^0] = [2.7183, 1, 1]$
-- Products: $[1.3591, 0.3, 0.2]$, total $Z = 1.8591$
-- $\pi^* = [0.7311, 0.1614, 0.1076]$
+PPO is reinforcement learning on the leash. The exercise leaves it in words.
 
-A real model can't compute $Z(x)$, because it would need to sum over every
-possible sentence. PPO and DPO are two ways around that.
+A rollout writes answers from the current policy and a frozen reward model scores them. It repeats after every update, on samples from that policy. A value head predicts the score of a partial answer. The advantage is how much better a token turned out than that prediction, and the update pushes on it.
 
-## PPO in words
+The clipped objective reuses one batch and caps each token's probability ratio, often to 0.8 through 1.2. The KL leash is a per-token penalty. Four models sit in memory: policy, value head, reward model, and reference. The usual mistake treats the clip as a decoding rule. It limits the training update.
 
-Proximal Policy Optimisation treats the problem as reinforcement learning. It
-needs several moving parts:
+## Train from the implicit reward
 
-- **A rollout loop.** Generate full answers from the current policy, one
-  token at a time, and score each with the frozen reward model. This is slow,
-  and it repeats after every update, because PPO learns from its own fresh
-  samples.
-- **A value head.** A second output predicts how much reward a partial answer
-  will end up with. It makes the learning signal less noisy.
-- **Advantages.** For each token, how much better it turned out than the
-  value head expected. This is what the update pushes on.
-- **A clipped objective.** PPO reuses each batch of samples for a few steps.
-  To stop one batch from moving the policy too far, it caps how much each
-  token's probability ratio against the sampling policy can change the
-  objective, to a range like 0.8 to 1.2.
+In words, the implicit reward of an answer is $\beta$ times how far the training policy's log probability sits above the reference log probability. The same prompt adds one extra piece to every answer, and that piece cancels in a comparison. That is why Bradley-Terry only needed gaps.
 
-The KL leash enters as a per-token penalty on the reward. PPO needs four
-models in memory: the policy, the value head, the reward model, and the
-reference.
-
-## DPO: skip the sampling
-
-Direct Preference Optimisation starts from the best-policy formula and runs
-it backwards. Solve it for the reward:
+Solving the best-policy formula for the reward gives
 
 $$
 r(x, y) = \beta \log \frac{\pi^*(y \mid x)}{\pi_{\text{ref}}(y \mid x)} + \beta \log Z(x)
 $$
 
-Read it as: the reward of an answer is $\beta$ times how much more likely the
-best policy makes it than the reference, plus a term that depends only on the
-prompt.
-
-Now plug that into the Bradley-Terry gap. Both answers share the prompt, so
-the $\beta \log Z(x)$ term appears in both rewards and cancels. That's the
-"only gaps matter" slack from earlier. What's left uses only
-log-probabilities the model can compute. Define the *implicit reward* of an
-answer under the policy being trained:
+The second term depends only on the prompt, so the gap drops it. The implicit reward is
 
 $$
 \hat{r} = \beta \left(\log \pi_\theta(y \mid x) - \log \pi_{\text{ref}}(y \mid x)\right)
 $$
 
-In numpy that's `beta * (policy_logps - ref_logps)`. The DPO loss is the
-Bradley-Terry loss applied to these implicit rewards:
+In code, `beta * (policy_logps - ref_logps)`. DPO is Bradley-Terry on these rewards:
 
 $$
 \text{DPO loss} = \frac{1}{n} \sum_{i=1}^{n} -\log \sigma(\hat{r}_{w,i} - \hat{r}_{l,i})
 $$
 
-Read it as: for each pair, compute how much the policy has raised the chosen
-answer relative to the reference, minus the same for the rejected answer,
-then apply the reward-model loss. There's no sampling, no reward model during
-training, and no value head. You need only the policy and a frozen copy of the
-reference.
-
-> [!KEY]
-> DPO is the Bradley-Terry loss applied to implicit rewards,
-> $\beta(\log \pi_\theta - \log \pi_{\text{ref}})$. The unknown $Z(x)$ cancels
-> in the gap, so you never sample and never need a reward model.
-
-### The gradient
-
-The chain rule adds one factor. $\hat{r}$ changes by $\beta$ for every unit
-change in the policy log-probability. So the gradient with respect to the
-policy's log-probabilities is $\beta$ times the Bradley-Terry gradient,
-evaluated at the implicit rewards:
+Training keeps the policy and a frozen reference. It does not sample, score with a reward model, or fit a value head. Because $\hat{r}$ moves by $\beta$ per unit of log probability, the gradient is
 
 $$
 \frac{\partial\, \text{loss}}{\partial \log \pi_\theta(y_{w,i})} = \beta \, \frac{\sigma(u_i) - 1}{n}, \qquad u_i = \hat{r}_{w,i} - \hat{r}_{l,i}
 $$
 
-The rejected answer gets the same value with the sign flipped. Read it as a
-per-example weight: pairs the policy still ranks wrong get a push near
-$\beta / n$. Pairs it already ranks right by a wide margin get almost none.
-Going downhill raises the chosen answer's log-probability and lowers the
-rejected one's.
+The rejected answer flips the sign. That factor is a per-example weight: near $\beta / n$ when the pair is still wrong, and near 0 when the margin is already wide.
 
-### Worked example
+Take $\beta = 0.1$, policy logs $-1$ and $-3$, and reference logs $-2$ for both. Implicit rewards are $0.1$ and $-0.1$. The gap is $0.2$, $\sigma(0.2) = 0.5498$, and the loss is $0.5981$. The preferred gradient is $0.1 \times (0.5498 - 1) = -0.0450$. The usual mistake drops $\beta$.
 
-One pair, $\beta = 0.1$. Policy log-probs: chosen $-1$, rejected $-3$.
-Reference log-probs: both $-2$.
+> [!KEY]
+> DPO is Bradley-Terry on implicit rewards, $\beta$ times a difference of log probabilities. The unknown $Z(x)$ cancels, so training skips sampling and skips a reward model.
 
-- Implicit rewards: $\hat{r}_w = 0.1 \times (-1 + 2) = 0.1$, and $\hat{r}_l =
-  0.1 \times (-3 + 2) = -0.1$
-- Gap: $u = 0.2$, and $\sigma(0.2) = 0.5498$
-- Loss: $-\log 0.5498 = 0.5981$
-- Gradient for chosen: $0.1 \times (0.5498 - 1) = -0.0450$. For rejected:
-  $+0.0450$
+> [!KEY]
+> The DPO gradient is a per-example weight. A pair still ranked wrong is pushed by about $\beta / n$. A pair already right by a wide margin barely moves.
 
 > [!RECAP]
-> - The Bradley-Terry loss is the mean of $-\log \sigma(r_w - r_l)$, and tied
->   rewards give $\log 2$.
-> - Its gradient for the chosen reward is $(\sigma(z) - 1) / n$. The rejected
->   reward gets the same value with the sign flipped.
-> - The best policy is a softmax of `ref_logprobs + rewards / beta` along each
->   row.
-> - KL sums $p \log(p / q)$ over the last axis, with $p_i = 0$ terms set to 0.
-> - DPO applies the Bradley-Terry loss to the implicit rewards, and its
->   gradient carries an extra factor of $\beta$.
+> Keep these five facts in front of you while you code:
+>
+> - The Bradley-Terry loss is the mean of $-\log \sigma(r_w - r_l)$. Tied rewards give $\log 2$.
+> - The preferred gradient is $(\sigma(z) - 1) / n$. The rejected gradient flips that sign.
+> - The best policy is a softmax of `ref_logprobs + rewards / beta` on each row.
+> - KL sums $p \log(p / q)$ on the last axis, and a term with $p_i = 0$ counts as 0.
+> - DPO runs Bradley-Terry on the implicit rewards, and the gradient carries an extra $\beta$.
 
 ## Build it step by step
 
-The checks test the functions in this order.
+The checks call your functions in this order:
 
-1. **`bradley_terry_loss(reward_chosen, reward_rejected)`.** Takes two `(n,)`
-   arrays, returns a float. Compute `z`, then $\log(1 + e^{-z})$. For large
-   negative `z`, `np.exp(-z)` overflows, so use `np.where` to switch to $-z +
-   \log(1 + e^{z})$ when `z < 0`. Common mistake: summing instead of
-   averaging. The checks expect $\log 2$ for tied rewards.
-2. **`bradley_terry_grad(reward_chosen, reward_rejected)`.** Returns two `(n,)`
-   arrays. Write your own stable sigmoid: for `z < 0` use `exp(z) / (1 +
-   exp(z))`. Common mistake: forgetting the `1 / n` from the mean. Finite
-   differences catch it.
-3. **`optimal_policy(ref_logprobs, rewards, beta)`.** Takes arrays of the same
-   shape, often `(prompts, answers)`. Returns probabilities of that shape,
-   each row summing to one. Use `axis=-1` and `keepdims=True` for the max and
-   the sum. Common mistake: normalising over the whole array instead of each
-   row.
-4. **`kl_divergence(p, q)`.** Sum over the last axis. Common mistake: letting
-   `0 * log(0)` produce `nan`. Mask it with `np.where`.
-5. **`implicit_reward(policy_logps, ref_logps, beta)`.** One line,
-   elementwise.
-6. **`dpo_loss(...)`.** Build both implicit rewards and pass them to your
-   `bradley_terry_loss`. Reusing it guarantees the first DPO check passes and
-   gives you the $Z(x)$ cancellation for free.
-7. **`dpo_grad(...)`.** Call `bradley_terry_grad` on the implicit rewards, then
-   multiply both results by `beta`. Common mistake: dropping the `beta`
-   factor. The last check runs 50 gradient steps and expects the loss to fall.
+1. `bradley_terry_loss(reward_chosen, reward_rejected)` takes two `(n,)` arrays and returns a float. For `z < 0`, switch to $-z + \log(1 + e^{z})$. The usual mistake sums. Ties must give $\log 2$:
+
+```python
+def bradley_terry_loss(reward_chosen, reward_rejected):
+    # mean of the stable -log sigmoid of the gap
+    return loss
+```
+
+2. `bradley_terry_grad(reward_chosen, reward_rejected)` returns two `(n,)` arrays. For `z < 0`, the sigmoid is `exp(z) / (1 + exp(z))`. The helper `_sigmoid` already does this. The usual mistake forgets `1 / n`:
+
+```python
+def bradley_terry_grad(reward_chosen, reward_rejected):
+    # (sigmoid(z) - 1) / n, and the negation
+    return grad_chosen, grad_rejected
+```
+
+3. `optimal_policy(ref_logprobs, rewards, beta)` returns row probabilities. Subtract the max and sum with `axis=-1` and `keepdims=True`. The usual mistake normalises the whole array:
+
+```python
+def optimal_policy(ref_logprobs, rewards, beta):
+    # softmax of ref_logprobs + rewards / beta
+    return probs
+```
+
+4. `kl_divergence(p, q)` sums on the last axis. The usual mistake lets `0 * log(0)` become `nan`:
+
+```python
+def kl_divergence(p, q):
+    # mask p == 0, then sum p * log(p / q)
+    return kl
+```
+
+5. `implicit_reward(policy_logps, ref_logps, beta)` is elementwise:
+
+```python
+def implicit_reward(policy_logps, ref_logps, beta):
+    # beta * (policy_logps - ref_logps)
+    return reward
+```
+
+6. `dpo_loss(policy_chosen_logps, policy_rejected_logps, ref_chosen_logps, ref_rejected_logps, beta)` passes the two implicit rewards to `bradley_terry_loss`:
+
+```python
+def dpo_loss(policy_chosen_logps, policy_rejected_logps,
+             ref_chosen_logps, ref_rejected_logps, beta):
+    # bradley_terry_loss on the implicit rewards
+    return loss
+```
+
+7. `dpo_grad` takes the same arguments and returns two `(n,)` arrays. Multiply `bradley_terry_grad` of the implicit rewards by `beta`. The usual mistake drops `beta`. Fifty steps must lower the loss:
+
+```python
+def dpo_grad(policy_chosen_logps, policy_rejected_logps,
+             ref_chosen_logps, ref_rejected_logps, beta):
+    # beta times the Bradley-Terry gradient
+    return grad_chosen, grad_rejected
+```
 
 ## Cost and scaling
 
-The methods differ in how many models they keep in memory and whether they
-generate text during training.
+The three stages compare as follows:
 
-| Stage | Models in memory | Generates text? | Work per training pair |
+| Stage | Models in memory | Generates text? | Work per pair |
 |---|---|---|---|
 | Reward model | 1 | No | One forward pass per answer |
-| PPO | 4: policy, value head, reward model, reference | Yes, every round | Token-by-token generation, plus scoring |
-| DPO | 2: policy and reference | No | One forward and backward pass per answer |
+| PPO | 4 | Yes, every round | Generation, then scoring |
+| DPO | 2 | No | One forward and backward pass per answer |
 
-PPO spends most of its time generating, which is slow because it's
-sequential. DPO costs about the same as supervised fine-tuning on twice as
-many answers. The exercise functions are all a few array operations over the
-batch, so they cost time proportional to $n$.
+Generation is sequential, so PPO spends most of its time there. DPO costs about as much as supervised fine-tuning on twice as many answers.
 
 ## Where this breaks
 
-**Reward hacking.** A reward model trained on a finite set of comparisons is
-wrong somewhere. PPO actively searches for those errors and finds answers
-that score well but read badly: repetitive, flattering, or gaming the format.
-The KL leash slows this but doesn't stop it. People retrain the reward model
-on fresh comparisons and stop training early.
+A reward model is wrong somewhere. PPO raises answers that score well and read badly: repetitive, flattering, or aimed at the format. The KL leash slows that, and training can still find it. People retrain the reward model on fresh comparisons and stop early.
 
-**Bias in the comparisons.** Both methods learn whatever the people comparing
-answers preferred, including their blind spots. Neither knows anything about
-prompts unlike the ones they saw.
-
-**Collapse at small beta.** The best-policy formula shows it: a short leash
-makes the policy nearly deterministic. Output becomes less varied and more
-sensitive to reward-model mistakes.
-
-**DPO lowering both answers.** DPO only needs the gap to grow. It can grow
-the gap by lowering the chosen answer's probability a little and the rejected
-one's a lot. Since rejected answers are often fluent, this can pull
-probability away from other good answers. People add a small supervised loss
-on the chosen answers to hold them up.
+Both methods learn the preferences they were given, including blind spots, and prompts outside that set have no signal. A small $\beta$ makes output nearly deterministic. DPO can grow the gap by lowering the preferred answer a little and the rejected answer a lot. A small supervised loss on the preferred answers holds them up.
 
 ## The exercise
 
-You build the losses and the best-policy rule from this lesson. Write
-`bradley_terry_loss` and `bradley_terry_grad` for the reward-model loss and
-its gradient, `optimal_policy(ref_logprobs, rewards, beta)` for $\pi^*$ over a
-short list of answers per prompt, and `kl_divergence(p, q)`. Then write
-`implicit_reward(policy_logps, ref_logps, beta)`, and `dpo_loss` and
-`dpo_grad` from the policy and reference log-probabilities of the chosen and
-rejected answers.
+`bradley_terry_loss` and `bradley_terry_grad` are the reward loss and its gradient. `optimal_policy(ref_logprobs, rewards, beta)` is $\pi^*$ on a short list of answers. `kl_divergence(p, q)` is the leash. `implicit_reward(policy_logps, ref_logps, beta)` is the DPO reward. `dpo_loss` and `dpo_grad` take policy and reference log probabilities for the preferred and rejected answers.
 
-The checks verify the Bradley-Terry loss at tied and widely separated
-rewards, both gradients against finite differences, and that `optimal_policy`
-matches the formula and reaches the reference for huge $\beta$ and the top
-answer for tiny $\beta$. They check KL against a hand computation, that
-`dpo_loss` equals `bradley_terry_loss` on the implicit rewards and ignores a
-shared shift of the reference log-probabilities, that `implicit_reward`
-recovers a planted reward up to a per-prompt constant, and that 50 DPO steps
-widen the gap and lower the loss.
+The checks cover tied rewards, wide gaps, finite-difference gradients, and the $\beta$ limits of `optimal_policy`. A shared shift of the reference logs leaves `dpo_loss` unchanged. Fifty DPO steps widen the gap and lower the loss.

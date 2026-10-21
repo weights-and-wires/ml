@@ -18,63 +18,35 @@ exercise: 26-the-transformer-block
 
 # The transformer block
 
-Self-attention lets tokens share information. On its own, though, it can only
-blend value vectors together. It never transforms any single token in a rich,
-nonlinear way. A transformer block pairs attention with a small neural network
-that works on each token separately. Think of a meeting: first everyone talks
-(attention), then each person goes back to their desk and thinks (the
-feed-forward network).
+Self-attention blends tokens. A block also runs a small network on each token alone.
 
-Two more pieces make these blocks stackable. A residual connection adds each
-step's output to its input, so information and gradients have a direct path
-through the stack. Layer norm keeps each token's numbers at a steady scale.
-With these, you can stack dozens of blocks and still train them.
+A residual add keeps a path around each sublayer, so a gradient, the slope of the loss, can travel straight back. Layer normalisation holds each token at a steady scale.
 
-The last piece is position. The previous lesson showed that attention can't
-tell word order. This lesson gives you two ways to fix that, and you build
-both.
+Attention still has no order. You mark where each token sits, in two ways, and you build the block.
 
 ## What you already know
 
-- Multi-head attention with a causal mask, from lesson 25.
-- Layer norm subtracts each row's mean, divides by its standard deviation, and
-  applies a learned gain and bias, from lesson 18.
-- A residual connection computes `x + f(x)` instead of `f(x)`, from lesson 21.
-- The sigmoid squashes any number into the range 0 to 1.
-- A rotation turns a 2D vector by an angle without changing its length.
+You already have these tools:
 
-## The block
+- Multi-head attention with a causal mask, from the previous lesson.
+- A residual connection returns `x + f(x)`.
+- Layer norm recentres each row and rescales it, from the norm lesson.
+- A dot product multiplies matching entries and adds them.
+- A softmax turns scores into positive weights that add up to one.
 
-Here is the whole block in two lines. $X$ is a $T \times d$ matrix, one row per
-token, where $T$ is the sequence length and $d$ is the model width:
+## One row, then a skip
 
-$$
-X' = X + \operatorname{Attn}(\operatorname{LN}_1(X)), \qquad
-X'' = X' + \operatorname{FFN}(\operatorname{LN}_2(X'))
-$$
+Take the row [1, 2, 3, 6]. The mean is (1 + 2 + 3 + 6) / 4 = 3. The squared gaps are 4, 1, 0, and 9. Their average, the variance, is 14 / 4 = 3.5. The Greek letter epsilon, written ε, is 10^{−5}. The root of 3.5 + ε is 1.8708.
 
-Read aloud: normalise $X$, run attention on it, and add the result back to
-$X$. Then normalise that, run the feed-forward network, and add again. This
-order is called **pre-norm**, because the norm comes before each sublayer.
+The centred entries divided by that root are (1 − 3) / 1.8708 = −1.0690 and (2 − 3) / 1.8708 = −0.5345. The other two are 0 and (6 − 3) / 1.8708 = 1.6036. With gain 1 and bias 0, that is the normalised row.
 
-```python
-x1 = x + attention(layer_norm(x, g1, b1)) @ Wo
-x2 = x1 + swiglu(layer_norm(x1, g2, b2), W_gate, W_up, W_down)
-```
-
-> [!WARNING]
-> Add each sublayer's output to the raw `x`, not to `layer_norm(x)`. If you add
-> it to the normalised copy, the clean residual path disappears.
-
-Layer norm works on each row by itself:
+This is layer normalisation. The Greek letter mu, written μ, is the row mean. Sigma-squared, σ², is the variance. The gain g and the bias b are learned vectors of length d:
 
 $$
 \operatorname{LN}(x) = \frac{x - \mu}{\sqrt{\sigma^2 + \epsilon}} \cdot g + b
 $$
 
-Read aloud: $\mu$ is the mean of the row, $\sigma^2$ is its variance (the
-average squared distance from the mean), and $\epsilon = 10^{-5}$ stops a
-divide by zero. The gain $g$ and bias $b$ are learned vectors of length $d$.
+Subtract the mean, divide by the root of variance plus epsilon, then apply g and b. With g = 1 and b = 0 you get the row you computed.
 
 ```python
 mu = x.mean(axis=-1, keepdims=True)
@@ -82,85 +54,70 @@ var = x.var(axis=-1, keepdims=True)
 out = (x - mu) / np.sqrt(var + 1e-5) * g + b
 ```
 
-For the row $[1, 2, 3, 6]$, the mean is 3 and the variance is 3.5. The
-normalised row is about $[-1.069, -0.535, 0, 1.604]$.
+The usual mistake is dividing the variance by the width minus one. Numpy's default divides by the width.
 
-### Why pre-norm
+Suppose attention returns [0.1, 0, 0, −0.1]. Added to the raw row, that is [1.1, 2, 3, 5.9]. The block norms, runs the sublayer, then adds. That order is pre-norm:
 
-The original transformer put the norm after the add. That puts a layer norm
-on the main path between every pair of blocks, and a gradient flowing back
-through 50 of them can shrink or blow up. Pre-norm keeps the main path clean:
-$X' = X + (\text{something})$. The "$X +$" part passes the gradient straight
-back, untouched, however deep the stack is.
+$$
+X' = X + \operatorname{Attn}(\operatorname{LN}_1(X)), \qquad
+X'' = X' + \operatorname{FFN}(\operatorname{LN}_2(X'))
+$$
+
+Normalise, run attention, and add to raw X. Normalise again, run the feed-forward net, and add. The residual plug-in is [1.1, 2, 3, 5.9]. If both output matrices are zero, the block returns X.
+
+```python
+x1 = x + attention(layer_norm(x, g1, b1))
+x2 = x1 + swiglu(layer_norm(x1, g2, b2), W_gate, W_up, W_down)
+```
+
+The usual mistake is adding the sublayer to the normalised copy. The skip then disappears.
+
+> [!WARNING]
+> Add each sublayer to the raw `x`, not to `layer_norm(x)`. The skip has to bypass the norm.
 
 > [!KEY]
-> In a pre-norm block, the "$X +$" path carries the gradient straight back
-> through every block. That clean path is what lets you stack dozens of them.
+> In a pre-norm block the plain `x +` path carries the gradient straight back, which is what lets you stack many blocks.
 
-There's a useful side effect. If both output projections, $W_O$ and
-$W_{\text{down}}$, are all zeros, each sublayer adds zero, and the block
-returns its input exactly. Your exercise checks this.
+## A faucet on the hidden units
 
-## The SwiGLU feed-forward network
+A plain feed-forward net is two matrices with a bend between them. SwiGLU adds a third matrix, a faucet on each hidden unit.
 
-A plain feed-forward network is two matrices with a nonlinearity between
-them. SwiGLU adds a gate: one projection decides how much of a second
-projection gets through, like a dimmer switch on each hidden unit.
+The bend is SiLU. The sigmoid squashes a number into 0 to 1, and SiLU multiplies the number by that sigmoid. For 1, e^{−1} = 0.3679, so the sigmoid is 1 / 1.3679 = 0.7311 and SiLU(1) = 0.7311.
 
-First, the nonlinearity. **SiLU** is $\operatorname{silu}(z) = z \cdot
-\operatorname{sigmoid}(z)$, where $\operatorname{sigmoid}(z) = 1 / (1 +
-e^{-z})$. It's close to $z$ for large positive $z$ and close to 0 for large
-negative $z$. For example, $\operatorname{silu}(1) = 0.7311$ and
-$\operatorname{silu}(-1) = -0.2689$.
+Take x = [1, 1], a gate column [1, 0], an up column [0, 2], and a down row [1, −1]. The gate sum is 1 × 1 + 1 × 0 = 1, and SiLU(1) = 0.7311. The up sum is 0 × 1 + 2 × 1 = 2. The product is 0.7311 × 2 = 1.4622. Times [1, −1] the output is [1.4622, −1.4622].
 
 $$
 \operatorname{SwiGLU}(x) = \big(\operatorname{silu}(x W_{\text{gate}}) \odot (x W_{\text{up}})\big)\, W_{\text{down}}
 $$
 
-Read aloud: project $x$ two ways, with $W_{\text{gate}}$ and $W_{\text{up}}$,
-each $d \times d_h$. Apply SiLU to the gate. Multiply the two results entry by
-entry (that's what $\odot$ means). Then project back down with
-$W_{\text{down}}$, which is $d_h \times d$.
+W_gate and W_up are d by d_h. SiLU hits only the gate. W_down is d_h by d. The same numbers give [1.4622, −1.4622].
 
 ```python
 gate = x @ W_gate
-silu = gate / (1 + np.exp(-gate))
-out = (silu * (x @ W_up)) @ W_down
+hidden = gate / (1.0 + np.exp(-gate)) * (x @ W_up)
+out = hidden @ W_down
 ```
 
-A worked example with $d = 2$ and $d_h = 1$: let $x = [1, 1]$,
-$W_{\text{gate}} = [1, 0]^{\top}$, $W_{\text{up}} = [0, 2]^{\top}$, and
-$W_{\text{down}} = [1, -1]$. The gate is 1, and $\operatorname{silu}(1) =
-0.7311$. The up projection is 2. Their product is 1.4621. The output is
-$[1.4621, -1.4621]$.
+The usual mistake is SiLU on the up projection as well as the gate.
 
-### Why two-thirds
-
-A plain network with hidden size $d_{\text{ff}}$ has two matrices, so
-$2 d \, d_{\text{ff}}$ weights. SwiGLU has three matrices, so $3 d \, d_h$. To
-keep the same number of weights, set them equal: $3 d_h = 2 d_{\text{ff}}$, so
+A plain net holds 2 d d_ff weights. SwiGLU holds 3 d d_h. Set them equal and d_h is two-thirds of d_ff. With d = 2 and d_ff = 6, both hold 24 weights: 2 × 2 × 6 = 24 and 3 × 2 × 4 = 24. At d_ff = 4d and d = 64, d_h = round(512 / 3) = 171.
 
 $$
 d_h = \tfrac{2}{3} d_{\text{ff}}
 $$
 
-With the usual $d_{\text{ff}} = 4d$, a model with $d = 64$ has
-$d_{\text{ff}} = 256$ and $d_h \approx 171$. That's why SwiGLU configs have
-odd-looking hidden sizes.
+In the exercise, `d_h = round(2 * d_ff / 3)`.
 
 > [!KEY]
-> SwiGLU has three matrices instead of two. Shrinking its hidden width to
-> $\tfrac{2}{3} d_{\text{ff}}$ keeps the weight count the same as a plain
-> feed-forward network.
+> SwiGLU has three matrices. A hidden width of two-thirds d_ff keeps the same weight count as a plain feed-forward net.
 
-## Telling the model where a token is
+## A clock for each position
 
-### Sinusoidal encodings
+The first position mark is a fixed fingerprint added to each token. At position 0 and width 4, every angle is 0, so the row is [0, 1, 0, 1].
 
-The original fix adds a fixed "position fingerprint" vector to each token's
-embedding. The fingerprint is a set of sine and cosine waves at different
-speeds, like the hands of a clock: a fast hand for fine detail and slow hands
-for the big picture.
+The fast frequency is 1. The slow one is 10000^{−1/2} = 0.01. Position 1 is [sin 1, cos 1, sin 0.01, cos 0.01] = [0.8415, 0.5403, 0.0100, 0.99995]. One step turns the fast pair by 1 radian and the slow pair by 0.01, at every position.
+
+The Greek letter omega, written ω, is that frequency. This fingerprint is a sinusoidal position encoding:
 
 $$
 \omega_i = 10000^{-2i/d}, \qquad
@@ -168,57 +125,36 @@ $$
 \operatorname{PE}(p)_{2i+1} = \cos(p\,\omega_i)
 $$
 
-Read aloud: for $i = 0, 1, \dots, d/2 - 1$, frequency $\omega_i$ starts at 1
-and shrinks geometrically. At position $p$, even column $2i$ holds the sine
-of $p$ times that frequency, and odd column $2i+1$ holds the cosine.
+For i from 0 to d/2 − 1, ω starts at 1 and shrinks. Even columns are sines and odd columns are cosines. Those two rows are the plug-in.
 
 ```python
-omega = 10000.0 ** (-2 * np.arange(d // 2) / d)   # (d/2,)
-angles = np.arange(T)[:, None] * omega[None, :]   # (T, d/2)
+omega = 10000.0 ** (-2 * np.arange(d // 2) / d)
+angles = np.arange(T)[:, None] * omega[None, :]
 pe[:, 0::2], pe[:, 1::2] = np.sin(angles), np.cos(angles)
 ```
 
+The usual mistake is sines in the first half and cosines in the second half. That layout is for RoPE.
+
 > [!WARNING]
-> Here sines go in the even columns and cosines in the odd columns. RoPE,
-> later in this lesson, uses a different layout with two halves side by side.
-> Don't mix the two.
-
-Try $T = 2$ and $d = 4$. The frequencies are $\omega_0 = 1$ and $\omega_1 =
-10000^{-1/2} = 0.01$. Row 0 is $[0, 1, 0, 1]$. Row 1 is
-$[\sin 1, \cos 1, \sin 0.01, \cos 0.01] = [0.8415, 0.5403, 0.0100, 0.99995]$.
-
-Each sine and cosine pair is a point on a circle. Moving $k$ positions turns
-every point by a fixed angle $k\,\omega_i$. So the encoding at $p + k$ is the
-same rotation of the encoding at $p$, for every $p$. A linear layer can learn
-that rotation, which lets the model reason about "three tokens back".
+> Sinusoidal encodings interleave sine and cosine. RoPE splits the vector into two halves. Do not mix the layouts.
 
 > [!KEY]
-> Moving $k$ positions turns every sine and cosine pair by the same angle. So
-> the step from $p$ to $p + k$ is one fixed linear map, wherever $p$ is.
+> A shift of k positions turns every sine and cosine pair by k times its frequency, so one linear map works at every position.
 
-### Rotary position embeddings
+## A turn of the query and the key
 
-Rotary embeddings (RoPE) use the same clock idea, but they rotate the queries
-and keys instead of adding to the input. Here's why that's clever. If you turn
-the query by the angle for position $m$ and the key by the angle for position
-$n$, their dot product only feels the difference between the two angles. The
-score depends on the distance $n - m$, not on where the pair sits.
+RoPE turns the queries and the keys with the same clock. The Greek letter theta, written θ, is the base, 10000. Frequencies are θ^{−2j/d}, with d the head width.
 
-The code uses the "rotate-half" layout. Split a vector's last axis into two
-halves $x_1$ and $x_2$. Entry $j$ of $x_1$ pairs with entry $j$ of $x_2$, and
-each pair is rotated by its own angle:
+Width 2 has one frequency, 1. Turn q = [1, 0] at position 1. cos 1 = 0.5403 and sin 1 = 0.8415, repeated on both halves. Rotate-half of [1, 0] is [0, 1]. The output is [0.5403, 0] + [0, 0.8415] = [0.5403, 0.8415]. The length is 0.5403² + 0.8415² = 1.000.
+
+At position 0 the same vector stays [1, 0], and its dot with the position-1 vector is 0.5403. At position 2 the key is [cos 2, sin 2] = [−0.4161, 0.9093]. Then 0.5403 × (−0.4161) + 0.8415 × 0.9093 = −0.2248 + 0.7652 = 0.5404. The score matches the distance 1.
 
 $$
 \operatorname{RoPE}(x) = x \odot \cos + \operatorname{rotate\_half}(x) \odot \sin,
 \qquad \operatorname{rotate\_half}(x) = [-x_2,\; x_1]
 $$
 
-Read aloud: multiply $x$ entry by entry by a table of cosines, then add the
-rotated-half vector times a table of sines. The cosine and sine tables hold
-angle $m\,\omega_j$ for position $m$, and each frequency appears twice, once
-for each half, so the tables have the same width as $x$. The RoPE frequencies
-are $\omega_j = \theta^{-2j/d}$ with $\theta = 10000$, the same formula as
-above, where $d$ is the head width.
+Each frequency is stored twice, so the tables match the width of x. Turn queries and keys only.
 
 ```python
 half = x.shape[-1] // 2
@@ -226,125 +162,62 @@ rot = np.concatenate([-x[..., half:], x[..., :half]], axis=-1)
 out = x * cos + rot * sin
 ```
 
-A worked example with $d = 2$: the only frequency is $\omega_0 = 1$. Rotate
-$q = [1, 0]$ at position $m = 1$. The tables are $\cos = [0.5403, 0.5403]$ and
-$\sin = [0.8415, 0.8415]$. $\operatorname{rotate\_half}(q) = [0, 1]$. So the
-output is $[0.5403, 0] + [0, 0.8415] = [0.5403, 0.8415]$. Its length is
-still 1, as a rotation must keep it.
-
-Inside the block, you build the tables for every position once:
-
-```python
-angles = np.arange(T)[:, None] * rope_frequencies(d_head)[None, :]  # (T, d_head/2)
-cos = np.concatenate([np.cos(angles), np.cos(angles)], axis=-1)      # (T, d_head)
-```
+The usual mistake is `[x2, −x1]`, which turns the other way and breaks the distance match.
 
 > [!TIP]
-> Build the $(T, d_{\text{head}})$ cosine and sine tables once. They broadcast
-> against a `(heads, T, d_head)` array, so one call rotates every head.
-
-Then apply RoPE to each head's queries and keys, never to the values.
+> Build the `(T, d_head)` cosine and sine tables once. They broadcast over a `(heads, T, d_head)` stack, so one call turns every head.
 
 > [!KEY]
-> RoPE turns each query and key by the angle for its own position. Their dot
-> product then depends only on the distance between the two tokens.
+> RoPE turns each query and each key by its own position. Their dot product then depends only on the distance between the tokens.
 
-### Two other options, in words
+A learned table stops at its length. ALiBi stores no vectors and subtracts a penalty that grows with distance.
 
-- **Learned position embeddings** keep a trainable table with one row per
-  position. They're flexible, but they have no row for positions beyond the
-  table's length.
-- **ALiBi** adds no vectors at all. It subtracts a penalty from each score
-  that grows with the distance between the two tokens, so far-away tokens get
-  less attention.
+## How many numbers a block holds
+
+Four attention matrices hold 4d². Two layer norms hold 4d. SwiGLU holds 3 d d_h with d_h = round(2 d_ff / 3). For d = 64 and d_ff = 192, d_h = 128. Then 4 × 4096 + 3 × 64 × 128 + 4 × 64 = 16384 + 24576 + 256 = 41216.
 
 > [!RECAP]
-> - The pre-norm block is `x1 = x + Attn(LN1(x))`, then `x2 = x1 + FFN(LN2(x1))`.
-> - Layer norm works along the last axis with $\epsilon = 10^{-5}$, then applies
->   the gain and bias.
-> - SwiGLU is `(silu(x @ W_gate) * (x @ W_up)) @ W_down`, with SiLU on the gate
->   only.
-> - Sinusoidal encodings interleave sine and cosine columns. RoPE uses the
->   rotate-half layout $[-x_2, x_1]$ on queries and keys only.
-> - A block has $4d^2 + 3 d\, d_h + 4d$ parameters, with $d_h$ rounded from
->   $2 d_{\text{ff}} / 3$.
+> Carry these facts into the exercise:
+> - Pre-norm is `x1 = x + Attn(LN1(x))`, then `x2 = x1 + FFN(LN2(x1))`. Add to the raw `x`.
+> - Layer norm runs on the last axis with epsilon 10^{−5}, then applies the gain and the bias.
+> - SwiGLU is `(silu(x @ W_gate) * (x @ W_up)) @ W_down`, with SiLU on the gate only.
+> - Sinusoidal encodings interleave sine and cosine. RoPE uses rotate-half `[−x2, x1]` on queries and keys only.
+> - A block holds 4d² + 3 d d_h + 4d parameters, with d_h rounded from 2 d_ff / 3.
 
 ## Build it step by step
 
-The checks test your functions in this order.
+The checks test the functions in this order:
 
-1. **`sinusoidal_encoding(T, d)`** returns a $(T, d)$ array. Build `omega`
-   with `np.arange(d // 2)`, take the outer product with positions, and write
-   `np.sin` into columns `0::2` and `np.cos` into columns `1::2`. Common
-   mistake: putting sines in the first half and cosines in the second half.
-   That's the RoPE layout, not this one.
-2. **`rope_frequencies(d, theta=10000.0)`** returns a $(d/2,)$ array,
-   `theta ** (-2 * i / d)`. Common mistake: dividing by `d // 2` instead of
-   `d`.
-3. **`apply_rope(x, cos, sin)`** returns an array shaped like `x`. Split the
-   last axis in half, build `rotate_half`, and combine. It must work for any
-   leading shape, so index with `x[..., :half]`. Common mistake: writing
-   `[x2, -x1]`, which rotates the wrong way and breaks the distance property.
-4. **`swiglu(x, W_gate, W_up, W_down)`** maps $(\dots, d)$ to $(\dots, d)$.
-   Two matrix products, SiLU on the gate, an elementwise product, then
-   `@ W_down`. Common mistake: applying SiLU to the up projection too.
-5. **`transformer_block_forward(x, params, mask)`** maps $(T, d)$ to $(T, d)$.
-   Write a small layer norm helper. Project with `params["Wq"]` and friends,
-   reshape to heads with `.reshape(T, heads, d_head).transpose(1, 0, 2)`,
-   apply RoPE to `q` and `k`, compute scores divided by `np.sqrt(d_head)`,
-   add `mask`, softmax, multiply by `v`, undo the reshape, multiply by
-   `params["Wo"]`, and add to `x`. Then the second norm, `swiglu`, and the
-   second add. Use `params.get("theta", 10000.0)`. Common mistake: adding
-   the residual to the normalised input instead of the raw `x`.
-6. **`block_parameter_count(d_model, d_ff, heads)`** returns an integer:
-   $4d^2$ for the four attention matrices, plus $3 d\, d_h$ with
-   `d_h = round(2 * d_ff / 3)`, plus $4d$ for two layer norms' gains and
-   biases. For $d = 64$ and $d_{\text{ff}} = 192$: $d_h = 128$, and the total
-   is $16384 + 24576 + 256 = 41216$. Common mistake: forgetting the layer
-   norm parameters.
+1. **`sinusoidal_encoding(T, d)`.** Return `(T, d)`. Build `omega` with `np.arange(d // 2)`, take the outer product with positions, and write `np.sin` into columns `0::2` and `np.cos` into columns `1::2`. The usual mistake is sines in the first half and cosines in the second.
+2. **`rope_frequencies(d, theta=10000.0)`.** Return `(d/2,)` as `theta ** (-2 * i / d)`. The usual mistake is dividing by `d // 2` instead of `d`.
+3. **`apply_rope(x, cos, sin)`.** Return the same shape as `x`. Split the last axis, build rotate-half as `[−x2, x1]`, and combine. Index with `x[..., :half]` so any leading shape works. The usual mistake is `[x2, −x1]`, which turns the wrong way.
+4. **`swiglu(x, W_gate, W_up, W_down)`.** Map `(..., d)` to `(..., d)`. Two products, SiLU on the gate only, an entry-wise product, then `@ W_down`. The usual mistake is SiLU on the up branch too.
+5. **`transformer_block_forward(x, params, mask)`.** Map `(T, d)` to `(T, d)`. Norm, project `Wq`, `Wk`, and `Wv`, then `.reshape(T, heads, d_head).transpose(1, 0, 2)`. RoPE on `q` and `k`. Divide by `np.sqrt(d_head)`, add `mask`, softmax, times `v`. Undo the reshape, times `Wo`, add to raw `x`. Second norm, `swiglu`, second add. Use `params.get("theta", 10000.0)`. The usual mistake is the residual on the normalised input.
+6. **`block_parameter_count(d_model, d_ff, heads)`.** Return an int: 4d² for attention, 3 d d_h with `d_h = round(2 * d_ff / 3)`, and 4d for the two norms. For d = 64 and d_ff = 192 the total is 41216. The usual mistake is forgetting the norm gain and bias. `heads` must divide d, and it does not otherwise change the count.
 
 ## Cost and scaling
 
-Each weight is used once per token in a multiply and an add, so the forward
-pass costs about two flops per weight per token. With $d_{\text{ff}} = 4d$,
-the counts are these.
+Each weight is used once per token in a multiply and an add, so the forward pass costs about two flops per weight per token. With d_ff = 4d the counts are:
 
 | Part | Weights | Forward flops per token |
 |---|---|---|
-| Attention projections | $4d^2$ | $8d^2$, plus a part that grows with $T$ |
-| Feed-forward network | $8d^2$ | $16d^2$ |
-| Whole block | $12d^2$ | $24d^2$, plus a part that grows with $T$ |
+| Attention projections | 4d² | 8d², plus a term that grows with T |
+| Feed-forward network | 8d² | 16d² |
+| Whole block | 12d² | 24d², plus a term that grows with T |
 
-A model with $L$ blocks and a vocabulary of $V$ tokens has about $V d + 12 L
-d^2$ weights. For $d = 4096$, $L = 32$, and $V = 50000$, the blocks hold about
-6.4 billion weights and the embedding about 0.2 billion. Model size is mostly
-a question of depth and width.
+L blocks and a vocabulary of V tokens hold about V d + 12 L d² weights. For d = 4096, L = 32, and V = 50000, the blocks hold about 6.4 billion and the embedding about 0.2 billion.
 
 ## Where this breaks
 
-- **Deep post-norm stacks.** They need a long, slow start to the learning
-  rate to train at all. Pre-norm is the default for deep models.
-- **Growing residual stream.** In pre-norm, each sublayer adds to the stream
-  and nothing rescales it, so its size grows with depth. A final layer norm
-  before the output layer fixes this.
-- **RoPE past its training length.** The slowest clock hands barely move
-  during training. At much longer sequences, the model sees angles it never
-  learned. People rescale the frequencies to extend context.
-- **Learned embeddings past their table.** There's no row for position
-  $T_{\max} + 1$. You have to grow the table and train it.
+The block fails in four familiar ways:
+
+- Post-norm puts a norm on the main path, so a deep stack needs a slow start to the learning rate. Pre-norm avoids that.
+- In pre-norm the stream grows with depth, because nothing rescales the adds. A final layer norm before the output fixes it.
+- RoPE's slow angles barely move in training. A much longer sequence shows angles the block did not train on. Rescale the frequencies to extend context.
+- A learned position table has no row past its length. Grow the table and train the extra rows.
 
 ## The exercise
 
-You build a full pre-norm transformer block in one file:
-`sinusoidal_encoding`, `rope_frequencies`, `apply_rope`, `swiglu`,
-`transformer_block_forward`, and `block_parameter_count`. The block uses RoPE
-inside attention and SwiGLU as its feed-forward network.
+You build `sinusoidal_encoding`, `rope_frequencies`, `apply_rope`, `swiglu`, `transformer_block_forward`, and `block_parameter_count`. The block uses RoPE inside attention and SwiGLU as its feed-forward network.
 
-The checks confirm the sine and cosine layout, that shifting a sinusoidal
-encoding by a fixed offset is the same linear map at every position, and that
-the RoPE frequencies are the right geometric sequence. They check that
-`apply_rope` keeps vector lengths and makes the query-key score depend only on
-the distance between positions. Then they compare `swiglu` with a direct
-computation, check that the block keeps its input shape, check that zeroing
-`Wo` and `W_down` turns the block into an exact identity, and check your
-parameter count against a hand computation.
+The checks confirm the sine and cosine layout, the fixed-shift linear map, and the RoPE frequencies. They check that `apply_rope` keeps lengths and that the query-key score depends only on distance. They compare `swiglu` with a direct product, check the block's shape, check that zero `Wo` and `W_down` make an identity, and check the parameter count.

@@ -2,14 +2,14 @@
 title: PCA and the SVD
 slug: 13-pca-and-svd
 part: "Part 2 — Classical machine learning"
-summary: Find the directions your data varies most along, using the SVD, power iteration, and a probabilistic version fitted by EM.
+summary: "Find the directions a cloud spreads along, from the SVD, from power iteration, and from a noisy model fitted by EM."
 minutes: 65
 gpu: false
 objectives:
-  - Centre data and compute principal components, scores, and explained variance from the SVD.
-  - Reconstruct data from k components, and predict the reconstruction error from the singular values.
-  - Build power iteration to find the top eigenvector, and explain why the eigenvalue gap sets its speed.
-  - Fit probabilistic PCA with EM, and check that its log-likelihood never goes down.
+  - Centre data and read principal components, scores, and explained variance from the SVD.
+  - Reconstruct data from k components, and match the error to the singular values you dropped.
+  - Find the top eigenvector with power iteration, and tie its speed to the eigenvalue gap.
+  - Fit probabilistic PCA with EM, and check that the log-likelihood never falls.
 prereqs:
   - 02-linear-regression
 exercise: 13-pca-and-svd
@@ -17,252 +17,292 @@ exercise: 13-pca-and-svd
 
 # PCA and the SVD
 
-So far every model had labels to learn from. Principal component analysis (PCA) works with the data alone. It asks: along which directions does the data actually spread out, and which directions are mostly noise you could throw away?
+So far every model had a label on each row. Principal component analysis (PCA) has only the points. It asks which directions the cloud spreads along, and which directions are thin enough to drop.
 
-Think of a cloud of points shaped like a flat pancake floating in 3D. Almost all of the spread lies in the plane of the pancake. If you describe each point by its two coordinates in that plane, you lose very little. PCA finds that plane for you, in any number of dimensions.
+Picture a pancake in three dimensions. Two coordinates in its plane describe each point.
 
-The tool that does the work is the singular value decomposition (SVD), which you met when solving least squares. This lesson shows how to read PCA straight off the SVD, how to find the top direction with a simple loop called power iteration, and how a probabilistic version of PCA lands on the same answer.
+You can name the directions three ways, find the top one with a short loop, and fit a noisy copy of that plane.
 
 ## What you already know
 
-- Any $n$-by-$d$ matrix $X$ factors as $X = U S V^{\top}$, the SVD. The columns of $U$ and $V$ are unit length and at right angles to each other, and $S$ is diagonal with nonnegative entries $s_1 \ge s_2 \ge \ldots$, the singular values.
-- An eigenvector $v$ of a square matrix $A$ satisfies $Av = \lambda v$: multiplying by $A$ only stretches it, by the eigenvalue $\lambda$.
-- The variance of a list of numbers is the average squared distance from their mean.
-- The norm of a vector, $\lVert v \rVert$, is its length, `np.linalg.norm(v)`.
+Four earlier ideas are enough to start:
 
-## Step 1: centre the data
+- $X = U S V^{\top}$, with orthonormal columns in $U$ and $V$, and $s_1 \ge s_2 \ge \cdots \ge 0$.
+- An eigenvector obeys $Av = \lambda v$. Multiplication by $A$ stretches $v$ by $\lambda$.
+- Variance is an average squared gap. For 0 and 2, with divisor $n-1 = 1$, the variance is 2.
+- $\lVert v \rVert$ is length, `np.linalg.norm(v)`.
 
-PCA is about how the data spreads around its middle, so first move the middle to the origin. Subtract each column's mean from that column:
+## Centre the cloud
+
+Take the points $(2, 0)$, $(0, 2)$, and $(4, 4)$. Column means are $(2+0+4)/3 = 2$ and $(0+2+4)/3 = 2$. Subtract $(2, 2)$ from each row. You get $(0, -2)$, $(-2, 0)$, and $(2, 2)$.
+
+That shift is **centring**. Spread is measured from the origin.
 
 $$
-X_c = X - \bar x ,
+X_c = X - \bar x .
 $$
 
-where $\bar x$ is the length-$d$ vector of column means. Read it aloud: from every row, subtract the average row. Afterwards every column of $X_c$ has mean zero.
+$\bar x$ is the vector of column means, subtracted from every row. The three points give the centred rows above:
 
 ```python
-mean = X.mean(axis=0)     # shape (d,)
-Xc = X - mean             # broadcasting subtracts it from every row
+mean = X.mean(axis=0)
+Xc = X - mean
 ```
 
-Why bother? If you skip centring, the first "direction of spread" tends to point from the origin to the middle of the cloud. That tells you where the data sits, not how it varies.
+The usual mistake is `axis=1`. Skip centring and the first direction points at the cloud's middle.
 
-## Step 2: the principal components
+## Measure spread along a line
 
-Picture a line through the origin. Project every centred point onto it, so each point becomes one number: its position along the line. Some lines give projections that are widely spread. Others squash everything together. The **first principal component** is the direction whose projections have the largest variance. The second is the best direction at right angles to the first, and so on.
+A line through the origin turns each centred point into one score. Try $u = (1, 1)/\sqrt{2}$. Dot products are $-2/\sqrt{2} = -\sqrt{2}$, $-\sqrt{2}$, and $4/\sqrt{2} = 2\sqrt{2}$. Squared scores are 2, 2, and 8, summing to 12. Divide by $n-1 = 2$ and the variance is 6.
 
-There is a second, equivalent way to say this. Replace each point by its shadow on the line. The best line is the one that makes these shadows closest to the original points. The two definitions agree, because by Pythagoras, each point's squared length equals its squared shadow length plus its squared distance to the line. The total is fixed, so making the shadows long is the same as making the distances short.
+Try $w = (1, -1)/\sqrt{2}$. Scores are $\sqrt{2}$, $-\sqrt{2}$, and 0. Squared scores sum to 4. The variance is $4/2 = 2$.
 
-> [!KEY]
-> The first principal component is the direction along which the centred data spreads the most. That same direction also keeps the points closest to their shadows on it.
-
-### Reading PCA off the SVD
-
-Take the SVD of the centred data, $X_c = U S V^{\top}$. Then:
-
-- The **components** are the first $k$ columns of $V$. Each is a unit-length direction in feature space, with shape `(d,)`.
-- The **scores** are the coordinates of each point along those directions: $X_c V_k$, with shape `(n, k)`.
-- The **explained variance** of component $i$ is the variance of its scores:
+The winning direction is the **first principal component**. Component variances are
 
 $$
 \lambda_i = \frac{s_i^2}{n - 1} .
 $$
 
-Read it aloud: square the $i$-th singular value and divide by $n - 1$. These $\lambda_i$ are also the eigenvalues of the sample covariance matrix $X_c^{\top} X_c / (n-1)$, and the components are its eigenvectors. The SVD gets them without ever forming that matrix, which is more accurate numerically.
-
-> [!KEY]
-> Run the SVD on the centred data. The top $k$ columns of $V$ are the components, and $s_i^2 / (n - 1)$ is the variance each one explains.
+Square singular value $i$ and divide by $n-1$. Here $s_1^2 = 12$ and $s_2^2 = 4$, so the variances are 6 and 2, the two numbers you computed:
 
 ```python
-U, s, Vt = np.linalg.svd(Xc, full_matrices=False)
-components = Vt[:k].T                  # shape (d, k), note the transpose
-scores = Xc @ components               # shape (n, k)
 explained_variance = s[:k] ** 2 / (n - 1)
 ```
 
-> [!WARNING]
-> `np.linalg.svd` returns $V^{\top}$, not $V$, and it sorts the singular values from largest to smallest. The components are the rows of `Vt`, so take `Vt[:k].T`, not `Vt[:, :k]`.
+The usual mistake is dividing by $n$. The checks use $n-1$, as `np.cov` does.
 
-## Step 3: reconstruct and measure the error
+> [!KEY]
+> The first principal component is the direction whose scores have the largest variance.
 
-To go back from $k$ scores to the original $d$ features, walk along each component by its score and add the mean back:
+## Match the shadows, not the points
+
+Squared length equals squared shadow plus squared distance to the line. A longer shadow is a shorter distance.
+
+Centred squared lengths are $0+4$, $4+0$, and $4+4$, totalling 16. Squared scores on $u$ already summed to 12. The leftover is 4.
+
+A score $z$ comes back as $z u$. The scores $-\sqrt{2}$, $-\sqrt{2}$, and $2\sqrt{2}$ come back as $(-1,-1)$, $(-1,-1)$, and $(2,2)$. Add the mean $(2,2)$ and you get $(1,1)$, $(1,1)$, and $(4,4)$. Squared errors are 2, 2, and 0, totalling 4.
+
+In matrix form,
 
 $$
-\hat X = \bar x + Z V_k^{\top} ,
+\hat X = \bar x + Z V_k^{\top} .
 $$
 
-where $Z$ is the `(n, k)` score matrix. Read it aloud: each reconstructed row is the mean plus score 1 times component 1, plus score 2 times component 2, and so on.
+Each row is the mean plus each score times its component. With $k = 1$ you rebuild $(1,1)$, $(1,1)$, and $(4,4)$:
 
 ```python
-X_hat = mean + scores @ components.T   # shape (n, d)
+X_hat = mean + scores @ components.T
 ```
 
-How much do you lose? The Eckart–Young theorem says keeping the top $k$ SVD terms gives the best possible rank-$k$ approximation, and it tells you the error exactly:
+The usual mistake is forgetting the mean.
+
+> [!KEY]
+> The maximum-variance direction is also the one that keeps points closest to their shadows.
+
+## Read the same directions from the covariance
+
+**Covariance** is an average product of centred columns, divided by $n-1$. Column squares $0+4+4$ give variance $8/2 = 4$. The column product $0+0+4$ gives covariance $4/2 = 2$. The matrix has rows $(4, 2)$ and $(2, 4)$.
+
+Then $(4-\lambda)^2 - 4 = 0$, so $\lambda$ is 6 or 2. For 6, $v_1 = v_2$, and the unit vector is $(1,1)/\sqrt{2}$. Same line as the maximum-variance direction.
+
+PCA is those three descriptions at once: largest score variance, smallest reconstruction error, and the top covariance eigenvectors. The SVD of $X_c$ lists them. Components are the first $k$ columns of $V$, scores are $X_c V_k$, and $\lambda_i = s_i^2/(n-1)$.
+
+Here $s_1 = \sqrt{12} \approx 3.464$ and $s_2 = 2$:
+
+```python
+U, s, Vt = np.linalg.svd(Xc, full_matrices=False)
+components = Vt[:k].T
+scores = Xc @ components
+```
+
+The usual mistake is `Vt[:, :k]`. The top direction is a row of `Vt`.
+
+> [!WARNING]
+> `np.linalg.svd` returns $V^{\top}$, largest singular value first. Components are rows of `Vt`.
+
+> [!TIP]
+> Two unit components can differ only by a sign. Compare `abs(u @ v)` with 1.
+
+## Throw away the small singular values
+
+The Eckart-Young theorem says the top $k$ terms are the best rank-$k$ approximation, and the error is exact:
 
 $$
 \sum_{\text{all entries}} (X - \hat X)^2 = \sum_{i > k} s_i^2 .
 $$
 
-Read it aloud: the total squared reconstruction error equals the sum of the squares of the singular values you threw away. You can predict the error before you reconstruct anything.
+The total squared error equals the sum of the squares of the singular values you dropped.
 
-> [!KEY]
-> No rank-$k$ approximation beats the top $k$ SVD terms, and its error is the sum of the dropped $s_i^2$.
+Plug in $k = 1$. You drop $s_2^2 = 4$, which matched the hand error.
 
-### Explained variance ratio
-
-Each component's share of the total spread is its squared singular value over the sum of all of them:
+Each component's share of the spread is
 
 $$
 r_i = \frac{s_i^2}{\sum_j s_j^2} .
 $$
 
-Read it aloud: the fraction of total variance that component $i$ carries. The ratios add up to one. People plot them to decide how many components to keep. The $n - 1$ cancels, so you can skip it.
+Divide $s_i^2$ by the sum of every $s_j^2$. The shares add to 1, and $n-1$ cancels.
+
+Plug in 12 and 4. The shares are $12/16 = 0.75$ and $4/16 = 0.25$:
 
 ```python
-s = np.linalg.svd(Xc, compute_uv=False)
 ratio = s ** 2 / np.sum(s ** 2)
 ```
 
-### A worked example
+The usual mistake is keeping only the top $k$, so the shares no longer add to 1.
 
-Take three points in 2D: $(2, 0)$, $(0, 2)$, and $(4, 4)$.
+> [!KEY]
+> No rank-$k$ approximation beats the top $k$ terms. The error is the sum of the dropped $s_i^2$.
 
-1. The mean is $(2, 2)$. The centred rows are $(0, -2)$, $(-2, 0)$, and $(2, 2)$.
-2. The singular values of $X_c$ are $s_1 = \sqrt{12} \approx 3.4641$ and $s_2 = 2$. So $s_1^2 = 12$ and $s_2^2 = 4$.
-3. With $n - 1 = 2$, the explained variances are $12/2 = 6$ and $4/2 = 2$. The ratios are $12/16 = 0.75$ and $4/16 = 0.25$.
-4. The first component is $(1, 1)/\sqrt2 \approx (0.7071, 0.7071)$, up to sign.
-5. The scores on it are $-\sqrt2$, $-\sqrt2$, and $2\sqrt2$.
-6. Reconstructing with $k = 1$ gives $(1, 1)$, $(1, 1)$, and $(4, 4)$.
-7. The squared errors are $1 + 1 = 2$, $1 + 1 = 2$, and $0$, for a total of $4 = s_2^2$. Eckart–Young checks out.
+## Repeat one matrix-vector product
 
-The SVD may flip the sign of a component. Then the scores flip too, and the reconstruction is unchanged.
-
-> [!TIP]
-> To compare two unit-length components that may differ in sign, test `abs(u @ v)` against 1 instead of comparing `u` and `v` entry by entry.
-
-## Step 4: power iteration
-
-Sometimes you only need the top eigenvector of a symmetric matrix $A$, such as the covariance. **Power iteration** finds it with nothing but matrix-vector products. Start with any vector, multiply by $A$, rescale to length one, and repeat:
+**Power iteration** finds the top eigenvector of a symmetric matrix with only matrix-vector products. Multiply by $A$, then divide by the length:
 
 $$
 v \leftarrow \frac{A v}{\lVert A v \rVert} .
 $$
 
-Read it aloud: multiply by $A$, then divide by the length so the vector does not blow up or vanish. Each multiplication stretches the part of $v$ along eigenvector $i$ by $\lambda_i$. The biggest eigenvalue wins, so $v$ turns toward the top eigenvector.
+Each multiply stretches direction $i$ by $\lambda_i$, so the largest eigenvalue wins. The **Rayleigh quotient** $v^{\top} A v$ equals $\lambda_1$ once $v$ is exact.
+
+Let $A$ have rows $(2,0)$ and $(0,1)$, so $\lambda_1 = 2$, $\lambda_2 = 1$, and the top vector is $(1,0)$. Start at $(1,1)/\sqrt{2}$.
+
+Step 1 gives $(2,1)/\sqrt{2} = (1.4142, 0.7071)$, entry ratio $1/2$. Divide by $\sqrt{2.5}$ to get $(0.8944, 0.4472)$. The Rayleigh quotient is $9/5 = 1.8$. Step 2 gives $(4,1)/\sqrt{5}$, entry ratio $1/4$, then $(0.9701, 0.2425)$ and Rayleigh quotient $33/17 = 1.9412$. Leftover error shrinks by about $|\lambda_2/\lambda_1|$ each step:
 
 ```python
-v = np.ones(d) / np.sqrt(d)
-for _ in range(iters):
-    v = A @ v
-    v = v / np.linalg.norm(v)
-eigenvalue = v @ A @ v          # the Rayleigh quotient
+v = A @ v / np.linalg.norm(A @ v)
+eigenvalue = v @ A @ v
 ```
 
-The estimate of the eigenvalue is the **Rayleigh quotient** $v^{\top} A v$, which equals $\lambda_1$ when $v$ is the top eigenvector.
-
-How fast does it converge? Each step shrinks the leftover error by about $|\lambda_2 / \lambda_1|$, the **eigenvalue gap** ratio. A ratio of 0.5 halves the error each step. A ratio of 0.99 crawls.
+The usual mistake is scaling only after the loop. Entries can overflow.
 
 > [!KEY]
-> Power iteration turns any starting vector toward the top eigenvector, and the ratio $|\lambda_2 / \lambda_1|$ sets how fast it gets there.
+> Power iteration turns a start vector towards the top eigenvector. The ratio $|\lambda_2 / \lambda_1|$ sets the speed.
 
-Worked example: let $A$ have rows $(2, 0)$ and $(0, 1)$, so $\lambda_1 = 2$, $\lambda_2 = 1$, and the top eigenvector is $(1, 0)$. Start from $(0.7071, 0.7071)$.
+## Fit a noisy line with EM
 
-- Step 1: $Av = (1.4142, 0.7071)$, normalised to $(0.8944, 0.4472)$. Rayleigh quotient $1.8$.
-- Step 2: $Av = (1.7889, 0.4472)$, normalised to $(0.9701, 0.2425)$. Rayleigh quotient $1.9412$.
+Probabilistic PCA maps a short hidden vector $z$ through a matrix $W$ and adds Gaussian noise of variance $\sigma^2$. The best $W$ spans the top $k$ components. An **expectation** is a weighted average: scores $1$ and $-1$, each half the time, have expectation 0.
 
-The second entry roughly halves each step, matching the ratio $1/2$.
+Fit it by **expectation-maximisation** on centred data. On $(2,0)$ and $(-2,0)$, start with $W = (1,0)$ and $\sigma^2 = 1$. Then $M = 1+1 = 2$, and the guessed scores $X_c W / 2$ are $1$ and $-1$.
 
-## Step 5: probabilistic PCA and EM
-
-Probabilistic PCA (PPCA) tells a story about how the data was made. Each point starts as a short hidden vector $z$ of length $k$, drawn from a standard normal distribution. A $d$-by-$k$ matrix $W$ maps it into feature space, and Gaussian noise with variance $\sigma^2$ is added: $x = Wz + \text{noise}$. The best-fitting $W$ spans the same subspace as the top $k$ principal components.
-
-You fit it with **expectation–maximisation (EM)**. EM alternates two steps. The E-step guesses the hidden $z$ for each point, given the current $W$ and $\sigma^2$. The M-step picks the $W$ and $\sigma^2$ that best explain the data, given those guesses. Every round is guaranteed not to lower the log-likelihood.
-
-All the formulas below work on centred data $X_c$, one row per point.
-
-**E-step.** Form the small $k$-by-$k$ matrix $M = W^{\top} W + \sigma^2 I$. The best guess of each point's hidden vector, stacked as rows, is
+The E-step in general is
 
 $$
 E_z = X_c W M^{-1} ,
 $$
 
-a matrix of shape `(n, k)`. The E-step also needs the sum over points of $\mathbb{E}[z z^{\top}]$, which captures how uncertain those guesses are:
-
 $$
 E_{zz} = n\,\sigma^2 M^{-1} + E_z^{\top} E_z .
 $$
 
-Read it aloud: $n$ copies of the posterior uncertainty $\sigma^2 M^{-1}$, plus the outer products of the guesses. It has shape `(k, k)`.
+$M = W^{\top} W + \sigma^2 I$. The first line is the guess of $z$. The second is $n$ copies of the uncertainty, plus outer products of the guesses. Here $E_{zz} = 2\cdot 1\cdot 1/2 + 2 = 3$.
 
-**M-step.** Update $W$ by a least-squares-style solve:
+The M-step is
 
 $$
 W_{\text{new}} = X_c^{\top} E_z \, E_{zz}^{-1} .
 $$
 
-Then update the noise variance as the average leftover error per entry:
-
 $$
 \sigma^2_{\text{new}} = \frac{1}{nd}\Big( \textstyle\sum X_c^2 \;-\; 2 \sum \big(E_z \odot X_c W_{\text{new}}\big) \;+\; \operatorname{tr}\big(E_{zz} W_{\text{new}}^{\top} W_{\text{new}}\big) \Big) .
 $$
 
-Read it aloud: take the total squared data, subtract twice the sum of the elementwise product $\odot$ of the guesses with $X_c W_{\text{new}}$, and add the trace (sum of the diagonal) of $E_{zz} W_{\text{new}}^{\top} W_{\text{new}}$. Divide by the number of entries $nd$.
+$X_c^{\top} E_z = (4, 0)$, so $W_{\text{new}} = (4/3, 0)$. Squared entries sum to 8. Twice the elementwise product sums to $32/3$. The trace term is $16/3$. The numerator is $8 - 32/3 + 16/3 = 8/3$. Divide by $nd = 4$ and the noise is $2/3$:
 
 ```python
-M_inv = np.linalg.inv(W.T @ W + sigma2 * np.eye(k))
 Ez = Xc @ W @ M_inv
-Ezz = n * sigma2 * M_inv + Ez.T @ Ez
 W_new = (Xc.T @ Ez) @ np.linalg.inv(Ezz)
 ```
 
-**Log-likelihood.** Under the model, each point is Gaussian with covariance $C = W W^{\top} + \sigma^2 I$. With $S = X_c^{\top} X_c / n$, the log-likelihood of all the data is
+The usual mistake is the noise update from the old $W$. Both the product and the trace use $W_{\text{new}}$.
+
+With $S = X_c^{\top} X_c / n$ and $C = WW^{\top} + \sigma^2 I$, the log-likelihood is
 
 $$
 \ell = -\frac{n}{2}\Big( d \log(2\pi) + \log\det C + \operatorname{tr}(C^{-1} S) \Big) .
 $$
 
-Read it aloud: a constant, plus a penalty for a large covariance ($\log\det C$), plus a penalty for data that does not fit it ($\operatorname{tr}(C^{-1}S)$), all scaled by $-n/2$. Compute $\log\det C$ with `np.linalg.slogdet` and $C^{-1} S$ with `np.linalg.solve(C, S)`. Record $\ell$ after every iteration. It should never go down.
+$d\log(2\pi)$ is constant, $\log\det C$ grows with a wide $C$, and the trace grows when the data miss $C$. Use `slogdet` and `solve`.
+
+After the update, $\det C = 44/27$ and $\log\det C = 0.488$. The trace is $18/11 = 1.636$. Twice $\log(2\pi)$ is 3.676. The sum is $3.676 + 0.488 + 1.636 = 5.800$, so $\ell = -5.800$. Record it every iteration. It never falls.
 
 > [!RECAP]
-> - Centre with `X.mean(axis=0)` before the SVD, and add the mean back when you reconstruct.
-> - Components are `Vt[:k].T`, scores are `Xc @ components`, and explained variances are `s[:k] ** 2 / (n - 1)`.
-> - Explained variance ratios use every singular value, so they sum to one.
-> - Power iteration multiplies by $A$ and rescales to length one every step. The Rayleigh quotient $v^{\top} A v$ gives the eigenvalue.
-> - PPCA EM computes $E_z$ and $E_{zz}$, then $W_{\text{new}}$, then $\sigma^2$ from $W_{\text{new}}$. Its log-likelihood never goes down.
+> Keep these five facts in hand:
+> - Centre with `X.mean(axis=0)`, and add the mean back when you reconstruct.
+> - Components are `Vt[:k].T`, scores are `Xc @ components`, and variances are `s[:k] ** 2 / (n - 1)`.
+> - Variance ratios use every singular value. Eckart-Young error is the sum of the dropped $s_i^2$.
+> - Power iteration multiplies by $A$, rescales to length 1, and reads $v^{\top} A v$.
+> - PPCA updates $E_z$, $E_{zz}$, $W_{\text{new}}$, then $\sigma^2$ from $W_{\text{new}}$. The log-likelihood never falls.
 
 ## Build it step by step
 
-The checks test the functions in this order.
+Build the six functions in this order:
 
-1. **`center(X)`.** Takes shape `(n, d)`. Returns `(Xc, mean)` with shapes `(n, d)` and `(d,)`. Use `X.mean(axis=0)`. Common mistake: `axis=1`, which averages each row instead of each column.
-2. **`pca_svd(X, k)`.** Returns `(components, scores, explained_variance)` with shapes `(d, k)`, `(n, k)`, and `(k,)`. Centre, call `np.linalg.svd(Xc, full_matrices=False)`, take `Vt[:k].T`, and use `s[:k] ** 2 / (n - 1)`. Common mistake: taking columns of `Vt` instead of rows, or running the SVD on uncentred `X`.
-3. **`reconstruct(mean, components, scores)`.** Returns shape `(n, d)`: `mean + scores @ components.T`. Common mistake: forgetting to add the mean back.
-4. **`explained_variance_ratio(X)`.** Returns every ratio, largest first. Centre, get the singular values with `compute_uv=False`, square, and divide by their sum. Common mistake: keeping only the top `k`, so the ratios do not sum to one.
-5. **`power_iteration(A, iters)`.** Returns `(v, eigenvalue)`. Start from `np.ones(d) / np.sqrt(d)`, loop `iters` times, then return `v @ A @ v`. Common mistake: normalising only at the end, which can overflow.
-6. **`ppca_em(X, k, iters)`.** Returns `(W, sigma2, history)`. Centre, set `W = np.random.default_rng(0).normal(scale=0.1, size=(d, k))` and `sigma2 = 1.0`, then loop: E-step, M-step, and append the log-likelihood under the new parameters. Clip `sigma2` to at least `1e-8`. Common mistake: computing the M-step for `sigma2` with the old `W` instead of `W_new`.
+1. **`center(X)`** returns `(Xc, mean)`, shapes `(n, d)` and `(d,)`, from `X.mean(axis=0)`. The usual mistake is `axis=1`. Write it like this:
+
+    ```python
+    def center(X):
+        # Subtract the column mean. Return Xc and that mean.
+    ```
+
+2. **`pca_svd(X, k)`** returns `(d, k)`, `(n, k)`, and `(k,)`. Centre, take `Vt[:k].T` from `svd(..., full_matrices=False)`, and set variances to `s[:k] ** 2 / (n - 1)`. The usual mistake is a column of `Vt`. Write it like this:
+
+    ```python
+    def pca_svd(X, k):
+        # SVD of centred data. Scores are Xc times Vt[:k].T.
+    ```
+
+3. **`reconstruct(mean, components, scores)`** returns `(n, d)` from `mean + scores @ components.T`. The usual mistake is leaving the mean off. Write it like this:
+
+    ```python
+    def reconstruct(mean, components, scores):
+        # Add the mean onto scores @ components.T.
+    ```
+
+4. **`explained_variance_ratio(X)`** returns every share, largest first, using `compute_uv=False`. The usual mistake is keeping only $k$ values. Write it like this:
+
+    ```python
+    def explained_variance_ratio(X):
+        # s ** 2 / sum(s ** 2), using compute_uv=False.
+    ```
+
+5. **`power_iteration(A, iters)`** returns `(v, eigenvalue)`. Start from `np.ones(d) / np.sqrt(d)`, loop `iters` times, and finish with `v @ A @ v`. The usual mistake is scaling only at the end. Write it like this:
+
+    ```python
+    def power_iteration(A, iters):
+        # Multiply by A and divide by the length, every step.
+    ```
+
+6. **`ppca_em(X, k, iters)`** returns `(W, sigma2, history)`. Seed `W` with `default_rng(0).normal(scale=0.1, size=(d, k))` and `sigma2 = 1`. Each round, E then M, append $\ell$, and clip `sigma2` at `1e-8`. The usual mistake is noise from the old `W`. Write it like this:
+
+    ```python
+    def ppca_em(X, k, iters):
+        # Seed W, then Ez, Ezz, W_new, sigma2, and the log-likelihood.
+    ```
 
 ## Cost and scaling
 
-The following table compares routes to the principal components, for $n$ rows, $d$ features, and $k$ components.
+Routes for $n$ rows, $d$ features, and $k$ components line up as follows:
 
 | Route | How the work grows | Notes |
 |---|---|---|
-| SVD of $X_c$ | About $n \cdot d \cdot \min(n, d)$ | Most accurate; the default. |
-| Eigenvectors of $X_c^{\top} X_c$ | About $n d^2 + d^3$ | Forming $X_c^{\top} X_c$ loses precision. |
-| Power iteration, $t$ steps | About $t \cdot d^2$ | Only the top vector; fast for sparse $A$. |
-| One PPCA EM round | About $n d k$ | Cheap when $k$ is much smaller than $d$. |
+| SVD of $X_c$ | About $n \cdot d \cdot \min(n, d)$ | Default. Most accurate. |
+| Eigenvectors of $X_c^{\top} X_c$ | About $n d^2 + d^3$ | Forming the product loses precision. |
+| Power iteration, $t$ steps | About $t \cdot d^2$ | Top vector only. Fast if $A$ is sparse. |
+| One PPCA round | About $n d k$ | Cheap for small $k$. |
 
-Memory is dominated by $X$ itself, `n * d` numbers. The SVD also needs space for $U$, about `n * min(n, d)` numbers.
+$X$ uses about $n d$ numbers. $U$ adds about $n \cdot \min(n, d)$.
 
 ## Where this breaks
 
-- **Outliers.** Variance squares distances, so a few far-away points can drag a component toward themselves. Remove outliers first, or use a robust variant.
-- **Curved data.** A spiral or a sphere has no good flat subspace. Kernel PCA and nonlinear methods handle these.
-- **Near-equal eigenvalues.** When $\lambda_k \approx \lambda_{k+1}$, a small change in the data can swap which direction is kept. Power iteration also becomes very slow.
-- **Different units.** A feature measured in grams has a bigger variance than the same feature in kilograms, and PCA will favour it. Standardise each feature to unit variance first when units differ.
+Four failures show up in practice:
+
+- Far points drag a component, because variance squares distance. Remove them, or use a robust variant.
+- A spiral has no flat subspace. Kernel PCA handles curved clouds.
+- If $\lambda_k \approx \lambda_{k+1}$, the kept direction can swap, and power iteration slows down.
+- Grams and kilograms of the same feature get different variances. Standardise columns when units differ.
 
 ## The exercise
 
-You compute PCA three ways and check that they agree. Write `center` and `pca_svd`, then `reconstruct` and `explained_variance_ratio`. Then write `power_iteration`, which finds the top eigenvector of a symmetric matrix, and `ppca_em`, which fits probabilistic PCA by EM and returns the log-likelihood after every iteration.
+You compute PCA three ways. Write `center`, `pca_svd`, `reconstruct`, `explained_variance_ratio`, `power_iteration`, and `ppca_em`.
 
-The checks confirm that `center` gives zero column means, that `pca_svd` returns orthonormal components with `scores == Xc @ components` and matches an eigendecomposition of the covariance up to sign, that `reconstruct` hits the Eckart–Young error $\sum_{i>k} s_i^2$, and that `explained_variance_ratio` sums to one. They check that `power_iteration` converges at the rate the eigenvalue gap predicts, that the log-likelihood from `ppca_em` never decreases, and that its fitted `W` spans the PCA subspace.
+Checks: column means are zero, and adding the mean back recovers $X$. Components are orthonormal, match the covariance eigenvectors up to sign, and scores equal $X_c$ times them. Error equals $\sum_{i>k} s_i^2$. Ratios sum to 1. Power iteration tracks $|\lambda_2/\lambda_1|$. PPCA's log-likelihood never falls, and $W$ spans the PCA subspace.

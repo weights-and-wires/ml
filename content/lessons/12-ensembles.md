@@ -2,14 +2,14 @@
 title: Bagging, forests, and boosting
 slug: 12-ensembles
 part: "Part 2 — Classical machine learning"
-summary: Combine many weak trees into one strong model, by averaging (bagging) or by fixing mistakes in turn (boosting).
+summary: "Average jumpy trees, or add stumps that fix leftover error, and estimate test error from missed rows."
 minutes: 60
 gpu: false
 objectives:
-  - Compute the variance of an average of correlated models, and explain why adding trees stops helping.
-  - Draw bootstrap samples, and use out-of-bag rows to estimate test error for free.
-  - Build gradient boosting, where each new stump fits what the model still gets wrong.
-  - Explain how random forests and AdaBoost fit into the same two ideas.
+  - Compute the variance of an average of correlated models, and explain why more trees stop helping.
+  - Draw bootstrap samples, and estimate test error from the rows each tree missed.
+  - Build gradient boosting so each stump fits the gap the current sum still misses.
+  - Place random forests and AdaBoost in those same two ideas.
 prereqs:
   - 11-decision-trees
 exercise: 12-ensembles
@@ -17,210 +17,222 @@ exercise: 12-ensembles
 
 # Bagging, forests, and boosting
 
-A single decision tree is jumpy. Change a few training rows and the root split can flip, and then every split beneath it changes too. Its predictions have high **variance**: they swing a lot from one training set to the next.
+A single decision tree is jumpy. Change a few training rows and the first split can flip, and every split under it flips too.
 
-There is an old trick for jumpy guesses: ask a crowd and average the answers. If you ask 100 people to guess the weight of a cow, the average is usually closer than most single guesses. **Bagging** does this with trees. It trains many trees on slightly different copies of the data and averages them.
+Averaging a crowd beats most single guesses. Bagging trains many trees on slightly different copies of your rows and averages them. Boosting is a relay. Each stump fits the gap the sum still misses, and you add only a fraction of it.
 
-**Boosting** takes the opposite route. Instead of a crowd guessing at once, it is a team taking turns. Each new small tree looks at what the team still gets wrong and fixes a bit of it. This lesson builds both.
+You can tell when extra trees stop helping, score rows a tree never saw, and run gradient boosting so training loss falls each round.
 
 ## What you already know
 
-- A decision tree grown until its leaves are pure fits the training data perfectly and generalises badly.
-- A stump is a tree with one split and two leaves.
-- The variance of a random quantity measures how much it spreads around its average.
-- The correlation $\rho$ between two quantities is 1 when they always move together and 0 when they are unrelated.
-- A gradient points in the direction a function increases fastest, so its negative points downhill.
+Five earlier ideas are enough to start:
 
-## Why averaging helps, and where it stops
+- A pure-leaf tree fits its training rows and still misses other rows.
+- A stump is one split and two leaves.
+- Variance is an average squared gap. For 1 and 3, the mean is 2 and the variance is $(1+1)/2 = 1$.
+- Correlation is 1 when two lists move together and 0 when they do not. The lists 1, 2, 3 and 2, 4, 6 have correlation 1.
+- A gradient is a slope. For $w^2$ at $w = 3$ the slope is 6. A nudge of 0.01 raises it by about 0.06.
 
-Suppose you have $B$ models. Each one's prediction has variance $\sigma^2$. Any two of them have correlation $\rho$. Bagging predicts with their average. The variance of that average is
+## Average two noisy guesses
+
+Two models each have variance 4, and correlation $\rho = 0.5$. The shared piece is $0.5 \times 4 = 2$, and averaging leaves it alone. The private 2, split across both models, leaves 1. The average has variance $2 + 1 = 3$.
+
+This split is the **variance of an average**.
 
 $$
 \operatorname{Var}(\text{average}) = \rho\,\sigma^2 + \frac{1-\rho}{B}\,\sigma^2 .
 $$
 
-Read it aloud in two pieces. The second piece, $(1-\rho)\sigma^2 / B$, shrinks as you add more models $B$. The first piece, $\rho\sigma^2$, does not depend on $B$ at all. It is a floor. However many trees you average, the variance cannot drop below $\rho\sigma^2$.
+The first term, $\rho\sigma^2$, is the shared variance. It ignores $B$. The second term splits the private variance across $B$ models.
 
-> [!KEY]
-> Averaging more models shrinks only the $(1-\rho)$ part of the variance. The $\rho\sigma^2$ part stays, however large $B$ gets.
+Plug in $0.5$, $4$, and $2$. You get 3 again. With $\rho = 0$ the result is $4/2 = 2$. With $\rho = 1$, or with $B = 1$, it stays 4. At $\rho = 0.3$, $\sigma^2 = 1$, and $B = 50$ you get $0.3 + 0.014 = 0.314$. At $B = 5000$ you get $0.30014$. More trees then only cost time. Lower $\rho$ to lower the floor:
 
 ```python
 var_avg = rho * sigma2 + (1 - rho) * sigma2 / B
 ```
 
-Try some numbers. With $\rho = 0.3$, $\sigma^2 = 1$, and $B = 50$, you get $0.3 + 0.7/50 = 0.3 + 0.014 = 0.314$. Going to $B = 5000$ only gets you to $0.30014$. Three extreme cases are worth remembering:
+The usual mistake is dividing the shared term by $B$ as well.
 
-- $\rho = 0$: the models are independent, and the variance is $\sigma^2 / B$.
-- $\rho = 1$: the models are identical, and averaging does nothing. The variance stays $\sigma^2$.
-- $B = 1$: one model, variance $\sigma^2$, whatever $\rho$ is.
+> [!KEY]
+> Averaging shrinks only the private part of the variance. The shared part $\rho\sigma^2$ stays, however large $B$ gets.
 
-The lesson: past a point, more trees do not help. What helps is making the trees less alike, so $\rho$ falls.
+## Draw a bootstrap sample
 
-## The bootstrap
+You have $n = 4$ rows. Draw `idx = [0, 0, 2, 3]`, with replacement. Row 0 appears twice, rows 2 and 3 once, and row 1 never. The in-bag fraction is $3/4$. Row 1 is **out-of-bag**. This draw is a **bootstrap** sample: $n$ draws from $n$ rows, with replacement.
 
-To train many different trees, you need many different training sets. You only have one. The **bootstrap** fakes new ones: draw $n$ rows from your $n$ training rows, at random, **with replacement**. With replacement means a row can be picked more than once, and some rows are not picked at all.
-
-```python
-idx = rng.integers(0, n, size=n)   # n random row numbers from 0 to n-1
-X_boot, y_boot = X[idx], y[idx]
-```
-
-How many distinct rows does one bootstrap sample contain? A given row is missed by one draw with probability $1 - 1/n$. It is missed by all $n$ draws with probability
+A given row misses one draw with probability $1 - 1/n$. It misses all $n$ draws with probability
 
 $$
 \left(1 - \frac{1}{n}\right)^n \approx e^{-1} \approx 0.368 .
 $$
 
-Read it aloud: the chance of missing a row once, multiplied by itself $n$ times. For large $n$ this is close to $1/e$. So about 36.8% of rows are left out of each sample, and about 63.2% ($1 - 1/e$) are in it. Those left-out rows are called **out-of-bag** for that tree.
-
-> [!KEY]
-> A bootstrap sample holds about 63.2% of the distinct rows. The other 36.8% are out-of-bag for that tree.
+It is the one-draw miss chance, $n$ times. For large $n$ that is about $1/e$, so about 36.8% of rows are missed and 63.2% appear. At $n = 4$, $(3/4)^2 = 0.5625$ and $0.5625^2 = 0.3164$. Your draw missed 1 of 4 rows, one outcome of that chance:
 
 ```python
-in_bag_fraction = len(np.unique(idx)) / n   # close to 0.632 for large n
+idx = rng.integers(0, n, size=n)
 ```
 
-### A worked example
-
-With $n = 4$ rows, suppose the draw is `idx = [0, 0, 2, 3]`. Row 0 appears twice, rows 2 and 3 once, and row 1 never. The in-bag fraction is $3/4$, and row 1 is out-of-bag for this tree. You can mark it with a boolean mask:
-
-```python
-in_bag = np.zeros(4, dtype=bool)
-in_bag[idx] = True       # [True, False, True, True]
-oob = ~in_bag            # [False, True, False, False]
-```
+The usual mistake is `rng.choice(n, n, replace=False)`. That shuffles, so nothing is out-of-bag.
 
 > [!TIP]
-> Repeated indices set the same entry of `in_bag` more than once, which does no harm. You don't need `np.unique` to build the mask.
-
-## Out-of-bag error: a free test set
-
-Each row is out-of-bag for roughly a third of the trees. Those trees never saw that row. So if you average only their predictions for that row, you get an honest, held-out prediction.
-
-Do that for every row, and compute the mean squared error against the true labels. The result is the **out-of-bag (OOB) error**. It estimates test error without setting aside any data, and it tracks cross-validation closely once you have many trees.
+> Build the in-bag mask with `in_bag[idx] = True`. A repeated index writes the same slot twice, so you do not need `np.unique`.
 
 > [!KEY]
-> Score each row with only the trees that never saw it. That gives you a held-out error estimate from the training data alone.
+> For large $n$, a bootstrap sample holds about 63.2% of the distinct rows. The rest are out-of-bag for that tree.
 
-The recipe for each tree $b$:
+## Score the rows a tree missed
 
-1. Build the out-of-bag mask for tree $b$.
-2. Add tree $b$'s predictions on those rows to a running `total`.
-3. Add 1 to a running `count` for those rows.
+Average, for each row, only the trees that missed it. That mean squared error is the **out-of-bag error**.
 
-Then the OOB prediction for each row is `total / count`, over rows with `count > 0`, and the OOB error is the mean of the squared differences from `y`.
+Take $x = [1, 2, 3, 4]$ and $y = [0, 10, 10, 0]$. The draw `[0, 0, 1, 1]` splits at 1.5, with leaf values 0 and 10. Out-of-bag rows 2 and 3 both get 10. The draw `[2, 2, 3, 3]` splits at 3.5, with leaf values 10 and 0. Out-of-bag rows 0 and 1 both get 10.
+
+The held-out scores line up as follows:
+
+| Row | $y$ | Prediction | Squared error |
+|---|---|---|---|
+| 0 | 0 | 10 | 100 |
+| 1 | 10 | 10 | 0 |
+| 2 | 10 | 10 | 0 |
+| 3 | 0 | 10 | 100 |
+
+The mean is $(100 + 0 + 0 + 100) / 4 = 50$.
+
+Tree 1 predicts 0 on row 3, but that row was in its bag. Averaging both trees there gives 5, which is not held out.
+
+Add each stump's out-of-bag predictions into `total`, and add 1 into `count`. Then:
+
+```python
+pred = total[count > 0] / count[count > 0]
+oob = np.mean((pred - y[count > 0]) ** 2)
+```
+
+The usual mistake is averaging every stump on every row. That is training error.
+
+> [!KEY]
+> Score each row with only the trees that missed it. The mean squared error of those scores is a held-out estimate.
 
 > [!WARNING]
-> With few trees, some rows land in every bootstrap sample and keep `count == 0`. Dividing `total / count` for those rows gives `nan`, so select the rows with `count > 0` before you divide.
+> Some rows stay in every bag and keep `count == 0`. Dividing there returns `nan`. Select `count > 0` first.
 
-## Random forests: make the trees disagree
+## Hide features so the trees disagree
 
-Suppose one feature is very strong. Almost every bagged tree splits on it at the root, so the trees look alike and $\rho$ stays high. A **random forest** fixes this: at every split, each tree may only look at a random subset of the features. Some trees then have to use the second-best feature. Each tree gets a little worse, but they disagree more, so $\rho$ drops and the floor $\rho\sigma^2$ drops with it. The exercise uses plain bagging, but this is the one change that turns bagging into a forest.
+If one feature dominates, every bagged stump splits on it and $\rho$ stays high. A **random forest** shows each split only a random subset of columns. Some trees miss the strong feature. Each tree is a bit worse, and $\rho$ falls.
 
-## Boosting: fix the mistakes in turn
+The same identity, with $\sigma^2 = 1$ and $B = 50$, gives $0.804$ at $\rho = 0.8$ and $0.216$ at $\rho = 0.2$. The usual mistake is calling another bootstrap a forest. The change is which columns a split may see. This exercise bags rows only.
 
-Boosting builds a model $F$ as a sum of small trees, added one at a time. Start with $F = 0$ for every row. Then repeat:
+## Add one stump for the leftover error
 
-1. Work out, for every row, which way to nudge $F$ to lower the loss.
-2. Fit a stump $h$ to those nudges.
-3. Add a small step of that stump: $F \leftarrow F + \eta\,h$.
+Take $x = [1, 2, 3, 4]$ and $y = [1, 3, 8, 10]$, with $F = 0$. Squared labels 1, 9, 64, and 100 sum to 174. The loss, half the mean, is $0.5 \times 174/4 = 21.75$. The best stump splits at 2.5. Leaf means are $(1+3)/2 = 2$ and $(8+10)/2 = 9$, so $h = [2, 2, 9, 9]$. At $\eta = 0.5$, $F = [1, 1, 4.5, 4.5]$. Residual squares 0, 4, 12.25, and 30.25 sum to 46.5, and the loss is $0.5 \times 46.5/4 = 5.8125$.
 
-The **learning rate** $\eta$ (eta) is a number such as $0.1$ that keeps each step small.
-
-The nudge in step 1 is the negative gradient of the loss with respect to each prediction:
+This is **gradient boosting**, or functional gradient descent. You step $F$ by a stump fitted to the negative gradient:
 
 $$
 g_i = -\frac{\partial\, \ell(y_i, F_i)}{\partial F_i} .
 $$
 
-Read it aloud: for row $i$, ask how the loss $\ell$ changes when you change that row's prediction $F_i$, and go the opposite way. It is ordinary gradient descent, except the step must come from a stump, so it generalises to new rows.
-
-In the exercise, the caller passes this as a function, `loss_grad(y, F)`, which returns the whole vector $g$.
-
-### Squared error means fitting the residuals
-
-Take the loss $\ell = \tfrac12 (y - F)^2$. Its negative gradient is
+$g_i$ is minus the slope of $\ell$ in that row's prediction. The caller passes `loss_grad(y, F)`, and you set $F \leftarrow F + \eta h$. For squared error the slope is the residual:
 
 $$
-g_i = y_i - F_i ,
+g_i = y_i - F_i .
 $$
 
-which is the **residual**: what the model still gets wrong on row $i$. So under squared error, each round fits a stump to the leftover error. In the first round $F = 0$, so the target is the raw label $y$ itself.
-
-> [!KEY]
-> Under squared error, each boosting round fits a stump to the residuals $y - F$ and adds only a small step, $\eta h$, of it.
+On round 1, $F = 0$, so $g = y = [1, 3, 8, 10]$, the target you fitted:
 
 ```python
-target = loss_grad(y, F)             # y - F under squared error
-stump = _fit_stump(X, target)
-F = F + learning_rate * _predict_stump(stump, X)
+target = loss_grad(y, F)
+F = F + learning_rate * _predict_stump(_fit_stump(X, target), X)
 ```
 
-### How much one round helps
+The usual mistake is fitting every round to $y$. After round 1 the target is the residual.
 
-Measure the training loss as the mean over rows, $L = \frac{1}{n}\sum_i \tfrac12 (y_i - F_i)^2$. Because each stump leaf predicts the mean of the targets in that leaf, one round with learning rate $\eta$ lowers the loss by exactly
+Each leaf predicts the mean of its targets, so one round drops the mean loss by
 
 $$
-L_{\text{before}} - L_{\text{after}} = \eta\left(1 - \frac{\eta}{2}\right) \cdot \frac{1}{n}\sum_i h_i^2 ,
+L_{\text{before}} - L_{\text{after}} = \eta\left(1 - \frac{\eta}{2}\right) \cdot \frac{1}{n}\sum_i h_i^2 .
 $$
 
-where $h_i$ is the stump's prediction on row $i$. Read it aloud: the drop equals $\eta(1 - \eta/2)$ times the average squared stump output. For any $\eta$ between 0 and 2, that factor is positive, so the loss falls every round unless the stump predicts all zeros.
+It is $\eta(1 - \eta/2)$ times the mean of $h^2$. Between $\eta = 0$ and $\eta = 2$ the loss falls, unless $h$ is all zeros. Here $h^2$ is 4, 4, 81, and 81, mean $170/4 = 42.5$. Then $0.5 \times 0.75 \times 42.5 = 15.9375$, and $21.75 - 5.8125 = 15.9375$:
 
 ```python
 drop = eta * (1 - eta / 2) * np.mean(h ** 2)
 ```
 
-### A worked round
+The usual mistake is $\eta = 1$ for many rounds. The identity still holds, but later stumps fit noise. A small $\eta$, such as 0.1, keeps each step short.
 
-Take $x = [1, 2, 3, 4]$ and $y = [1, 3, 8, 10]$, starting from $F = 0$. The starting loss is $\tfrac12 \cdot (1 + 9 + 64 + 100)/4 = 21.75$.
+> [!KEY]
+> Under squared error, each round fits a stump to the residual $y - F$ and adds $\eta$ times that stump.
 
-The target is $y$. The best stump splits at $x \le 2.5$ and predicts each side's mean, so $h = [2, 2, 9, 9]$. With $\eta = 0.5$, the new predictions are $F = [1, 1, 4.5, 4.5]$.
-
-The residuals are $[0, 2, 3.5, 5.5]$. Their squares sum to $0 + 4 + 12.25 + 30.25 = 46.5$, so the new loss is $\tfrac12 \cdot 46.5 / 4 = 5.8125$. The formula agrees: the mean of $h^2$ is $(4 + 4 + 81 + 81)/4 = 42.5$, and $0.5 \times 0.75 \times 42.5 = 15.9375 = 21.75 - 5.8125$.
-
-### AdaBoost in one paragraph
-
-AdaBoost is boosting with a different loss, the exponential loss $e^{-yF}$ for labels $y$ of $-1$ or $+1$. It keeps a weight on each row. After each round, it scales a correctly classified row's weight down and a misclassified row's weight up, so the next weak learner focuses on the mistakes. That rule falls out of the same "follow the negative gradient" recipe. You do not implement it here.
+AdaBoost uses the loss $e^{-yF}$ for labels $-1$ and $+1$. At $y = 1$, $F = 0$ gives 1, and $F = 0.5$ gives $e^{-0.5} = 0.607$. At $y = -1$ and $F = 0.5$ the loss is $e^{0.5} = 1.649$, so a wrong row gets a larger weight next round. You do not code that rule. One mislabelled row can dominate because the loss grows so fast.
 
 > [!RECAP]
-> - The average of $B$ models with correlation $\rho$ has variance $\rho\sigma^2 + (1-\rho)\sigma^2 / B$.
-> - A bootstrap sample is `rng.integers(0, n, size=n)`: $n$ draws with replacement.
-> - A row's out-of-bag prediction averages only the stumps that missed it, and the OOB error is the mean squared error over rows with `count > 0`.
-> - Gradient boosting starts from $F = 0$, fits a stump to `loss_grad(y, F)`, and adds `learning_rate` times that stump's predictions.
-> - Under squared error the target is the residual, so the first round's target is $y$ itself.
+> Keep these five facts in hand:
+> - The variance of an average is $\rho\sigma^2 + (1-\rho)\sigma^2 / B$. Only the second term shrinks as $B$ grows.
+> - A bootstrap sample is `rng.integers(0, n, size=n)`. For large $n$, about 36.8% of rows are out-of-bag.
+> - Out-of-bag error averages only the stumps that missed each row, and it skips rows with `count == 0`.
+> - Gradient boosting starts from $F = 0$, fits a stump to `loss_grad(y, F)`, and adds `learning_rate` times that stump.
+> - Under squared error the first target is $y$, and one round drops the loss by $\eta(1-\eta/2)$ times the mean of $h^2$.
 
 ## Build it step by step
 
-The checks test the functions in this order. `_fit_stump` and `_predict_stump` are already written for you.
+`_fit_stump` and `_predict_stump` are already written. Build the five functions in this order:
 
-1. **`bagging_variance(rho, sigma2, B)`.** Takes three numbers and returns a float. It is the one-line formula above. Common mistake: dividing the whole thing by `B`, instead of only the `(1 - rho)` part.
-2. **`bootstrap_indices(n, rng)`.** Returns an integer array of shape `(n,)` with values from `0` to `n - 1`. Use `rng.integers(0, n, size=n)`. Common mistake: using `rng.choice(n, n, replace=False)`, which is a shuffle, not a bootstrap.
-3. **`fit_bagged_stumps(X, y, n_estimators, rng)`.** Returns two lists of length `n_estimators`: the stump dicts and the index arrays. For each estimator, draw `idx`, fit `_fit_stump(X[idx], y[idx])`, and keep `idx`. Common mistake: forgetting to return the indices, which `out_of_bag_error` needs.
-4. **`out_of_bag_error(X, y, stumps, in_bag_indices)`.** Returns a float. Keep `total` and `count` arrays of shape `(n,)`. For each stump, build the boolean out-of-bag mask, and add that stump's predictions on those rows. Average only the rows with `count > 0`. Common mistake: averaging over all stumps for every row, which reports training error, not held-out error.
-5. **`gradient_boost(X, y, loss_grad, n_rounds, learning_rate)`.** Returns the final `F` of shape `(n,)` and a list of `n_rounds` dicts. Start from `np.zeros(n)`. Each round, compute `target`, fit a stump, update `F`, and append `{"target": target, "prediction": F.copy()}`. Common mistake: appending `F` without `.copy()`, or updating `F` in place, so every history entry ends up the same.
+1. **`bagging_variance(rho, sigma2, B)`** takes three numbers and returns a float. Return $\rho\sigma^2 + (1-\rho)\sigma^2 / B$. The usual mistake is dividing the first term by `B`. Write it like this:
+
+    ```python
+    def bagging_variance(rho, sigma2, B):
+        # Return rho * sigma2 + (1 - rho) * sigma2 / B as a float.
+    ```
+
+2. **`bootstrap_indices(n, rng)`** returns integers of shape `(n,)`, each from 0 to `n - 1`. Call `rng.integers(0, n, size=n)`. The usual mistake is sampling without replacement. Write it like this:
+
+    ```python
+    def bootstrap_indices(n, rng):
+        # n draws with replacement on 0, ..., n - 1.
+    ```
+
+3. **`fit_bagged_stumps(X, y, n_estimators, rng)`** returns stump dicts and index arrays, one pair per estimator. Draw `idx`, fit `_fit_stump(X[idx], y[idx])`, and keep both. The usual mistake is dropping the indices. Write it like this:
+
+    ```python
+    def fit_bagged_stumps(X, y, n_estimators, rng):
+        # For each estimator, store the stump and its bootstrap idx.
+    ```
+
+4. **`out_of_bag_error(X, y, stumps, in_bag_indices)`** returns a float. Keep `total` and `count` of shape `(n,)`. Add each stump only on its out-of-bag rows. Average squared error where `count > 0`. The usual mistake is using every stump on every row. Write it like this:
+
+    ```python
+    def out_of_bag_error(X, y, stumps, in_bag_indices):
+        # Accumulate on the out-of-bag mask, then mean squared error.
+    ```
+
+5. **`gradient_boost(X, y, loss_grad, n_rounds, learning_rate)`** returns `F` of shape `(n,)` and `n_rounds` dicts. Start from `np.zeros(n)`. Each round, fit a stump to `loss_grad(y, F)` and add `learning_rate` times its predictions. Append `{"target": target, "prediction": F.copy()}`. The usual mistake is appending `F` without `.copy()`. Write it like this:
+
+    ```python
+    def gradient_boost(X, y, loss_grad, n_rounds, learning_rate):
+        # Step F from zeros. Copy F into each history dict.
+    ```
 
 ## Cost and scaling
 
-The following table compares the work with $B$ bagged trees or $M$ boosting rounds, $n$ rows, and $d$ features.
+The costs for $B$ trees or $M$ rounds, $n$ rows, and $d$ features line up as follows:
 
 | Task | How the work grows | Notes |
 |---|---|---|
 | One bootstrap sample | Proportional to $n$ | $n$ random draws. |
-| Bagging $B$ stumps | $B$ times one stump fit, about $B \cdot d \cdot n \log n$ | Trees are independent, so they run in parallel. |
+| Bagging $B$ stumps | About $B \cdot d \cdot n \log n$ | Independent trees can run together. |
 | Out-of-bag error | Proportional to $B \cdot n$ | One prediction per tree per row. |
-| Boosting $M$ rounds | $M$ times one stump fit | Strictly one after another. |
-
-Bagging parallelises across trees. Boosting cannot, because each round needs the previous round's predictions.
+| Boosting $M$ rounds | $M$ times one stump fit | Round $m$ reads $F$ from round $m-1$. |
 
 ## Where this breaks
 
-- **Bagging plateaus.** Once the $\rho\sigma^2$ floor dominates, more trees only cost time. Use feature subsampling to lower $\rho$.
-- **Boosting overfits.** With a large learning rate and many rounds, later stumps fit noise. Use a small `learning_rate`, fewer rounds, and stop when a validation score stops improving.
-- **AdaBoost and label noise.** The exponential loss grows very fast for badly wrong rows, so a mislabelled row can grab most of the weight. Losses that grow more slowly are more robust.
-- **Bias stays.** Averaging copies of a biased model gives a biased average. Boosting can lower bias, but it adds variance with each round, which is why it needs a small learning rate.
+Four failures show up in practice:
+
+- Past the $\rho\sigma^2$ floor, more trees only add time. A random column subset at each split lowers $\rho$.
+- A large learning rate and many rounds make boosting fit noise. Keep `learning_rate` small and stop when validation stops improving.
+- AdaBoost's exponential loss lets one mislabelled row take most of the weight. A slower-growing loss is more robust.
+- Averaging a biased model stays biased. Boosting can cut bias, and each round adds variance, so the learning rate stays small.
 
 ## The exercise
 
-You implement the core of both families. Write `bagging_variance` and `bootstrap_indices`, then `fit_bagged_stumps`, which fits one stump per bootstrap sample, and `out_of_bag_error`, which scores the ensemble using only the stumps that did not see each row. Finally write `gradient_boost`, which starts from zero and adds `learning_rate` times a stump fitted to `loss_grad(y, F)` each round.
+You implement `bagging_variance`, `bootstrap_indices`, `fit_bagged_stumps`, `out_of_bag_error`, and `gradient_boost`.
 
-The checks confirm `bagging_variance` at its three extremes and against a random simulation. They check that `bootstrap_indices` has the right shape and range and an in-bag fraction near $1 - 1/e$, that `fit_bagged_stumps` returns one stump and one index array per estimator, and that `out_of_bag_error` lands near a true held-out error. For `gradient_boost`, they check that the first target is the raw labels, that training loss falls every round, and that one round's drop matches $\eta(1-\eta/2)$ times the mean of $h^2$ for several learning rates.
+The checks hit the edges $\rho = 0$, $\rho = 1$, and $B = 1$, plus a correlated simulation. `bootstrap_indices` must have shape `(n,)`, stay in range, repeat rows, and land near in-bag fraction $1 - 1/e$. `fit_bagged_stumps` returns one stump and one index array per estimator. `out_of_bag_error` tracks a real held-out error. For `gradient_boost`, the first target is $y$, loss falls every round, and one round's drop matches $\eta(1-\eta/2)$ times the mean of $h^2$.

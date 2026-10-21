@@ -2,15 +2,15 @@
 title: Generalisation and model selection
 slug: 07-model-selection
 part: "Part 2 — Classical machine learning"
-summary: Estimate how well a model does on unseen data with cross-validation and leave-one-out, and use that to pick settings.
+summary: Estimate error on new data with cross-validation, leave-one-out, and learning curves, then pick a setting.
 minutes: 60
 gpu: false
 objectives:
   - Build k-fold cross-validation and use it to pick a ridge penalty.
-  - Compute leave-one-out error for ridge regression from a single fit, using the hat matrix.
-  - Build a learning curve and read what it says about more data versus a better model.
-  - Estimate the Rademacher complexity of a small set of models by sampling random signs.
-  - Explain why choosing a setting and scoring it on the same folds gives a score that is too good.
+  - Compute leave-one-out error for ridge regression from one fit, using the hat matrix.
+  - Build a learning curve and read whether you need more data or a richer model.
+  - Estimate Rademacher complexity for a small set of models by sampling random signs.
+  - Explain why the winning score among many settings is too good to report.
 prereqs:
   - 01-the-learning-problem
 exercise: 07-model-selection
@@ -18,351 +18,236 @@ exercise: 07-model-selection
 
 # Generalisation and model selection
 
-Every model so far picks its weights by doing well on the training data.
-What you care about is how it does on data it has never seen. A student who
-memorises last year's exam can score perfectly on it and still fail this
-year's. The gap between those two scores is the *generalisation gap*, and
-lesson 1 measured it once with a held-out set.
+You fit a model on last year's exam and it scores perfectly. This year's paper is the one that matters. The gap between those two scores is the *generalisation gap*.
 
-This lesson asks two practical questions. How big can that gap be? And how
-do you pick between models, such as ten different ridge penalties, when you
-can't see the future data?
+You also have several ridge penalties, and you must pick one before new marks arrive. A penalty that wins on papers you already used can be lucky.
 
-Theory gives the first answer, but its numbers are far too loose to act on.
-So you build the tools people use instead: k-fold cross-validation, a fast
-shortcut for leave-one-out, and learning curves. You also build a small
-estimator for how flexible a set of models is.
+You will bound that gap, score flexibility with random signs, and estimate error with cross-validation, leave-one-out, and a learning curve.
 
 ## What you already know
 
-- The training error is the average loss on the data you fit, and it tends to look better than the truth.
-- The *true risk* is the average loss on new data from the same source, which you can't compute directly.
-- Ridge regression fits $w = (X^{\top}X + \lambda I)^{-1}X^{\top}y$, where $\lambda$ is the penalty strength.
-- The mean squared error, or MSE, is the average of the squared differences between predictions and targets.
-- Data is *i.i.d.* when each example is drawn independently from the same distribution.
+These five ideas are the ones this lesson uses:
 
-## How big can the gap be
+- Training error is the average loss on the data you fit, and on 100 points it often beats the error on new points.
+- *True risk* is the average loss on new data from the same source, which the training set cannot give you.
+- Ridge regression with penalty $\lambda = 1$ fits $w = (X^{\top}X + I)^{-1}X^{\top}y$.
+- Mean squared error, or MSE, averages squared gaps, so gaps of 1 and 3 give $(1 + 9) / 2 = 5$.
+- Examples are *i.i.d.* when each is drawn independently from the same distribution, as with two flips of one coin.
 
-Picture flipping a coin 100 times to test whether it is fair. With a single
-coin, getting 70 heads is rare. With a thousand coins, some coin will
-probably land 70 heads by luck. Model choice works the same way. The more
-models you try, the more likely one of them looks good on your data by
-accident.
+## Bound the gap for a short list of models
 
-Theory turns this into a formula. Suppose you pick from $M$ candidate
-models, your loss is always between 0 and 1, and your $n$ training examples
-are i.i.d. Then, with probability at least $1 - \delta$, every one of the $M$
-models has a gap of at most:
+You try two scoring rules on four answers. Each loss sits between 0 and 1. You allow the claim to fail with probability 0.5.
+
+Twice the number of rules, divided by 0.5, is 8. The natural log of 8 is about 2.079. Divide by $2 \times 4 = 8$ to get 0.260. The square root is about 0.510, so the gap is at most about 0.51.
+
+That guarantee is a *finite-class generalisation bound*:
 
 $$
 \text{gap} \le \sqrt{\frac{\log(2M / \delta)}{2n}}
 $$
 
-Read it aloud: take the log of twice the number of models divided by the
-allowed failure chance $\delta$, divide by twice the sample size, and take the
-square root. Two lessons follow. The gap shrinks like one over $\sqrt{n}$, so
-four times the data halves it. And trying more models widens it, but only
-slowly, through a log.
+$M$ is the number of models, $\delta$ is the failure chance, and $n$ is the number of i.i.d. examples. The log is natural, and the loss must sit between 0 and 1.
 
-```python
-gap = np.sqrt(np.log(2 * M / delta) / (2 * n))
-```
+The same inputs return 0.510. At $n = 1000$, $M = 100$, and $\delta = 0.05$, the bound is about 0.064. Four times the data halves it.
 
-With $n = 1000$, $M = 100$, and $\delta = 0.05$, the bound is about $0.064$.
+Numpy is `np.sqrt(np.log(2 * M / delta) / (2 * n))`.
 
-This formula needs a finite number of models. A linear model has infinitely
-many possible weight vectors. Theory handles that with a measure of how
-flexible a set of models is, such as the VC dimension or the Rademacher
-complexity. The next section builds the second one.
+The usual mistake is `np.log10`, which gives about 0.336 on these inputs.
 
-## Measure flexibility with random signs
+> [!KEY]
+> The gap shrinks like $1/\sqrt{n}$. Extra models widen it only through a logarithm.
 
-A flexible set of models can fit anything, even pure noise. The *Rademacher
-complexity* measures exactly that. Flip a fair coin for each of your $n$
-examples to get a random sign $\sigma_i$ of $+1$ or $-1$. Then ask how well
-the best model in your set lines up with those random signs.
+Infinite weights need a different score.
 
-Each row of a matrix $F$ holds one model's outputs on the $n$ examples, so
-$F$ has shape (number of models, $n$). The estimate is:
+## Score flexibility with random signs
 
-$$
-\hat{R} = \text{average over many random } \sigma \text{ of }
-\max_{j} \frac{1}{n} \sum_{i=1}^{n} \sigma_i F_{ji}
-$$
+Model 1 outputs $[1, 1]$ on two examples. Model 2 outputs $[1, -1]$. Give each example a random sign, $+1$ or $-1$.
 
-Read it aloud: draw a random sign vector $\sigma$. For each model $j$, take
-the dot product of its row with $\sigma$ and divide by $n$. Keep the largest
-of those values. Repeat for many sign vectors and average the results.
+For signs $[1, -1]$, model 1 scores $(1 - 1) / 2 = 0$ and model 2 scores $(1 + 1) / 2 = 1$.
 
-```python
-signs = rng.choice(np.array([-1.0, 1.0]), size=(num_draws, n))
-estimate = (F @ signs.T).max(axis=0).mean() / n
-```
+All four sign patterns give these scores:
 
-> [!WARNING]
-> `F @ signs.T` has shape (number of models, `num_draws`). Take the max over `axis=0`, across models, to keep the best model for each draw. Then average over the draws.
-
-A set with one model scores close to 0, because on average its dot product
-with random signs is 0. A set that can match every possible sign pattern
-scores exactly 1, the maximum.
-
-### Work the random-sign estimate by hand
-
-Take two models on $n = 2$ examples, with outputs $f_1 = [1, 1]$ and
-$f_2 = [1, -1]$. There are only four sign vectors, so you can list them all
-instead of sampling.
-
-| $\sigma$ | $\frac{1}{2}\,\sigma \cdot f_1$ | $\frac{1}{2}\,\sigma \cdot f_2$ | Largest |
+| Signs | Model 1 | Model 2 | Best |
 |---|---|---|---|
 | $[-1, -1]$ | $-1$ | $0$ | $0$ |
 | $[-1, 1]$ | $0$ | $-1$ | $0$ |
 | $[1, -1]$ | $0$ | $1$ | $1$ |
 | $[1, 1]$ | $1$ | $0$ | $1$ |
 
-The average of the last column is $0.5$. With many sampled draws, your
-function returns a number close to $0.5$ on this input.
+The last column averages to $(0 + 0 + 1 + 1) / 4 = 0.5$.
 
-## Why theory can't pick your model
+That average is the *empirical Rademacher complexity*. Row $j$ of $F$ holds model $j$ on $n$ examples:
 
-These bounds hold for every model in the set at once. They have to cover the
-worst possible case, and the model you trained is almost never that case. So
-in practice the bounds are loose by a huge margin. For a modest neural
-network, a bound on the error can come out larger than 1, which says nothing
-at all.
+$$
+\hat{R} = \text{average over many random } \sigma \text{ of }
+\max_{j} \frac{1}{n} \sum_{i=1}^{n} \sigma_i F_{ji}
+$$
 
-The bounds are still useful as a guide. More data helps, at a rate of one
-over $\sqrt{n}$. Flexibility hurts. Regularisation limits flexibility. None
-of that tells you which of ten ridge penalties to use. For that, you stop
-bounding the true risk and start estimating it.
+You dot each row with a sign vector $\sigma$, divide by $n$, keep the max, and average over draws of $\sigma$.
 
-## k-fold cross-validation
+The formula returns that same 0.5. One model averages near 0. A set that matches every sign pattern scores 1.
 
-Think of a class that splits into five study groups. Each group takes turns
-sitting out, and the other four teach a model. The group that sat out then
-tests it. Every student is tested once, always by a model that never saw
-them.
+Numpy is `(F @ signs.T).max(axis=0).mean() / n`, with `signs` of shape `(num_draws, n)`.
 
-That is *k-fold cross-validation*. Shuffle the $n$ indices, cut them into $k$
-*folds* of nearly equal size, and for each fold:
+The usual mistake is `max(axis=1)`, the best draw per model rather than the best model per draw.
 
-1. Fit on the other $k - 1$ folds.
-2. Predict on the held-out fold.
-3. Record the MSE on that fold.
+> [!WARNING]
+> `F @ signs.T` has shape `(number of models, num_draws)`. Max over `axis=0`.
 
-The result is $k$ numbers, and their average estimates the true risk.
+A bound above 1 does not constrain a loss between 0 and 1. Estimate the risk when you pick a penalty.
 
-```python
-order = rng.permutation(n)
-folds = [np.sort(chunk) for chunk in np.array_split(order, k)]
-```
+## Estimate the risk with k-fold cross-validation
 
-`np.array_split` handles sizes that don't divide evenly. With $n = 7$ and
-$k = 3$, it gives folds of size 3, 2, and 2.
+Shuffle seven indices to $[3, 1, 4, 0, 6, 2, 5]$. Cut them into groups of 3, 2, and 2: $[3, 1, 4]$, $[0, 6]$, $[2, 5]$. Sort each group. Every index from 0 to 6 appears once. Each group sits out once. Held-out MSEs of 4, 2, and 2 average to $(4 + 2 + 2) / 3 = 8/3$.
+
+This is *k-fold cross-validation*. One shuffle, $k$ folds, and the average held-out MSE:
+
+$$
+\text{CV} = \frac{1}{k}\sum_{f=1}^{k} \text{MSE}_f
+$$
+
+$\text{MSE}_f$ is the mean squared error of a model that never saw fold $f$. Scores 4, 2, and 2 give $8/3$.
+
+Numpy shuffles with `rng.permutation(n)`, then `np.array_split`, then `np.sort` on each piece.
+
+The usual mistake is `np.split`. For $n = 7$ and $k = 3$ it errors. `array_split` returns sizes 3, 2, and 2.
 
 > [!TIP]
-> Check your folds with `np.array_equal(np.sort(np.concatenate(folds)), np.arange(n))`. It is `True` only when every index appears exactly once.
+> `np.array_equal(np.sort(np.concatenate(folds)), np.arange(n))` is true only when every index appears once.
 
-The choice of $k$ is a trade-off:
-
-- Each fold trains on only $\frac{k-1}{k}$ of the data. With less data a
-  model is usually a bit worse, so the estimate comes out slightly too
-  pessimistic. A larger $k$ shrinks that bias.
-- The training sets overlap heavily, so their scores move together. A larger
-  $k$ means more overlap and a noisier average. It also means more fits.
-
-At $k = n$ you get *leave-one-out*: the least bias and among the most noise.
-Values from 5 to 10 are the usual compromise.
+Each fold trains on $(k - 1) / k$ of the rows. For $k = 5$ that is 0.8, a little pessimistic. At $k = n$ you get *leave-one-out*, less bias and a noisier average. Folds from 5 to 10 are the usual compromise.
 
 > [!KEY]
-> In cross-validation, every example is scored once, by a model that never saw it. The average of the $k$ fold scores is your estimate of the true risk.
+> Every example is scored once, by a model that never saw it.
 
-## The leave-one-out shortcut
+## Read leave-one-out error from one ridge fit
 
-Leave-one-out needs $n$ fits, one per held-out example. For ridge regression
-you can get all $n$ results from a single fit.
+Leave-one-out refits once per point. Ridge can do it in one fit.
 
-Ridge predictions on the training data are a matrix times the targets,
-$\hat{y} = Hy$. The matrix $H$ is the *hat matrix*, because it puts the hat
-on $y$:
+Take $\lambda = 1$, inputs $1, 2, 3$, and targets $1, 2, 2$. Then $X^{\top}X = 1 + 4 + 9 = 14$, so $14 + \lambda = 15$. And $X^{\top}y = 1 + 4 + 6 = 11$, so $w = 11/15$.
+
+Fitted values are $11/15$, $22/15$, and $33/15$. Residuals are $4/15$, $8/15$, and $-1/5$. Diagonal weights are $1/15$, $4/15$, and $9/15$. Divide each residual by one minus its weight: $2/7$, $8/11$, and $-1/2$. The mean of the squares is about 0.2869.
+
+Call this matrix the *hat matrix*, and call $h_{ii}$ the *leverage*. The scaled residuals are the leave-one-out residuals:
 
 $$
 H = X (X^{\top}X + \lambda I)^{-1} X^{\top}
 $$
 
-Read it aloud: form $X^{\top}X$, add $\lambda$ to its diagonal, invert it,
-and sandwich it between $X$ and $X^{\top}$. $H$ has shape $n$ by $n$. Its
-diagonal entry $h_{ii}$ is the *leverage* of example $i$: how much that
-example's own target pulls on its own prediction.
-
-The shortcut says the leave-one-out residual for example $i$ is:
-
 $$
 y_i - \hat{y}_i^{(-i)} = \frac{r_i}{1 - h_{ii}}, \qquad r = y - Hy
 $$
 
-Read it aloud: $\hat{y}_i^{(-i)}$ is the prediction for example $i$ from a
-model fitted without it. Take the ordinary residual $r_i$ from the full fit,
-and divide by one minus that example's leverage. A high-leverage example
-pulled the fit toward itself, so its ordinary residual looks too small. The
-division scales it back up. The leave-one-out MSE is the mean of the squares
-of these residuals.
+$H$ is $n$ by $n$. Dividing by $1 - h_{ii}$ undoes the pull of a high leverage. The formula returns $2/7$, $8/11$, and $-1/2$.
 
-```python
-H = X @ np.linalg.inv(X.T @ X + lam * np.eye(d)) @ X.T
-loo = (y - H @ y) / (1 - np.diag(H))
-```
+Numpy builds $H$ as `X @ np.linalg.inv(X.T @ X + lam * np.eye(d)) @ X.T`. Divide `y - H @ y` by `1 - np.diag(H)`.
+
+The usual mistake is dropping `lam * np.eye(d)`. At $\lambda = 1$ the divisor is then 14, not 15.
 
 > [!KEY]
-> For ridge, one fit gives every leave-one-out residual. Divide each ordinary residual by one minus its leverage.
+> For ridge, divide each ordinary residual by one minus its leverage. One fit is enough.
 
-### Work the shortcut by hand
+## Keep the choice off the score you report
 
-Take one feature, three examples, and $\lambda = 1$:
+Twenty penalties share five folds, and the winner averages 0.20. One of twenty tends to be lucky, so 0.20 is too good.
 
-$$
-X = \begin{bmatrix} 1 \\ 2 \\ 3 \end{bmatrix}, \quad
-y = \begin{bmatrix} 1 \\ 2 \\ 2 \end{bmatrix}
-$$
+Use five outer folds to score. Inside each outer training set, inner cross-validation picks the penalty. The outer fold scores that choice. An outer average of 0.35 is the number you report.
 
-Then $X^{\top}X + \lambda = 1 + 4 + 9 + 1 = 15$, so the inverse is
-$1/15 \approx 0.0667$. Each entry of $H$ is $x_i x_j / 15$. The following
-table shows each step, rounded to four decimal places:
+This is *nested cross-validation*. The inner loop chooses and the outer loop scores the recipe, both by averaging MSE. The outer plugs in as 0.35, not the lucky 0.20.
 
-| Example | Leverage $h_{ii}$ | Fitted $\hat{y}_i$ | Residual $r_i$ | LOO residual $r_i/(1-h_{ii})$ |
-|---|---|---|---|---|
-| 1 | $1/15 = 0.0667$ | $0.7333$ | $0.2667$ | $0.2857$ |
-| 2 | $4/15 = 0.2667$ | $1.4667$ | $0.5333$ | $0.7273$ |
-| 3 | $9/15 = 0.6$ | $2.2$ | $-0.2$ | $-0.5$ |
-
-The fitted values come from $w = X^{\top}y / 15 = 11/15$. Refitting three
-times without each example gives the same three LOO residuals. The
-leave-one-out MSE is $(0.2857^2 + 0.7273^2 + 0.5^2)/3 = 0.2869$.
-
-## Choose a setting without fooling yourself
-
-Suppose you run cross-validation for twenty ridge penalties and pick the one
-with the lowest score. That score is too good. Remember the thousand coins:
-among twenty penalties, one tends to look lucky on these particular folds.
-The more settings you compare, the more optimistic the winning score.
-
-*Nested cross-validation* keeps the two jobs apart. An outer loop splits the
-data into folds for scoring. Inside each outer training set, an inner
-cross-validation picks the penalty using only that data. The outer fold then
-scores the result on examples the inner loop never saw. The outer score
-estimates how well the whole pick-then-fit recipe works.
+The usual mistake is publishing 0.20 after it has already chosen the penalty.
 
 > [!KEY]
-> The best score among many settings is too optimistic. To report an honest number, score the choice itself on data the choice never saw.
+> The best score among many settings is too optimistic. Score the choice on data it never saw.
 
-## Learning curves
+## Read a learning curve
 
-A *learning curve* plots training error and validation error against the
-training-set size. With few examples, a model fits them closely, so
-training error is low and validation error is high. As the set grows,
-training error rises, validation error falls, and the two approach each
-other.
+Hold out 2 of 10 points. Shuffle the other 8 once. Train on the first 2, then the first 4, then all 8.
 
-Reading the curve tells you what to do next:
+At size 2 you might see training MSE 0.1 and validation MSE 0.9. At size 8, 0.4 and 0.5. Training error rose. Validation error fell.
 
-- Both curves meet at a high error: more data won't help. You need a more
-  flexible model or better features.
-- A wide gap remains at the largest size: the model overfits. More data,
-  stronger regularisation, or a simpler model all help.
+That plot is a *learning curve*. One validation set and one shuffle stop it jumping.
 
-To make the curves smooth, hold out one fixed validation set, shuffle the
-rest once, and train on the first `size` examples of that shuffle. Each
-training set then contains the smaller ones.
+If both curves meet near 0.7, you need a richer model or better features. A gap near 0.1 against 0.9 is too flexible a fit. More data, a stronger penalty, or a simpler model can help.
+
+Numpy holds the pool in `order[n_val:]` and scores with `np.mean((y_hat - y_tr) ** 2)`.
+
+The usual mistake is a new shuffle at every size, so larger sets are not supersets.
+
+Keep these checks in mind:
 
 > [!RECAP]
-> - The theoretical gap shrinks like $1/\sqrt{n}$, but the bounds are too loose to pick a model.
-> - k-fold cross-validation shuffles once, splits with `np.array_split`, and records the MSE on each held-out fold.
-> - For ridge, the leave-one-out residual is $r_i / (1 - h_{ii})$, where $h_{ii}$ is diagonal entry $i$ of the hat matrix.
-> - A learning curve uses one fixed validation set and trains on growing prefixes of one shuffled pool.
-> - The random-sign estimate takes the best model for each draw, averages over draws, and divides by $n$.
+> - The finite-class gap is $\sqrt{\log(2M/\delta) / (2n)}$, too loose to pick a penalty.
+> - k-fold cross-validation shuffles once, splits with `np.array_split`, and averages held-out MSE.
+> - For ridge, the leave-one-out residual is $r_i / (1 - h_{ii})$.
+> - A learning curve reuses one validation set and one shuffled pool.
+> - The random-sign score keeps the best model per draw, then divides by $n$.
 
 ## Build it step by step
 
-Build the functions in the order the checks test them.
+Build the five functions in the order the checks test them:
 
-1. **`k_fold_indices(n, k, rng)`**. Returns a list of `k` sorted integer
-   arrays that together hold every index from 0 to `n - 1` once. Use
-   `rng.permutation(n)`, `np.array_split`, and `np.sort`. Common mistake:
-   using `np.split`, which fails when `k` doesn't divide `n`.
-2. **`cross_val_score(fit, predict, X, y, k)`**. Returns an array of shape
-   `(k,)`. Create `rng = np.random.default_rng(0)` inside the function so
-   every call uses the same folds. For each fold, find the training indices
-   with `np.setdiff1d`, call `model = fit(X[train], y[train])`, then
-   `predict(model, X[test])`, and store the MSE. Common mistake: passing in
-   or reusing an outside random generator, which makes two calls disagree.
-3. **`loo_linear_smoother(X, y, lam)`**. Returns one float. Build the hat
-   matrix, take `np.diag`, divide the residuals by `1 - leverage`, square,
-   and take `np.mean`. Common mistake: forgetting `lam * np.eye(d)`, which
-   breaks the match at `lam > 0`.
-4. **`learning_curve(fit, predict, X, y, train_sizes, val_fraction, seed)`**.
-   Returns two arrays, each with one entry per size. Draw
-   `order = np.random.default_rng(seed).permutation(n)`, take the first
-   `int(round(val_fraction * n))` indices as the validation set and the rest
-   as the pool. For each size, train on `pool[:size]` and record the MSE on
-   those training examples and on the validation set. Common mistake:
-   reshuffling for each size, which makes the curve jumpy.
-5. **`empirical_rademacher(losses_matrix, rng, num_draws)`**. Returns one
-   float. Draw a `(num_draws, n)` array of signs with `rng.choice`, compute
-   `losses_matrix @ signs.T` to get shape `(num_models, num_draws)`, take the
-   `max` over `axis=0`, then the mean, then divide by `n`. Common mistake:
-   taking the max over the wrong axis, which returns the best draw instead of
-   the best model.
+1. **`k_fold_indices(n, k, rng)`**. Returns `k` sorted integer arrays that partition `0` to `n - 1`. Sizes differ by at most one. Use `rng.permutation`, `np.array_split`, and `np.sort`. The common mistake is `np.split` when `k` does not divide `n`. The pieces have these shapes:
+
+```python
+order = rng.permutation(n)         # shape (n,)
+chunks = np.array_split(order, k)  # k arrays
+```
+
+2. **`cross_val_score(fit, predict, X, y, k)`**. Takes `X` of shape `(n, d)` and `y` of shape `(n,)`. Returns fold MSEs of shape `(k,)`. Use `np.random.default_rng(0)` inside, and `np.setdiff1d` for the training rows. The common mistake is an outside generator. Each fold does this:
+
+```python
+pred = predict(model, X[test])  # shape (n_test,)
+mse = np.mean((pred - y[test]) ** 2)
+```
+
+3. **`loo_linear_smoother(X, y, lam)`**. Returns one float. Divide residuals by `1 - np.diag(H)`, square, and average. The common mistake is forgetting `lam * np.eye(d)`. The matrices look like this:
+
+```python
+gram = X.T @ X + lam * np.eye(d)  # shape (d, d)
+H = X @ np.linalg.inv(gram) @ X.T  # shape (n, n)
+```
+
+4. **`learning_curve(fit, predict, X, y, train_sizes, val_fraction, seed)`**. Returns two arrays, one entry per size. Shuffle with `np.random.default_rng(seed)`, hold out `int(round(val_fraction * n))` rows, and train on `pool[:size]`. The common mistake is a new shuffle per size. One size uses these indices:
+
+```python
+val_idx = order[:n_val]  # shape (n_val,)
+train_idx = pool[:size]  # shape (size,)
+```
+
+5. **`empirical_rademacher(losses_matrix, rng, num_draws)`**. Takes `losses_matrix` of shape `(num_models, n)` and returns one float. Draw signs of shape `(num_draws, n)` with `rng.choice`, take `max` on `axis=0`, average, and divide by `n`. The common mistake is the other axis. The product has this shape:
+
+```python
+signs = rng.choice(np.array([-1.0, 1.0]), size=(num_draws, n))
+scores = losses_matrix @ signs.T  # shape (num_models, num_draws)
+```
 
 ## Cost and scaling
 
-The cost depends on $n$ examples, $d$ features, and $k$ folds. For ridge
-regression, one fit costs about $n \times d^2$ work. The following table
-compares the methods:
+One ridge fit costs about $n \times d^2$ work, for $n$ rows and $d$ features. The methods compare as follows:
 
-| Method | Work compared with one fit | In plain words |
+| Method | Work | Memory |
 |---|---|---|
-| k-fold cross-validation | about $k$ fits | Five folds cost about five fits. |
-| Leave-one-out by refitting | $n$ fits | Slow once $n$ is in the thousands. |
-| Leave-one-out by the shortcut | about one fit, plus the $n$-by-$n$ hat matrix | Fast for small $n$, but $H$ needs $n^2$ memory. |
-| Nested cross-validation | outer folds times inner folds times settings | Grows fast, so keep the grid small. |
-| Random-sign estimate | models times $n$ times draws | Cheap for the sizes in this exercise. |
+| k-fold cross-validation | about $k$ ridge fits | the training rows |
+| Leave-one-out by refitting | $n$ fits | the training rows |
+| Leave-one-out shortcut | about one fit, plus $H$ | $n^2$ entries in $H$ |
+| Nested cross-validation | outer times inner times settings | one fold at a time |
+| Random-sign estimate | models times $n$ times draws | the sign matrix |
 
-The shortcut is why leave-one-out is practical for linear models. Without
-it, its $n$ refits are why 5-fold or 10-fold cross-validation is the default.
+Those $n$ refits are why 5-fold or 10-fold is the default.
 
 ## Where this breaks
 
-**Data that isn't i.i.d.** Every method here assumes the examples are
-independent. Time series break that: a random split lets the model train on
-the future and test on the past. Grouped data, such as several scans from
-each patient, breaks it too. Use forward-in-time splits for time series and
-keep each group inside one fold.
+**Rows that are not i.i.d.** A random time-series split trains on the future and tests on the past. Scans from one patient leak the same way. Split a series forward in time, and keep each group in one fold.
 
-**Small data with many settings.** With only a few dozen examples, nested
-cross-validation has too little data in each loop for either estimate to be
-trustworthy. Compare fewer settings.
+**Too many settings.** With a few dozen rows, nested loops are too small to trust. Compare fewer settings.
 
-**Reusing folds until they stop being fair.** After many rounds of
-choosing features and settings by the same cross-validation score, that
-score has shaped your choices. It no longer measures performance on unseen
-data. Keep a final test set that you use once, at the end.
+**Reused folds.** Choosing features from one cross-validation score makes that score part of the fit. Keep a final test set and use it once.
 
-**Leverage close to 1.** If an example has $h_{ii}$ near 1, the shortcut
-divides by a number near zero. With $\lambda = 0$ and $d$ close to $n$, this
-happens often. A positive $\lambda$ keeps every leverage below 1.
+**Leverage near 1.** The shortcut divides by nearly 0. This is common at $\lambda = 0$ when $d$ is close to $n$. A positive $\lambda$ keeps every leverage below 1.
 
 ## The exercise
 
-You implement `k_fold_indices`, `cross_val_score`, `loo_linear_smoother`,
-`learning_curve`, and `empirical_rademacher`. The `fit` and `predict`
-arguments follow the pattern `model = fit(X_train, y_train)` and
-`y_pred = predict(model, X_test)`, so your functions work with any model.
+You implement `k_fold_indices`, `cross_val_score`, `loo_linear_smoother`, `learning_curve`, and `empirical_rademacher`. Callers pass `fit(X_train, y_train)` and `predict(model, X_test)`.
 
-The checks confirm `k_fold_indices` uses every index once in folds whose
-sizes differ by at most one, and that `cross_val_score` returns the same
-`k` finite scores on every call. They confirm `loo_linear_smoother` matches
-brute-force refitting for three penalties, and that `learning_curve` shows
-validation error falling as the training set grows. They confirm
-`empirical_rademacher` is near 0 for one model, grows for 300 models, and
-reaches 1 for a set that matches every sign pattern. The last check uses
-`cross_val_score` to pick a ridge penalty and confirms it clearly beats both
-no penalty and a very large one on fresh test data.
+The checks confirm a full partition into folds whose sizes differ by at most one, and the same `k` finite scores from every `cross_val_score` call. They match `loo_linear_smoother` to three brute-force refits, and they check that validation error falls as the training set grows. They check that `empirical_rademacher` is near 0 for one model, larger for 300 models, and 1 for every sign pattern. The last check picks a ridge penalty that beats both no penalty and a very large penalty on fresh data.

@@ -18,184 +18,106 @@ exercise: 33-mixtures-of-experts
 
 # Mixtures of experts
 
-In a normal transformer block, every token goes through the same
-feed-forward network. A common word like "the" gets exactly as much compute
-as a rare technical term. To make the network smarter you widen it, and then
-every token pays for the extra width.
+In a normal transformer block, every token goes through the same feed-forward network. A common word and a rare term cost the same compute. Widen the network, and every token pays for the extra width.
 
-A mixture of experts, or MoE, breaks that link. Think of a hospital. Instead
-of one doctor who sees every patient, you have many specialists and a
-receptionist who sends each patient to the two most suitable ones. The
-hospital employs many doctors, but each patient sees only a couple. In the
-model, the specialists are copies of the feed-forward network called
-*experts*, and the receptionist is a small *router*.
+A mixture of experts keeps many copies of that network, and a small router sends each token to a few of them. The model stores more parameters than one token uses.
 
-The model can then hold far more parameters than it spends compute on. The
-price is a routing decision that has to be learned, kept balanced, and
-squeezed into fixed-size hardware buffers. You build each of those pieces in
-this lesson.
+You build the router, the loss that stops one expert from taking every token, and the rule that drops a token when an expert's buffer is full. You also write the router's gradient.
 
 ## What you already know
 
-- The feed-forward sublayer acts on each token separately.
-- A softmax turns a vector of scores into probabilities that sum to one.
+This lesson uses five ideas from earlier work:
+
+- The feed-forward sublayer acts on each token on its own.
+- A softmax turns a row of scores into positive numbers that sum to one.
 - `np.argsort` returns the indices that would sort an array.
-- The sublayer sits inside a residual connection, so a zero output leaves the
-  token unchanged.
-- A gradient says how much the loss changes when you nudge a number.
+- A residual connection leaves a token unchanged when the sublayer outputs zero.
+- A matrix product sends a gradient from outputs back to weights.
 
-## Route each token
+## Route one token to two of three experts
 
-You have $n$ tokens, each a vector of $d$ numbers, stacked in `x` of shape
-`(n, d)`. You have $E$ experts. The router is a weight matrix $W_{\text{gate}}$
-of shape `(d, E)`. For each token it works in three steps:
+One token has three experts and scores `[2, 1, 0]`. Keep $k = 2$. A softmax exponentiates each score and divides by the row total. The exponentials are 7.389, 2.718, and 1, totalling 11.107. The probabilities are $7.389 / 11.107 = 0.6652$, $2.718 / 11.107 = 0.2447$, and $1 / 11.107 = 0.0900$.
 
-1. **Score every expert.** The logits are $z = x W_{\text{gate}}$, shape
-   `(n, E)`. One score per token per expert.
-2. **Turn scores into probabilities.** Apply a softmax to each row. Call the
-   result $s$, the full probabilities.
-3. **Keep the top $k$ and renormalise.** Pick the $k$ experts with the
-   highest scores, then rescale their probabilities to sum to one. These are
-   the *gate weights* $g$.
+Experts 0 and 1 are the top two. Their probabilities sum to 0.9099, so the gate weights are $0.6652 / 0.9099 = 0.7311$ and $0.2447 / 0.9099 = 0.2689$. Expert 2 gets weight 0 and does not run. If the chosen experts return 4 and 10, the mix is $0.7311 \times 4 + 0.2689 \times 10 = 5.613$.
 
-The gate weight for a chosen expert $i$ is
+That mix is a top-k router, and the rescaled probabilities are the gate weights. In general, `x` has shape `(n, d)` and $W_{\text{gate}}$ has shape `(d, E)`. Scores are $z = x W_{\text{gate}}$. The gate weight of a chosen expert is
 
 $$
 g_i = \frac{s_i}{\sum_{j \in \text{top-}k} s_j}
 $$
 
-Read it as: the expert's probability divided by the total probability of the
-chosen experts. Experts outside the top $k$ get weight 0 and never run.
-
-The layer's output for a token is the gate-weighted sum of the chosen
-experts' outputs:
+Divide the expert's probability by the total probability of the chosen experts. The token output is
 
 $$
 \hat{y} = \sum_{i \in \text{top-}k} g_i \cdot \text{expert}_i(x)
 $$
 
-In the exercise each expert is one matrix of shape `(d, d_out)`, so
-$\text{expert}_i(x)$ is `x[t] @ experts[i]`. In numpy, the router is:
+Here expert $i$ is a matrix of shape `(d, d_out)`, and its output is `x[t] @ experts[i]`. The three scores give gate weights 0.7311 and 0.2689 again, and the same mix is 5.613. Sketch the gates as follows:
 
 ```python
-logits = x @ W_gate                              # (n, E)
-top = np.argsort(-logits, axis=-1)[:, :k]        # (n, k)
-chosen = np.take_along_axis(full_probs, top, axis=-1)
+logits = x @ W_gate                        # (n, E)
+top = np.argsort(-logits, axis=-1)[:, :k]  # (n, k)
 ```
 
 > [!TIP]
-> `np.take_along_axis` picks a different set of columns in each row. With `top`
-> of shape `(n, k)`, it returns the `(n, k)` probabilities of each token's
-> chosen experts.
+> `np.take_along_axis` picks different columns per row. With `top` of shape `(n, k)`, it returns those probabilities.
 
-### Worked example
-
-One token with logits $[2, 1, 0, -1]$ over 4 experts, and $k = 2$:
-
-- Exponentials: $[7.389, 2.718, 1.000, 0.368]$, total $11.475$
-- Full probabilities: $s = [0.6439, 0.2369, 0.0871, 0.0321]$
-- Top 2 are experts 0 and 1, with total $0.6439 + 0.2369 = 0.8808$
-- Gate weights: $0.6439 / 0.8808 = 0.7311$ and $0.2369 / 0.8808 = 0.2689$
-
-The output is $0.7311 \cdot \text{expert}_0(x) + 0.2689 \cdot
-\text{expert}_1(x)$. Experts 2 and 3 cost nothing for this token.
+The usual mistake sorts ascending and keeps the smallest scores.
 
 > [!KEY]
-> Each token runs only its top $k$ experts, mixed by gate weights that sum to
-> one. Every other expert costs that token nothing.
+> Each token runs only its top $k$ experts, mixed by gate weights that sum to one. Every other expert costs that token nothing.
 
-## Count active and total parameters
+## Count what you store and what you run
 
-With $E$ experts of $P_{\text{expert}}$ parameters each, $k$ chosen per token,
-and $P_{\text{shared}}$ parameters every token always uses:
+Take 8 experts of 100 million parameters, $k = 2$, and 100 million shared parameters on every token. Storage is $8 \times 100 + 100 = 900$ million. Compute per token is $2 \times 100 + 100 = 300$ million.
 
 $$
 P_{\text{total}} = E \cdot P_{\text{expert}} + P_{\text{shared}}, \qquad
 P_{\text{active}} = k \cdot P_{\text{expert}} + P_{\text{shared}}
 $$
 
-Read it as: the model stores all $E$ experts but runs only $k$ of them per
-token. The shared part counts in both.
+Shared parameters sit in both counts. These figures give 900 million and 300 million again. When $k = E$, the layer is dense. Count them as follows:
+
+```python
+active = k * expert_params + shared_params
+total = n_experts * expert_params + shared_params
+```
+
+The usual mistake leaves `shared_params` out of one count.
 
 > [!KEY]
-> Compute per token follows the active count, $k$ experts. Memory follows the
-> total count, all $E$ experts.
+> Compute per token follows the active count. Memory follows the total count, all $E$ experts.
 
-For $E = 8$ experts of 100 million parameters, $k = 2$, and 100 million shared
-parameters: total is $8 \times 100 + 100 = 900$ million, active is $2 \times
-100 + 100 = 300$ million. Each token costs as much as a 300-million-parameter
-model, while the model holds 900 million. When $k = E$, active equals total
-and the layer is dense again.
+## Multiply by the gate
 
-## Why the gate must multiply the output
+A gradient says how much the loss changes when you nudge one number. Top-$k$ is a yes-or-no choice. A tiny nudge usually keeps the same experts. If the output is a plain sum of those experts, that nudge leaves the output the same, and the router gradient is 0.
 
-Picking the top $k$ is a yes-or-no decision. Nudge the router weights a tiny
-bit, and almost always the same experts win. If the output were a plain sum
-of the chosen experts, it wouldn't change at all, and the router would get a
-gradient of exactly zero. It could never learn.
-
-Multiplying by $g_i$ fixes that. The gate weights change smoothly as the
-logits change, so the loss has something to pass back to the router.
-
-> [!KEY]
-> The top-$k$ choice itself has no gradient. Multiplying each expert's output
-> by its gate weight is the only path that lets the router learn.
-
-Here's the gradient. Let $\bar{y}$ be the gradient of the loss with respect
-to the token's output, a vector of length `d_out`. For each chosen expert,
-define $c_i = \bar{y} \cdot \text{expert}_i(x)$, a single number that says how
-much the loss would change if expert $i$ got more weight. Then for each
-chosen expert $j$:
+The gate weight moves smoothly with the logits, so the loss has a path back. Let $\bar{y}$ be the output gradient, length `d_out`. For a chosen expert, $c_i = \bar{y} \cdot \text{expert}_i(x)$. Then
 
 $$
 \frac{\partial L}{\partial z_j} = g_j \left(c_j - \bar{c}\right), \qquad \bar{c} = \sum_{i \in \text{top-}k} g_i c_i
 $$
 
-Read it as: $\bar{c}$ is the gate-weighted average of the $c$ values. Each
-expert's logit gradient is its gate weight times how far its $c$ sits from
-that average. Experts not in the top $k$ get a gradient of 0 from this token.
-Gradient descent lowers logits with positive gradient, so experts that reduce
-the loss more than average get pushed up.
+$\bar{c}$ is the gate-weighted average of the $c$ values. Each chosen logit gets its gate weight times the gap from that average. Other experts get 0 from this token. A downhill step lowers a positive gradient, so an expert that cuts the loss by more than average is pushed up.
 
-The gradient for $W_{\text{gate}}$ follows from $z = x W_{\text{gate}}$: stack
-every token's logit gradients into `dz` of shape `(n, E)`, then compute
-`x.T @ dz`, shape `(d, E)`.
+With gates 0.7311 and 0.2689 and $c = [1, 3]$, the average is $0.7311 + 0.8067 = 1.5378$. Expert 0 gets $0.7311 \times (1 - 1.5378) = -0.3932$. Expert 1 gets $0.2689 \times (3 - 1.5378) = 0.3932$. The two values sum to 0, because a heavier chosen expert makes the other lighter. The formula returns those two numbers.
 
-### Worked example
+Stack the logit gradients as `dz` of shape `(n, E)`, then `x.T @ dz` is the gradient of $W_{\text{gate}}$. The usual mistake fills experts outside the top $k$.
 
-Gate weights $g = [0.7311, 0.2689]$ for the two chosen experts, and $c = [1,
-3]$:
+> [!KEY]
+> The top-$k$ choice has no gradient. The gate weight on each expert output is the path back to the router.
 
-- $\bar{c} = 0.7311 \times 1 + 0.2689 \times 3 = 1.5379$
-- Expert 0: $0.7311 \times (1 - 1.5379) = -0.3932$
-- Expert 1: $0.2689 \times (3 - 1.5379) = 0.3932$
+## Penalise a lopsided router
 
-The two values add to zero. That always happens, because making one chosen
-expert heavier makes the others lighter.
+An expert chosen a bit more often gets more gradient, improves faster, and is chosen more. Routing then collapses, and most experts sit unused.
 
-## Keep the load balanced
-
-Routing has a rich-get-richer problem. If one expert is chosen slightly more
-often early on, it gets more gradient, improves faster, and gets chosen even
-more. The others starve. Left alone, routing *collapses* onto a few experts
-and most of the model sits unused.
-
-The fix is an extra loss, added to the main one, that penalises lopsided
-routing. For a batch of $n$ tokens, measure two things per expert $i$:
-
-- $f_i$: the fraction of all routing slots that went to expert $i$. There are
-  $n \cdot k$ slots in total.
-- $P_i$: the average full probability the router gave expert $i$, over all
-  tokens.
-
-The load-balancing loss is
+For $n$ tokens, $f_i$ is expert $i$'s share of the $n \cdot k$ routing slots, and $P_i$ is its average probability over tokens. The load-balancing loss is
 
 $$
 L_{\text{aux}} = E \sum_{i=1}^{E} f_i P_i
 $$
 
-Read it as: multiply each expert's traffic share by its average probability,
-add them up, and scale by the number of experts. In numpy:
+Multiply traffic share by average probability, add, and scale by the number of experts. Two tokens, two experts, $k = 1$, both sent to expert 0, with probabilities `[0.9, 0.1]` and `[0.6, 0.4]`: $f = [1, 0]$ and $P = [0.75, 0.25]$. The loss is $2 \times 0.75 = 1.5$. The fractions have this shape:
 
 ```python
 f = np.bincount(expert_indices.ravel(), minlength=E) / (n * k)
@@ -203,168 +125,105 @@ P = gate_probs.mean(axis=0)
 ```
 
 > [!WARNING]
-> Divide the counts by $n \cdot k$, the number of routing slots, not by $n$.
-> With $k = 2$, dividing by $n$ makes $f$ sum to 2 instead of 1.
+> Divide the counts by $n \cdot k$ slots. With $k = 2$, dividing by $n$ makes $f$ sum to 2.
 
-Both $f$ and $P$ sum to one. If routing is perfectly even, each is $1/E$, so
-the sum is $E \times (1/E)^2 = 1/E$ and the loss is exactly 1. If everything
-goes to one expert, both are 1 there and 0 elsewhere, and the loss is $E$.
-Every other routing lands between 1 and $E$. The factor $E$ keeps the loss at
-the same strength however many experts you use. In practice it's multiplied
-by a small weight, often around 0.01, before being added to the main loss.
-
-Only $P$ carries gradient, because $f$ comes from counting. The gradient
-lowers the probability of each expert in proportion to how much traffic it
-already gets.
+Even routing sets $f_i = P_i = 1/E$, and the loss is 1. Total collapse makes the loss $E$. Every other routing lands between 1 and $E$. The factor $E$ holds that scale fixed. In practice a small weight, often about 0.01, multiplies the loss before it is added to the main one. Only $P$ has a gradient, because $f$ is a count. The usual mistake uses the wrong denominator.
 
 > [!KEY]
-> The balancing loss is 1 for perfectly even routing and $E$ for total
-> collapse. Its gradient pushes probability away from the busiest experts.
+> The balancing loss is 1 when routing is even and $E$ when it collapses. The gradient pushes probability off the busiest experts.
 
-### Worked example
+## Drop a token when the expert is full
 
-Two tokens, two experts, $k = 1$. Both tokens go to expert 0. Full
-probabilities are $[0.9, 0.1]$ and $[0.6, 0.4]$.
-
-- $f = [2/2, 0/2] = [1, 0]$
-- $P = [(0.9 + 0.6)/2, (0.1 + 0.4)/2] = [0.75, 0.25]$
-- $L_{\text{aux}} = 2 \times (1 \times 0.75 + 0 \times 0.25) = 1.5$
-
-## Drop tokens at capacity
-
-Hardware wants fixed-size arrays. Routing gives each expert a different,
-unpredictable number of tokens. So each expert gets a fixed *capacity*: the
-most routing slots it accepts per batch. If routing were perfectly even, each
-expert would get $nk/E$ slots. A *capacity factor* $\gamma$ adds headroom:
+Each expert accepts a fixed number of slots. Even routing would send $nk / E$ slots each. A capacity factor $\gamma$ (gamma, pronounced GAM-uh) adds headroom:
 
 $$
 \text{capacity} = \left\lceil \gamma \cdot \frac{n k}{E} \right\rceil
 $$
 
-Read it as: the even share, times the headroom factor, rounded up. In code:
-`int(np.ceil(capacity_factor * n * k / E))`, and at least 1.
+Round the even share times $\gamma$ up. For $n = 6$, $k = 2$, $E = 3$, and $\gamma = 1$, capacity is $\lceil 12 / 3 \rceil = 4$. For $\gamma = 0.5$ it is 2. A larger factor drops fewer tokens and reserves more memory. Use at least 1. With `capacity_factor is None`, set capacity to $n \cdot k$ so nothing drops.
 
-Walk through the tokens in order. For each of a token's $k$ choices, if that
-expert still has room, count the slot and add its weighted output. If the
-expert is full, the slot is *dropped*: it adds nothing, and you count it. A
-token dropped from all its experts gets a zero output, and the residual
-connection passes it through unchanged. That's a real loss of computation for
-that token.
+Walk tokens in row order. If the expert has room, add the weighted output. If it is full, drop the slot and count it. A token dropped from every choice gets a zero row, and the residual connection passes the original token through. The usual mistake lets later rows claim slots first.
 
-For example, with $n = 6$ tokens, $k = 2$, $E = 3$, and $\gamma = 1$, the
-capacity is $\lceil 1 \times 12 / 3 \rceil = 4$ slots per expert. With
-$\gamma = 0.5$ it's 2. A bigger factor drops fewer tokens but reserves more
-memory, whether it's used or not.
+## Send tokens to the device that holds the expert
 
-## Spread experts across devices
-
-Big MoE models put different experts on different accelerators. Each token
-must then be sent to the device holding its experts, and the results sent
-back. This exchange is called an *all-to-all*. It's pure communication, and
-with small batches or slow links it can take longer than the expert math.
-
-Two more tricks are common. A *router z-loss* keeps the router's logits from
-growing huge, which matters in 16-bit arithmetic. A *shared expert* runs on
-every token alongside the routed ones, so the routed experts can specialise.
+Experts can sit on different accelerators. Tokens travel there and results travel back, an all-to-all that can outlast the expert math on a small batch. A router z-loss keeps logits from growing huge in 16-bit arithmetic. A shared expert runs on every token beside the routed ones. The usual mistake forgets that exchange.
 
 > [!RECAP]
-> - The router takes a row-wise softmax of `x @ W_gate`, keeps the top $k$ by
->   logit, and renormalises their probabilities into gate weights.
-> - A token's output is the gate-weighted sum of `x[t] @ experts[i]` over its
->   chosen experts.
-> - Active parameters are $k P_{\text{expert}} + P_{\text{shared}}$, and total
->   parameters are $E P_{\text{expert}} + P_{\text{shared}}$.
-> - The balancing loss is $E \sum_i f_i P_i$, with $f$ counted over $n k$
->   slots.
-> - Capacity is $\lceil \gamma n k / E \rceil$, at least 1. Tokens claim slots
->   in row order, and a slot at a full expert is dropped.
+> Keep these five facts in front of you while you code:
+>
+> - Softmax `x @ W_gate` per row, keep the top $k$ logits, and renormalise those probabilities.
+> - A token output is the gate-weighted sum of `x[t] @ experts[i]` on the chosen experts.
+> - Active parameters are $k P_{\text{expert}} + P_{\text{shared}}$. Total parameters use $E$ in place of $k$.
+> - The balancing loss is $E \sum_i f_i P_i$, with $f$ counted over $n k$ slots.
+> - Capacity is $\lceil \gamma \, n k / E \rceil$, at least 1. Earlier rows claim slots, and a full expert drops the slot.
 
 ## Build it step by step
 
-The checks test the functions in this order.
+The checks call your functions in this order:
 
-1. **`router(x, W_gate, k)`.** Takes `x` of shape `(n, d)`. Returns
-   `(topk_indices, gate_weights, full_probs)` with shapes `(n, k)`, `(n, k)`,
-   and `(n, E)`. Compute logits, a row-wise stable softmax (subtract each
-   row's max, `axis=-1, keepdims=True`), the top-`k` indices with
-   `np.argsort(-logits, axis=-1)[:, :k]`, then gather and renormalise with
-   `np.take_along_axis`. Common mistake: sorting ascending and keeping the
-   lowest scores.
-2. **`moe_forward(x, W_gate, experts, k, capacity_factor=None)`.** Returns
-   `(output, n_dropped)`, where `output` is `(n, d_out)`. Call your router,
-   set the capacity (with `None`, use `n * k`, so nothing drops), and loop
-   over tokens and slots with a per-expert counter. Common mistake: adding
-   the expert output without the gate weight. With `k = E` and no limit, the
-   checks expect the dense softmax-weighted sum.
-3. **`load_balancing_loss(expert_indices, gate_probs, n_experts)`.** Returns
-   a float. Use `np.bincount(..., minlength=n_experts)` and `.mean(axis=0)`.
-   Common mistake: dividing the counts by `n` instead of `n * k`.
-4. **Capacity behaviour.** No new function, but the checks confirm that a
-   larger `capacity_factor` never drops more, and that a token dropped from
-   its only expert gets an all-zero output row. Process tokens in row order,
-   so the first tokens claim the slots.
-5. **`active_parameters(n_experts, k, expert_params, shared_params)`.**
-   Returns `(active, total)` as integers. Common mistake: leaving
-   `shared_params` out of one of them.
-6. **`router_backward(x, W_gate, k, expert_outputs, grad_output)`.**
-   `expert_outputs` has shape `(n, E, d_out)` and `grad_output` has shape
-   `(n, d_out)`. Returns the gradient for `W_gate`, shape `(d, E)`. For each
-   token, compute `c` for its chosen experts, then $\bar{c}$, then fill those
-   entries of `dz`. Finish with `x.T @ dz`. Common mistake: filling gradients
-   for experts outside the top `k`. They must stay zero.
+1. `router(x, W_gate, k)` takes `(n, d)` and returns indices, gate weights, and full probabilities, shapes `(n, k)`, `(n, k)`, and `(n, E)`. Subtract the row max, then softmax. The usual mistake sorts the wrong way:
+
+```python
+def router(x, W_gate, k):
+    # top-k of x @ W_gate, then renormalise those probabilities
+    return topk_indices, gate_weights, full_probs
+```
+
+2. `moe_forward(x, W_gate, experts, k, capacity_factor=None)` returns `(output, n_dropped)` with `output` shaped `(n, d_out)`. `None` means capacity `n * k`. Otherwise use the ceiling, at least 1. The usual mistake adds an expert output without its gate weight. With $k = E$ and no limit, the result is the dense weighted sum:
+
+```python
+def moe_forward(x, W_gate, experts, k, capacity_factor=None):
+    # add g * (x[t] @ experts[i]) while the expert has room
+    return output, n_dropped
+```
+
+3. `load_balancing_loss(expert_indices, gate_probs, n_experts)` returns $E \sum f_i P_i$. Use `np.bincount(..., minlength=n_experts)` and divide by `n * k`. The usual mistake divides by `n`:
+
+```python
+def load_balancing_loss(expert_indices, gate_probs, n_experts):
+    # n_experts * sum(f * P)
+    return loss
+```
+
+4. The capacity checks call `moe_forward` again. A larger `capacity_factor` never drops more. A token dropped from its only expert has an all-zero row. Earlier rows claim the slots.
+
+5. `active_parameters(n_experts, k, expert_params, shared_params)` returns `(active, total)`. The usual mistake omits `shared_params` from one of them:
+
+```python
+def active_parameters(n_experts, k, expert_params, shared_params):
+    # k * expert + shared, and n_experts * expert + shared
+    return active, total
+```
+
+6. `router_backward(x, W_gate, k, expert_outputs, grad_output)` returns shape `(d, E)`. `expert_outputs` is `(n, E, d_out)` and `grad_output` is `(n, d_out)`. Write $g (c - \bar{c})$ on the chosen experts and finish with `x.T @ dz`. The usual mistake fills the other experts:
+
+```python
+def router_backward(x, W_gate, k, expert_outputs, grad_output):
+    # dz only on the chosen experts, then x.T @ dz
+    return grad_W
+```
 
 ## Cost and scaling
 
-The whole trade fits in one table. Here $d_{\text{ff}}$ is each expert's
-hidden width.
+Here $d_{\text{ff}}$ is each expert's hidden width. A dense layer and a mixture compare as follows:
 
 | Quantity | Dense feed-forward | Mixture of experts |
 |---|---|---|
 | Parameters | about $d \cdot d_{\text{ff}}$ | about $E \cdot d \cdot d_{\text{ff}}$ |
 | Compute per token | about $d \cdot d_{\text{ff}}$ | about $k \cdot d \cdot d_{\text{ff}}$ |
 | Memory to serve | one network | all $E$ experts |
-| Device traffic | none extra | one all-to-all each way, per MoE layer |
+| Device traffic | none extra | one all-to-all each way, per layer |
 
-Parameters grow with $E$ and compute grows with $k$. That gap is the reason
-to use MoE. Memory still grows with $E$. The router itself is tiny: one
-`(d, E)` matrix and a sort of $E$ numbers per token.
+Parameters grow with $E$ and compute grows with $k$. Memory still grows with $E$.
 
 ## Where this breaks
 
-**Memory.** Every expert must stay loaded, even though each token uses only
-$k$ of them. A sparse model needs memory for its total parameters, not its
-active ones. People offload rarely used experts or spread them across many
-devices.
+Every expert stays loaded, so memory follows the total count. Rare experts are offloaded or spread across devices. A small batch leaves each expert with too little work, and the layer runs as slow as its busiest expert.
 
-**Small batches.** Each expert sees only its share of the tokens. With a
-small batch, that share is too small to keep the hardware busy, and the
-layer runs as slow as its busiest expert.
-
-**Fine-tuning.** A narrow fine-tuning dataset can pull traffic onto a few
-experts and bring collapse back. Because top-$k$ is a yes-or-no choice, a
-small update can suddenly switch a token's experts. People freeze the router,
-tune only some experts, or keep the balancing loss on.
-
-**Dropped tokens.** A low capacity factor silently skips computation for
-some tokens. People raise the factor, or use the balancing loss to keep the
-load even enough that few tokens overflow.
+A narrow fine-tuning set can collapse routing again. Top-$k$ can also switch a token's experts after a small update. People freeze the router, tune some experts, or keep the balancing loss on. A low capacity factor skips tokens quietly. Raising the factor, or balancing the load, leaves fewer overflows.
 
 ## The exercise
 
-You build the router, the balancing loss, and the capacity rules. Write
-`router(x, W_gate, k)`, which returns the top-$k$ expert indices, their
-renormalised gate weights, and the full softmax probabilities. Write
-`moe_forward(x, W_gate, experts, k, capacity_factor)`, which returns the
-layer's output and the number of dropped slots, and
-`load_balancing_loss(expert_indices, gate_probs, n_experts)`, which computes
-$E \sum_i f_i P_i$. Finish with `active_parameters(n_experts, k,
-expert_params, shared_params)` and `router_backward(x, W_gate, k,
-expert_outputs, grad_output)`.
+`router(x, W_gate, k)` returns top-$k$ indices, renormalised gate weights, and the full softmax. `moe_forward(x, W_gate, experts, k, capacity_factor)` returns the output and the dropped-slot count. `load_balancing_loss(expert_indices, gate_probs, n_experts)` computes $E \sum_i f_i P_i$. `active_parameters(n_experts, k, expert_params, shared_params)` returns active and total counts. `router_backward(x, W_gate, k, expert_outputs, grad_output)` returns the router gradient.
 
-The checks verify that the router picks the true top-$k$ experts and that
-gate weights sum to one, that `moe_forward` with $k = E$ and no capacity
-limit equals the dense weighted sum, and that the balancing loss matches a
-hand computation, equals 1 for uniform routing and $E$ for collapse, and
-lands between them otherwise. They check that a larger capacity factor never
-drops more, that a fully dropped token outputs zeros, the active and total
-counts, and `router_backward` against finite differences.
+The checks confirm the true top-$k$ experts and gate weights that sum to one. With $k = E$ and no limit, `moe_forward` matches the dense weighted sum. The balancing loss matches a hand computation, equals 1 for uniform routing, equals $E$ for collapse, and lands between them otherwise. A larger capacity factor never drops more, a fully dropped token is zeros, and `router_backward` matches finite differences.

@@ -2,7 +2,7 @@
 title: Residual networks
 slug: 21-residual-networks
 part: "Part 4 — Vision and sequences"
-summary: "Add a shortcut around each block so gradients survive a deep stack, and see why the bottleneck block is cheap."
+summary: "Add a shortcut around each block so a deep stack can train, and count the cost of a bottleneck."
 minutes: 60
 gpu: true
 objectives:
@@ -18,68 +18,54 @@ exercise: 21-residual-networks
 
 # Residual networks
 
-You might expect a deeper network to always do at least as well as a shallow
-one. In practice it doesn't. Researchers found that a 56-layer plain
-convolutional network had higher *training* error than a 20-layer one, with
-the same data and the same optimiser. That isn't overfitting, because
-overfitting means training error is low and test error is high. The deep
-network could in principle copy the shallow one and leave its extra layers
-doing nothing. Gradient descent couldn't find that solution.
+A 56-layer plain network reaches a higher training error than a 20-layer one, on the same data and the same optimiser. That is not overfitting. Overfitting means the training error is low and the error on new data is high. Here the training error itself is worse.
 
-This is called the **degradation problem**. The fix is small and powerful. Add
-each block's input back to its output, so the block only has to learn a
-correction. If the correction is zero, the block passes its input through
-untouched. That one addition, the **shortcut**, keeps the training signal
-strong however deep the network gets.
+The deep stack could copy the shallow one and leave the extra layers doing nothing. Gradient descent does not find that setting. This is the degradation problem.
 
-In this lesson you build a residual block by hand, with its backward pass.
-Then you measure how much gradient survives 50 layers with and without the
-shortcut. You also count the cost of the bottleneck block that makes very deep
-networks affordable.
+The fix adds each block's input back onto its output, so the block only adds a correction. You build that block, measure the gradient that survives 50 layers, and count the cost of a bottleneck.
 
 ## What you already know
 
-- Backpropagation applies the chain rule layer by layer, from the loss back to
-  the input.
-- A linear layer computes `x @ W.T + b`, and ReLU sets negative values to zero.
-- Gradients shrink or grow when you multiply them by many numbers smaller or
-  larger than one.
-- Batch norm ends with a learned scale $\gamma$ and shift $\beta$ per channel.
-- A convolution's cost grows with output height, output width, input channels,
-  output channels, and kernel area.
+You already have the following:
 
-## The residual block
+- Backpropagation applies the chain rule from the loss back to the input.
+- A linear layer computes `x @ W.T + b`, and ReLU sets negatives to zero.
+- A long product of numbers smaller than one shrinks toward zero.
+- Batch norm ends with a learned scale and shift on each channel.
+- A convolution's cost grows with height, width, channels, and kernel area.
 
-Think of editing an essay. A plain layer rewrites the whole essay from
-scratch. A residual block keeps the essay and writes suggested edits in the
-margin. If there's nothing to fix, it writes no edits, and the essay comes
-through unchanged.
+## Keep the essay and write in the margin
 
-A residual block computes
+Keep the essay, and write edits in the margin. No edits, and the essay is unchanged.
+
+Take two examples with two features, and these weights:
+
+$$
+x = \begin{bmatrix} 1 & 2 \\ -1 & 3 \end{bmatrix}, \quad
+W_1 = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}, \quad
+b_1 = [0, -1]
+$$
+
+$W_1$ is the identity, so the first layer only subtracts 1 from the second column. That gives $h_1 = \begin{bmatrix} 1 & 1 \\ -1 & 2 \end{bmatrix}$.
+
+The block that does this is a **residual block**. The output is the input plus a correction:
 
 $$
 y = x + F(x)
 $$
 
-Read it aloud: the output $y$ is the input $x$ plus a correction $F(x)$. The
-function $F$ is called the **residual branch**. It can be any stack of layers,
-as long as its output has the same shape as $x$, so that you can add the two
-element by element. The plain path from $x$ to the plus sign is the
-**shortcut**.
-
-In this exercise, $x$ has shape `(n, d)`: $n$ examples, each with $d$
-features. The branch is two linear layers with a ReLU between them:
+$F$ is the residual branch. The plain path into the plus sign is the shortcut. Here the branch is two linear layers with a ReLU between them, and no ReLU after the addition:
 
 $$
 h_1 = x W_1^{\top} + b_1, \qquad a_1 = \operatorname{ReLU}(h_1), \qquad
 h_2 = a_1 W_2^{\top} + b_2, \qquad y = x + h_2
 $$
 
-Read it aloud: multiply the input by the first weight matrix and add a bias to
-get $h_1$. Zero out the negative entries to get $a_1$. Multiply by the second
-weight matrix and add a bias to get $h_2$. Add the original input back. Both
-$W_1$ and $W_2$ have shape `(d, d)`, and both biases have shape `(d,)`. In
-numpy:
+Both weights are `(d, d)` and both biases are `(d,)`, with `x` shaped `(n, d)`.
+
+Continue the same numbers. $W_2 = \begin{bmatrix} 2 & 0 \\ 0 & 0.5 \end{bmatrix}$ and $b_2 = [0.1, 0]$. ReLU turns the $-1$ into 0, so $a_1 = \begin{bmatrix} 1 & 1 \\ 0 & 2 \end{bmatrix}$. The second layer gives $h_2 = \begin{bmatrix} 2.1 & 0.5 \\ 0.1 & 1.0 \end{bmatrix}$. Adding the input back gives $y = \begin{bmatrix} 3.1 & 2.5 \\ -0.9 & 4.0 \end{bmatrix}$.
+
+The forward lines use a transpose on the weights, because each example is a row:
 
 ```python
 h1 = x @ W1.T + b1
@@ -88,50 +74,20 @@ h2 = a1 @ W2.T + b2
 y = x + h2
 ```
 
-If you set $W_2$ and $b_2$ to zero, then $h_2$ is zero for every input, and
-$y = x$ exactly. The block starts as a perfect "do nothing" layer. A plain
-layer $y = F(x)$ has no such easy setting: its weights must learn to copy the
-input, which is hard.
+The usual mistake is `W1 @ x`, which fails when the shapes are not square, or a ReLU after the addition.
+
+Set $W_2$ and $b_2$ to zero and $h_2$ is zero, so $y = x$. A plain layer $y = F(x)$ has no such setting. Its weights would have to copy the input.
 
 > [!KEY]
-> A residual block learns only a correction to its input. With a zero branch, it
-> passes the input through exactly.
+> A residual block outputs a correction. A zero branch passes the input through unchanged.
 
-### Work one example by hand
+## The plus sign copies the gradient
 
-Take two examples with two features each:
+The loss sends back `dY`, shape `(n, d)`. A plus sign passes that gradient down both paths. The shortcut contributes `dY` itself. The branch contributes whatever comes back through the two layers. You add those two pieces.
 
-$$
-x = \begin{bmatrix} 1 & 2 \\ -1 & 3 \end{bmatrix}, \quad
-W_1 = \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix}, \quad
-b_1 = [0, -1], \quad
-W_2 = \begin{bmatrix} 2 & 0 \\ 0 & 0.5 \end{bmatrix}, \quad
-b_2 = [0.1, 0]
-$$
+Walk the branch backward. On the example above, take `dY` as all ones. Then $dW_2 = dY^\top a_1 = \begin{bmatrix} 1 & 3 \\ 1 & 3 \end{bmatrix}$.
 
-Follow the four steps:
-
-1. $h_1 = x W_1^{\top} + b_1 = \begin{bmatrix} 1 & 1 \\ -1 & 2 \end{bmatrix}$.
-   $W_1$ is the identity, so you only subtract 1 from the second column.
-2. $a_1 = \operatorname{ReLU}(h_1) = \begin{bmatrix} 1 & 1 \\ 0 & 2 \end{bmatrix}$.
-   The $-1$ becomes $0$.
-3. $h_2 = a_1 W_2^{\top} + b_2 = \begin{bmatrix} 2.1 & 0.5 \\ 0.1 & 1.0 \end{bmatrix}$.
-   The first column doubles and gains $0.1$. The second column halves.
-4. $y = x + h_2 = \begin{bmatrix} 3.1 & 2.5 \\ -0.9 & 4.0 \end{bmatrix}$.
-
-The first check in the exercise uses exactly these numbers.
-
-## The backward pass
-
-The backward pass takes $dY$, the gradient of the loss with respect to $y$,
-with shape `(n, d)`. It returns $dx$ and the gradient for each parameter.
-
-The key idea is the plus sign. When you add two things, the gradient flows
-into both of them unchanged. So $dY$ goes two ways: straight down the
-shortcut into $dx$, and into the branch. The branch then sends back its own
-contribution, which you add to $dx$.
-
-Walk backward through the branch one line at a time:
+The three lines of the backward pass are:
 
 $$
 dh_2 = dY, \qquad dW_2 = dh_2^{\top} a_1, \qquad db_2 = \textstyle\sum_{\text{rows}} dh_2
@@ -146,13 +102,9 @@ $$
 dx = dY + dh_1 W_1
 $$
 
-Read it aloud. The gradient reaching $h_2$ equals $dY$, because $y = x + h_2$.
-A weight gradient is "upstream gradient, transposed, times the layer's input".
-A bias gradient sums the upstream gradient over the $n$ rows, because the same
-bias is added to every example. ReLU passes gradient only where its input was
-positive; $\odot$ means element-by-element multiplication and $[h_1 > 0]$ is
-a mask of ones and zeros. Last, $dx$ is the shortcut's $dY$ **plus** the
-branch's $dh_1 W_1$. In numpy:
+A weight gradient is the upstream gradient, transposed, times that layer's input. A bias gradient sums over the $n$ rows. ReLU passes gradient only where its input was positive. $\odot$ is entrywise multiplication, and $[h_1 > 0]$ is a mask of ones and zeros. Because $W_1$ is the identity, $dh_1 = \begin{bmatrix} 2 & 0.5 \\ 0 & 0.5 \end{bmatrix}$ and $dx = \begin{bmatrix} 3 & 1.5 \\ 1 & 1.5 \end{bmatrix}$. The ones from the shortcut are sitting inside $dx$.
+
+The forward pass multiplies by `W.T`. The backward pass multiplies by `W` with no extra transpose:
 
 ```python
 dW2 = dY.T @ a1
@@ -160,203 +112,116 @@ dh1 = (dY @ W2) * (h1 > 0)
 dx = dY + dh1 @ W1
 ```
 
-> [!WARNING]
-> The forward pass uses `W1.T`, but the backward pass multiplies by `W1` with no
-> transpose. With square weights, the wrong choice still runs and gives wrong
-> numbers.
+The usual mistake is to multiply by `W1.T` on the way back. Square weights still run, and the numbers are wrong.
 
-With $dY$ set to all ones in the example above, you get
-$dW_2 = \begin{bmatrix} 1 & 3 \\ 1 & 3 \end{bmatrix}$,
-$dh_1 = \begin{bmatrix} 2 & 0.5 \\ 0 & 0.5 \end{bmatrix}$, and
-$dx = \begin{bmatrix} 3 & 1.5 \\ 1 & 1.5 \end{bmatrix}$.
-The ones from the shortcut are visible inside $dx$.
+> [!WARNING]
+> Forward uses `W.T`. Backward multiplies by `W` itself. The wrong choice still runs on square weights.
 
 > [!KEY]
-> A plus sign copies the incoming gradient into both of its inputs. So $dx$ is
-> always $dY$ from the shortcut plus whatever the branch sends back.
+> A plus sign copies the incoming gradient onto both inputs. `dx` is `dY` plus the branch term.
 
 > [!TIP]
-> After a backward pass, check that each gradient has its parameter's shape:
-> `assert grads[k].shape == params[k].shape` for every key.
+> After a backward pass, check `grads[k].shape == params[k].shape` for every key.
 
-## Why gradients survive depth
+## A message passed down fifty people
 
-Imagine passing a message down a line of 50 people. In a plain stack, each
-person repeats only a tenth of what they heard. After 50 people the message is
-$0.1^{50}$ of its original size, which is effectively nothing. In a residual
-stack, each person repeats the whole message **and** adds their own small
-note. The original message always reaches the end.
+Picture 50 people passing a message. A plain line repeats a tenth each time, so $0.1^{50}$ is left. A residual line repeats the whole message and adds a short note.
 
-In symbols, when a plain layer scales the gradient by a factor $J$, a residual
-layer scales it by $1 + J$. The "1" comes from the shortcut. Multiply 50 of
-these factors together:
+If a plain layer multiplies the gradient by a number $J$, a residual layer multiplies it by $1 + J$. The 1 is the shortcut. Fifty layers give
 
 $$
 \text{plain: } J^{50}, \qquad \text{residual: } (1 + J)^{50}
 $$
 
-Read it aloud: the plain stack multiplies 50 small numbers, which collapses to
-zero. The residual stack multiplies 50 numbers close to one, which stays close
-to one.
+The plain product collapses. The residual product does not have to pass through a chain of factors below one. That scalar picture assumes each $J$ points the same way as the gradient. The exercise is the matrix version, which does not.
 
-For matrices the same idea holds: each residual layer turns the gradient $g$
-into $g + g W$ instead of $g W$. The exercise builds each $W$ as $0.1$ times a
-random **orthogonal matrix**, which is a matrix that rotates a vector without
-changing its length. So each plain layer shrinks the gradient's length by
-exactly $0.1$. In numpy:
+Each weight is $0.1$ times a random orthogonal matrix, a matrix that rotates a vector and keeps its length. A plain layer then shortens the gradient by exactly $0.1$. A residual layer does $g + gW$, not $(1 + 0.1)g$, because $gW$ points somewhere new. From a starting length of 1, the lengths come out as follows:
 
-```python
-g = g + g @ W   # residual layer
-g = g @ W       # plain layer
-```
-
-Starting from a gradient of length one, the numbers come out like this:
-
-| Depth | Residual gradient length | Plain gradient length |
+| Depth | Residual length | Plain length |
 |---|---|---|
 | 10 | about 0.93 | $10^{-10}$ |
 | 50 | about 0.53 | $10^{-50}$ |
 
-The residual stack keeps about half its signal after 50 layers. The plain
-stack keeps none.
+Use width 16, scale $0.1$, and seed 0. Start from `np.ones(d) / np.sqrt(d)`. Take Q from `np.linalg.qr`, then multiply by $0.1$:
+
+```python
+g = g + g @ W  # residual layer
+g = g @ W      # plain layer
+```
+
+The usual mistake is a plain Gaussian matrix instead of an orthogonal one. The plain stack's shrink is then no longer exactly $0.1$ per layer.
 
 > [!KEY]
-> The shortcut adds 1 to each layer's gradient factor. The gradient no longer
-> has to pass through a long product of small numbers, so it reaches the early
-> layers.
+> The shortcut adds 1 to each layer's gradient factor, so the gradient does not have to survive a long product of small numbers.
 
-Two design choices keep the shortcut clean. First, put batch norm and ReLU
-*inside* the branch, before the layers, rather than after the addition. This
-is called **pre-activation**, and it means nothing touches the shortcut path.
-Second, start the last batch-norm scale $\gamma$ of each branch at zero. Then
-every branch outputs zero at the start, and the whole network begins as the
-identity.
+Put batch norm and ReLU inside the branch, before the addition. That is pre-activation, so nothing sits on the shortcut. Start the last batch-norm scale at zero and every branch outputs zero at step zero. The network starts as the identity. Training moves it off that start.
 
-## The bottleneck block
+## Do the wide work at a narrow width
 
-A basic residual block uses two $3\times3$ convolutions at full width $C$.
-That gets expensive. A **bottleneck** block does three cheaper steps instead:
+Two $3 \times 3$ convolutions at full width $C$ get expensive. A **bottleneck** does three cheaper steps. A $1 \times 1$ shrinks $C_{\text{in}}$ channels to $C_{\text{mid}}$. A $3 \times 3$ works at that narrow width. A $1 \times 1$ grows back to $C_{\text{out}}$.
 
-1. A $1\times1$ convolution shrinks $C_{\text{in}}$ channels to $C_{\text{mid}}$.
-2. A $3\times3$ convolution works at the small width $C_{\text{mid}}$.
-3. A $1\times1$ convolution grows back to $C_{\text{out}}$ channels.
-
-Each convolution costs (height) times (width) times (input channels) times
-(output channels) times (kernel area) multiply-adds. Add the three:
+Each convolution costs height times width times input channels times output channels times kernel area. Add the three:
 
 $$
 \text{flops} = H W \left( C_{\text{in}} C_{\text{mid}} + 9\, C_{\text{mid}}^2 + C_{\text{mid}} C_{\text{out}} \right)
 $$
 
-Read it aloud: for each of the $H \times W$ output positions, pay
-$C_{\text{in}} C_{\text{mid}}$ for the shrink, $9 C_{\text{mid}}^2$ for the
-$3\times3$ step (9 is the kernel area), and $C_{\text{mid}} C_{\text{out}}$
-for the grow. In Python:
+The 9 is the area of the $3 \times 3$ kernel. The shortcut is not in this count.
+
+Try $C_{\text{in}} = C_{\text{out}} = 256$, $C_{\text{mid}} = 64$, at $14 \times 14$. The shrink is $256 \times 64 = 16{,}384$. The middle is $9 \times 64 \times 64 = 36{,}864$. The grow is $64 \times 256 = 16{,}384$. Per position that is $69{,}632$. Times $196$ positions that is $13{,}647{,}872$.
+
+Two full-width $3 \times 3$ convolutions cost $196 \times 2 \times 9 \times 256 \times 256 = 231{,}211{,}008$, about 17 times more. With $C_{\text{mid}} = C/4$, the weight ratio is $17/16$ against $18$:
 
 ```python
 flops = h * w * (c_in * c_mid + 9 * c_mid * c_mid + c_mid * c_out)
 ```
 
-Try $C_{\text{in}} = C_{\text{out}} = 256$, $C_{\text{mid}} = 64$, at
-$14 \times 14$:
-
-- Shrink: $256 \times 64 = 16{,}384$.
-- Middle: $9 \times 64 \times 64 = 36{,}864$.
-- Grow: $64 \times 256 = 16{,}384$.
-- Sum per position: $69{,}632$. Times $196$ positions: $13{,}647{,}872$.
-
-Two full-width $3\times3$ convolutions cost $196 \times 2 \times 9 \times 256
-\times 256 = 231{,}211{,}008$. The bottleneck is about 17 times cheaper. With
-$C_{\text{mid}} = C/4$ in general, the ratio is $\tfrac{17}{16}$ against $18$,
-so ResNets with 50 or more layers use bottlenecks.
+The usual mistake is to forget the 9 on the middle convolution.
 
 > [!KEY]
-> A bottleneck block does its $3\times3$ work at a quarter of the width. That
-> makes it about 17 times cheaper than two full-width $3\times3$ convolutions.
+> A bottleneck does its $3 \times 3$ work at a quarter of the width, about 17 times cheaper than two full-width $3 \times 3$ layers.
 
 > [!RECAP]
-> - The block computes `h1 = x @ W1.T + b1`, a ReLU, `h2 = a1 @ W2.T + b2`, and
->   `y = x + h2`, with no ReLU after the addition.
-> - The cache holds what the backward pass needs: `x`, `W1`, `W2`, `h1`, and
->   `a1`.
-> - Weight gradients are "upstream, transposed, times the layer's input". Bias
->   gradients sum over rows. The ReLU mask is `h1 > 0`.
-> - `dx` is `dY + dh1 @ W1`: the shortcut term plus the branch term.
-> - The bottleneck cost is $HW(C_{\text{in}} C_{\text{mid}} + 9 C_{\text{mid}}^2 +
->   C_{\text{mid}} C_{\text{out}})$.
+> Hold these five points before you write code:
+>
+> - Forward is `h1 = x @ W1.T + b1`, a ReLU, `h2 = a1 @ W2.T + b2`, and `y = x + h2`.
+> - The cache needs `x`, `W1`, `W2`, `h1`, and `a1`.
+> - Weight gradients are upstream, transposed, times the layer input. Bias gradients sum over rows. The ReLU mask is `h1 > 0`.
+> - `dx` is `dY + dh1 @ W1`.
+> - Bottleneck cost is $HW(C_{\text{in}} C_{\text{mid}} + 9 C_{\text{mid}}^2 + C_{\text{mid}} C_{\text{out}})$.
 
 ## Build it step by step
 
-The checks test the functions in this order.
+The checks call the functions in this order:
 
-1. **`residual_block_forward(x, params)`.** Takes `x` of shape `(n, d)` and a
-   dict with `W1`, `b1`, `W2`, `b2`. Returns `(y, cache)`, with `y` of shape
-   `(n, d)`. Use `@`, `.T`, and `np.maximum(h1, 0.0)`. Put everything the
-   backward pass needs in `cache`: at least `x`, `W1`, `W2`, `h1`, and `a1`.
-   Common mistake: writing `W1 @ x` instead of `x @ W1.T`, which fails on
-   non-square shapes.
-2. **Zero branch.** No new function. With `W2` and `b2` set to zero, your
-   forward pass must return `x` exactly. If it doesn't, you probably applied a
-   ReLU after the addition.
-3. **`residual_block_backward(dY, cache)`.** Takes `dY` of shape `(n, d)` and
-   the cache. Returns `(dx, grads)`, where `grads` has keys `W1`, `b1`, `W2`,
-   `b2` with the same shapes as the parameters. Use `.T @`, `.sum(axis=0)` for
-   biases, and `(h1 > 0)` for the ReLU mask. Common mistake: returning only the
-   branch term for `dx` and forgetting to add `dY` from the shortcut.
-4. **`gradient_norm_through_stack(depth, residual)`.** Uses $d = 16$ and
-   $\rho = 0.1$. Seed `np.random.default_rng(0)`. For each layer, take the Q
-   factor from `np.linalg.qr` of a Gaussian `(d, d)` matrix, and multiply it by
-   $\rho$. Start from `g = np.ones(d) / np.sqrt(d)`, loop over the layers in
-   reverse, update `g`, and return `float(np.linalg.norm(g))`. Common mistake:
-   using a plain Gaussian matrix instead of an orthogonal one, which makes the
-   plain stack's shrinkage unpredictable.
-5. **`bottleneck_flops(c_in, c_mid, c_out, h, w)`.** Returns an `int` from the
-   formula above. Common mistake: forgetting the factor 9 on the middle
-   convolution.
+1. **`residual_block_forward(x, params)`.** `x` is `(n, d)`. `params` holds `W1`, `b1`, `W2`, `b2`. Return `(y, cache)` with `y` shaped `(n, d)`. Use `@`, `.T`, and `np.maximum(h1, 0.0)`. Cache at least `x`, `W1`, `W2`, `h1`, and `a1`. The usual mistake is `W1 @ x`, or a ReLU after the sum. With `W2` and `b2` at zero, `y` must equal `x`.
+2. **`residual_block_backward(dY, cache)`.** `dY` is `(n, d)`. Return `(dx, grads)` with keys `W1`, `b1`, `W2`, `b2`. Use `.T @`, `.sum(axis=0)` for biases, and `(h1 > 0)` for the ReLU. The usual mistake is returning only the branch term and forgetting to add `dY`.
+3. **`gradient_norm_through_stack(depth, residual)`.** Use width 16 and scale $0.1$. Seed `np.random.default_rng(0)`. Build each layer as $0.1$ times the Q factor of `np.linalg.qr`. Start from `np.ones(d) / np.sqrt(d)`, walk the layers in reverse, and return `float(np.linalg.norm(g))`. The usual mistake is a Gaussian matrix that is not orthogonal.
+4. **`bottleneck_flops(c_in, c_mid, c_out, h, w)`.** Return an `int` from the formula above. The usual mistake is dropping the factor 9.
 
 ## Cost and scaling
 
-The shortcut itself is nearly free: one addition per number. The table
-compares the blocks for $C$ channels at $H \times W$.
+The shortcut is one addition per number. For $C$ channels at height $H$ and width $W$, the blocks compare as follows:
 
-| Block | Weights (ignoring biases) | Multiply-adds |
+| Block | Weights, ignoring biases | Multiply-adds |
 |---|---|---|
-| Basic, two $3\times3$ at width $C$ | $18 C^2$ | $18 H W C^2$ |
-| Bottleneck, $C \to C/4 \to C/4 \to C$ | $\tfrac{17}{16} C^2$ | $\tfrac{17}{16} H W C^2$ |
-| Projection shortcut, $1\times1$ | $C_{\text{in}} C_{\text{out}}$ | $H W C_{\text{in}} C_{\text{out}}$ |
+| Basic, two $3 \times 3$ at width $C$ | $18 C^2$ | $18 H W C^2$ |
+| Bottleneck, $C \to C/4 \to C/4 \to C$ | $17/16\, C^2$ | $17/16\, H W C^2$ |
+| Projection shortcut, $1 \times 1$ | $C_{\text{in}} C_{\text{out}}$ | $H W C_{\text{in}} C_{\text{out}}$ |
 
-Memory is the real limit. Backpropagation needs every block's activations, so
-memory grows in a straight line with depth. Doubling the number of blocks
-doubles the memory, however cheap each block is.
+Memory is the limit. Backpropagation stores every block's activations, so memory grows in a straight line with depth. Twice the blocks means twice the memory, however cheap each block is.
 
 ## Where this breaks
 
-**Shape changes need a projection.** You can only add $x$ and $F(x)$ when they
-have the same shape. When a stage changes the number of channels or the image
-size, the shortcut becomes a learned $1\times1$ convolution. That path is no
-longer a clean copy. Networks keep it to one block per stage.
+Each of these failures has a direct change:
 
-**Zero start isn't permanent.** A zero $\gamma$ makes the network the identity
-only at step zero. Training moves it away. Networks without batch norm need
-other initialisation tricks to get the same start.
-
-**Depth still runs out.** Past a few hundred layers, adding blocks stops
-helping. People then add width or data instead.
-
-**A clean shortcut doesn't fix a bad branch.** The shortcut keeps the gradient
-alive. It says nothing about whether the branch itself trains well. The branch
-still needs good initialisation and normalisation.
+- You can add $x$ and $F(x)$ only when the shapes match. A stage that changes channels or image size puts a learned $1 \times 1$ on the shortcut. That path is no longer a clean copy. Keep it to one block per stage.
+- A zero scale makes the network the identity only at step zero. Training moves it. Networks without batch norm need another initialisation to get the same start.
+- Past a few hundred layers, more blocks stop helping. Add width or data instead.
+- A clean shortcut keeps the gradient alive. It does not make a badly scaled branch train. The branch still needs a good initialisation and a norm.
 
 ## The exercise
 
-You build `residual_block_forward` and `residual_block_backward` for a block
-whose branch is two linear layers with a ReLU. You then build
-`gradient_norm_through_stack` to measure the gradient length after 10 and 50
-layers, with and without the shortcut. Last, you write `bottleneck_flops`.
+You build `residual_block_forward` and `residual_block_backward` for two linear layers with a ReLU between them. You build `gradient_norm_through_stack` for depths 10 and 50, with and without the shortcut. You write `bottleneck_flops`.
 
-The checks compare your forward pass with the worked example, confirm a zeroed
-branch gives an exact identity, and compare your backward pass with finite
-differences. They confirm the residual gradient at depth 50 stays between 0.1
-and 10 while the plain one falls below $10^{-6}$, and check the flop count and
-the more-than-fifteen-times saving. The `__main__` block trains a 20-block
-residual network on synthetic data and prints its loss.
+The checks match the forward pass to the worked numbers, and a zero branch to the identity. They match the backward pass to finite differences. At depth 50 the residual gradient stays between 0.1 and 10, and the plain one falls below $10^{-6}$. The gap widens from depth 10 to depth 50. The flop count matches, and the bottleneck is more than fifteen times cheaper.

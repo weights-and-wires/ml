@@ -17,305 +17,221 @@ exercise: 28-tokenisation
 
 # Tokenisation
 
-A transformer reads integers, not text. Something has to turn "the cat sat"
-into a list like `[464, 3797, 3332]`. That something is the tokeniser, and it
-decides what each integer stands for: a letter, a word, or something in
-between. You build the tokeniser once, before training, and every later
-number in the model depends on it.
+A transformer reads integers. Text has to become a list of those integers before training starts. The program that does this is the tokeniser, and every later weight depends on the ids it chose.
 
-Two numbers matter most. The vocabulary size $V$ is how many different tokens
-exist. The sequence length $T$ is how many tokens a piece of text turns into.
-You can't make both small. Tiny units, like single letters, give a small $V$
-but a long $T$. Big units, like whole words, give a short $T$ but a huge $V$,
-and any word you never saw has no token at all.
+Two sizes pull against each other. Letters need a small vocabulary and a long sequence. Whole words need a short sequence and a huge vocabulary, and a word that never appeared has no id. Attention cost grows with the square of the sequence length, so both extremes get expensive.
 
-This lesson builds byte-pair encoding (BPE), the method most language models
-use to land in the middle. It starts from single bytes and glues together the
-pairs that show up most often.
+You build byte-pair encoding. You start from raw bytes, glue the pair you see most often, and keep an ordered merge list. That list encodes text. The byte table decodes it. You also measure fertility, the average number of tokens per word.
 
 ## What you already know
 
-- Attention costs grow with the square of the sequence length $T$, from
-  lesson 25.
-- The embedding table and output layer each hold $V \times d$ weights, from
-  lesson 26.
-- Training compute is about $6ND$, where $D$ is the number of tokens, from
-  lesson 27.
-- UTF-8 stores every character as one to four bytes, and each byte is a
-  number from 0 to 255.
-- A Python `dict` maps keys to values, and a tuple like `(97, 98)` can be a
-  key.
+This lesson uses five ideas from earlier work:
 
-## The trade between V and T
+- Attention cost grows with the square of the sequence length.
+- The embedding table and the output layer each store one row per vocabulary id.
+- Training compute grows in proportion to the number of tokens.
+- UTF-8 stores each character as one to four bytes, and each byte is an integer from 0 to 255.
+- A Python dict can use a tuple such as `(97, 98)` as a key.
 
-Picture the sentence "the cat sat" three ways.
+## Merge one pair by hand
 
-| Unit | Tokens | $T$ | Typical $V$ |
-|---|---|---|---|
-| Characters | t, h, e, space, c, a, t, ... | 11 | a few hundred |
-| Words | the, cat, sat | 3 | over 100,000, and still missing words |
-| Subwords (BPE) | the, " cat", " sat" | 3 | tens of thousands |
+Take the one-word corpus `"aaab"`. The letter `"a"` is byte 97 and `"b"` is byte 98, so the word is `[97, 97, 97, 98]`.
 
-A long $T$ is expensive, because attention grows with $T^2$ and training
-compute grows with the token count. A huge $V$ is expensive too: the output
-layer scores every token in the vocabulary, for every position. BPE keeps
-both moderate, and it picks its units from real text instead of guessing.
+Walk the neighbours. The pairs are `(97, 97)`, `(97, 97)`, and `(97, 98)`. The count of `(97, 97)` is 2. The count of `(97, 98)` is 1. The winning pair is `(97, 97)`.
 
-### Start from bytes
+The first merge gets the next free id, 256. That id stands for the two parts joined, here the bytes of `"aa"`. Scan from the left and skip two positions after a hit. The first two 97s become 256, and the word is `[256, 97, 98]`.
 
-A **byte-level** tokeniser starts with exactly 256 base tokens, one for each
-possible byte. Any text in any language, even emoji, is some list of bytes. So
-nothing is ever unknown. For example, "hé" is the bytes $[104, 195, 169]$:
-"h" is one byte and "é" takes two. Merges added on top only make $T$ shorter.
-
-```python
-ids = list("hé".encode("utf-8"))   # [104, 195, 169]
-```
-
-> [!KEY]
-> A byte-level tokeniser starts from 256 base tokens, one per byte, so it can
-> encode any text. Merges only make the sequence shorter.
-
-## Byte-pair encoding
-
-Here's the idea in one sentence: find the two neighbouring tokens that appear
-together most often, glue them into a new token, and repeat. It's like
-noticing you keep writing "t" then "h" and inventing a single symbol for "th".
-
-Each new token gets the next free ID. The first merge makes ID 256, the second
-makes 257, and so on. In general:
+This one step is a merge in byte-pair encoding, or BPE. Merge number $i$, counting from 0, gets a fixed id:
 
 $$
 \text{id}(\text{merge } i) = 256 + i
 $$
 
-Read aloud: the merge at position $i$ in the list (counting from 0) produces
-token ID 256 plus $i$.
-
-### The two building blocks
-
-**Count pairs.** Walk along each word and count every neighbouring pair.
+The id is 256 plus the merge's position in the list. Here $i = 0$, so the id is 256, the same number as in the hand merge. The count lives in a dict:
 
 ```python
-for a, b in zip(tokens, tokens[1:]):
-    counts[(a, b)] = counts.get((a, b), 0) + 1
+counts = {}
+# zip [97, 97, 97, 98] with that list shifted by one
+# add 1 to counts[(a, b)] for each neighbour pair
 ```
 
-For the words `[1, 2, 3, 1, 2]` and `[1, 2]`, the pairs are $(1,2)$ three
-times, $(2,3)$ once, and $(3,1)$ once. Pairs never span two different words.
+The usual mistake is to let a run of three equal ids merge twice. `[97, 97, 97]` becomes `[256, 97]`.
 
-**Merge a pair.** Walk along each word from the left. If the current token and
-the next one match the pair, write the new ID and jump ahead two. Otherwise,
-copy the current token and move ahead one.
+> [!KEY]
+> A byte-level tokeniser starts from 256 ids, one per byte, so every text has an encoding. A merge only shortens the sequence.
 
-```python
-if i < n - 1 and (tokens[i], tokens[i + 1]) == pair:
-    merged.append(new_id); i += 2
-else:
-    merged.append(tokens[i]); i += 1
-```
+## Train by repeating that merge
 
-Merging $(1, 2)$ into 9 turns `[1, 2, 3, 1, 2]` into `[9, 3, 9]`. Merging
-$(5, 5)$ into 20 turns `[5, 5, 5]` into `[20, 5]`: the first two merge, and
-the third has no partner left.
+Training repeats the same step. Split the corpus into words, turn each word into bytes, count pairs inside each word, and merge the winner. Pairs never cross from one word into the next. Stop when the vocabulary reaches the size you asked for, or when no pair remains.
 
-### Training: a worked example
+On a tie, pick the pair that is smaller as a tuple of ids. The vocabulary maps each id to bytes. A merged id's bytes are its two parts concatenated.
 
-Train on the text "aaabdaaabac". In bytes, "a" is 97, "b" is 98, "c" is 99,
-and "d" is 100.
+Train on `"aaabdaaabac"`. The bytes are 97 for `"a"`, 98 for `"b"`, 99 for `"c"`, and 100 for `"d"`. The string is 11 bytes.
 
-1. Count pairs. "aa" appears 4 times (twice in each "aaab"). "ab" appears 2
-   times. "bd", "da", "ba", and "ac" appear once each. The winner is
-   $(97, 97)$. It becomes ID 256, standing for the bytes "aa".
-2. Merge. Scanning left to right, "aaab" becomes 256, a, b. The text is now
-   256 a b d 256 a b a c.
-3. Count again. Both $(256, 97)$ and $(97, 98)$ appear twice. It's a tie.
-   Break ties by picking the smaller pair as a tuple, so $(97, 98)$ wins. It
-   becomes ID 257, "ab". The text is now 256 257 d 256 257 a c.
-4. Count again. $(256, 257)$ appears twice and wins. It becomes ID 258,
-   "aaab". The text is now 258 d 258 a c.
+In round 0, `(97, 97)` appears 4 times. Every other pair appears once or twice. The winner is `(97, 97)`, and it becomes id 256, the bytes `b"aa"`. After the left-to-right merge the ids are `256, 97, 98, 100, 256, 97, 98, 97, 99`.
+
+In round 1, `(256, 97)` and `(97, 98)` both appear twice. The smaller tuple is `(97, 98)`, so it wins and becomes id 257, the bytes `b"ab"`. The ids become `256, 257, 100, 256, 257, 97, 99`.
+
+In round 2, `(256, 257)` appears twice and wins. It becomes id 258, the bytes `b"aaab"`. The ids are `258, 100, 258, 97, 99`. Eleven bytes have become five tokens.
+
+The merge list is `[(97, 97), (97, 98), (256, 257)]`, and the vocabulary holds $256 + 3 = 259$ ids. You can drop the training text. The ordered list and the byte table are the tokeniser.
 
 > [!TIP]
-> `min(counts, key=lambda p: (-counts[p], p))` does both jobs in one call. It
-> picks the highest count, and among equal counts it picks the smaller pair.
-
-The merge list is $[(97, 97), (97, 98), (256, 257)]$, and the vocabulary has
-$256 + 3 = 259$ tokens. The original 11 bytes became 5 tokens.
+> `min(counts, key=lambda p: (-counts[p], p))` picks the largest count, and on a tie it picks the smaller pair.
 
 > [!KEY]
-> Each training round counts pairs, glues the most common one into a new
-> token, and gives it the next free ID, $256 + i$.
+> Each round counts pairs, merges the winner, and gives it id $256 + i$. On a tie, the smaller pair wins.
 
-The vocabulary maps each ID to its bytes. A merged token's bytes are its two
-parts joined together:
+Store the bytes with one concatenation:
 
 ```python
-vocab[new_id] = vocab[a] + vocab[b]   # b"a" + b"a" == b"aa"
+vocab[new_id] = vocab[a] + vocab[b]  # bytes, not a string
 ```
 
-### The merge list is the tokeniser
+The usual mistake is to break the tie with `max`. That chooses the larger pair and fails this corpus.
 
-After training, you can throw away the training text. All you keep is the
-ordered merge list and the vocabulary. You never count pairs again.
+## Encode in learned order
 
-### Encoding: run the merges in order
+Encoding starts from bytes again. Apply merge 0 everywhere, then merge 1, then the rest of the list. Flatten the words into one list of ids. You recount nothing on the text you encode.
 
-To encode new text, start from its bytes. Apply merge 0 everywhere, then
-merge 1 everywhere, and so on, to the end of the list. Then join every word's
-tokens into one flat list.
+Order matters, because a later pair is built from ids that exist only after earlier merges. Reverse those three merges and encode `"aaabdaaabac"`. You get `[258, 257, 100, 258, 257, 97, 99]`, seven tokens rather than five. The result is a valid encoding, and it is a longer one.
 
-Order matters. Merge 2 in the example glues 256 and 257, and those tokens
-only exist after merges 0 and 1 have run. Run the list backwards and merge
-$(256, 257)$ fires first, when there is nothing to glue. Encoding
-"aaabdaaabac" with the list reversed gives 7 tokens instead of 5. It's still
-a valid tokenisation, but a worse one.
+Some long tokens appear only after particular shorter merges. Walking the learned list is the encoding rule.
 
 > [!KEY]
-> To encode, run the merges in the order you learned them. Later merges glue
-> tokens that only exist once the earlier merges have run.
+> Encode by running the merges in the order they were learned. A later merge glues ids that exist only after the earlier merges.
 
-For the same reason, encoding isn't "find the longest vocabulary entry that
-matches". Some tokens only appear after specific shorter ones join first.
-
-### Decoding
-
-Decoding looks up each ID's bytes, joins them, and turns the bytes back into
-text:
+Decoding looks up each id's bytes, joins them all, and turns the bytes into text once:
 
 ```python
 text = b"".join(vocab[i] for i in ids).decode("utf-8")
 ```
 
+The usual mistake is to decode each id to text on its own. One id can hold half of a character that uses two bytes, and that half is not valid text.
+
 > [!WARNING]
-> Join all the bytes first, then decode once. One token can hold half of a
-> two-byte character, so decoding tokens one at a time can fail.
+> Join every byte first, then call `.decode("utf-8")` once. Decoding one token at a time can fail on a split character.
 
-Because every token stands for exact bytes, decoding always reproduces the
-original text, spaces and all.
+Each id stands for exact bytes, so decoding returns the original text, spaces included.
 
-## Splitting text before BPE
+## Keep merges inside words
 
-If BPE ran on the raw text, it would waste tokens on things like "the last
-letter of one word plus the space after it". So tokenisers first split text
-into words, and merges never cross from one word into the next. The exercise
-gives you this splitter, `_pretokenize`.
+Running BPE on the raw byte stream spends merges on the end of one word plus the space after it. A splitter runs first, and merges stay inside each piece. The exercise gives you that splitter as `_pretokenize`.
 
-One detail keeps the text reversible. A single space stays attached to the
-start of the word after it, so " cat" is one piece. A run of two or more
-spaces, a tab, or a newline becomes its own piece. For example, "the cat  sat"
-followed by a newline splits into "the", " cat", a two-space piece, "sat",
-and the newline. Join the pieces and you get the input back exactly.
+A single space stays on the word that follows, so `" cat"` is one piece. Two or more spaces, a tab, or a newline is its own piece. The text `"the cat  sat"` plus a newline splits into `"the"`, `" cat"`, a two-space piece, `"sat"`, and the newline. Join those pieces and the input comes back.
 
-## Other ways to pick merges
+## Score pairs another way
 
-These are worth knowing by name. You don't build them here.
+Two other training scores are worth naming. You do not build them here:
 
-- **WordPiece** scores a pair by how often it appears together divided by how
-  often each half appears on its own. A pair of two very common pieces
-  doesn't win only because both pieces are common.
-- **Unigram** works the other way round. It starts with a huge vocabulary
-  and removes the tokens that matter least, until it reaches the target size.
+- WordPiece divides the pair count by the product of the two piece counts. Two common pieces do not win only because each half is common.
+- Unigram starts from a large vocabulary and deletes the tokens that help least, until the size hits the target.
 
-## Fertility
+The usual mistake is to change the encode loop when the training score changes. Encoding still applies a learned list in order.
 
-**Fertility** is the average number of tokens per word. Lower is better: the
-text fits in fewer tokens.
+## Measure fertility
+
+Fertility is the average number of tokens per word. A lower value means the same text costs fewer tokens. Count words with a plain whitespace split. That split is separate from `_pretokenize`.
 
 $$
 \text{fertility} = \frac{\text{number of tokens}}{\text{number of words}}
 $$
 
-Read aloud: encode the text, count the tokens, and divide by the number of
-words, where words are what you get by splitting on whitespace.
+Fertility is the encoded length divided by the word count. With no merges, `"the quick fox"` is 13 bytes and 3 words, so fertility is $13 / 3 = 4.33$. The same ratio is one division:
 
 ```python
-f = len(encode(text, merges)) / len(text.split())
+ratio = len(encode(text, merges)) / len(text.split())
 ```
 
-With no merges, "the quick fox" is 13 bytes and 3 words, so its fertility is
-$13 / 3 = 4.33$. As you train more merges, common words shrink to one or two
-tokens, and fertility falls.
+Further merges shrink common words toward one token, and fertility falls. The usual mistake is to count words with `_pretokenize` instead of `text.split()`.
 
 > [!RECAP]
-> - Start each word from `list(piece.encode("utf-8"))`, so nothing is ever
->   unknown.
-> - Count pairs inside each word only, never across word boundaries.
-> - Merge from the left and jump two after each merge, so `[5, 5, 5]` becomes
->   `[20, 5]`.
-> - Merge $i$ makes ID $256 + i$, and ties go to the smaller pair.
-> - Encode by running every merge in order. Decode by joining all the bytes
->   before one `.decode("utf-8")`.
+> Hold these five checks while you write the functions:
+>
+> - Start each word from its UTF-8 bytes, so no text is left unknown.
+> - Count pairs inside each word, and never across a word boundary.
+> - Merge from the left and jump two after a hit, so `[5, 5, 5]` becomes `[20, 5]`.
+> - Merge $i$ creates id $256 + i$, and a tie goes to the smaller pair.
+> - Encode in list order. Decode by joining all the bytes, then one `.decode("utf-8")`.
 
 ## Build it step by step
 
-The checks test your functions in this order.
+The checks call your functions in this order:
 
-1. **`get_pair_counts(token_lists)`** takes a list of lists of ints and
-   returns a `dict` from pair tuples to counts. Use `zip(tokens, tokens[1:])`
-   inside a loop over the words. Common mistake: joining all words into one
-   list first, which counts pairs across word boundaries.
-2. **`merge_pair(token_lists, pair, new_id)`** returns a new list of lists.
-   Use a `while` loop with an index, not a `for` loop, so you can jump ahead
-   by two. Common mistake: turning `[5, 5, 5]` into `[20, 20]` by letting
-   the middle token join both pairs.
-3. **`encode(text, merges)`** returns a flat list of ints. Call
-   `_pretokenize`, turn each piece into `list(piece.encode("utf-8"))`, loop
-   over `enumerate(merges)` calling `merge_pair` with `256 + i`, then flatten.
-   With an empty merge list, it returns the raw bytes.
-4. **`decode(ids, vocab)`** returns a string. Join the bytes, then call
-   `.decode("utf-8")`. Common mistake: decoding each token to text on its
-   own. A token can hold half of a two-byte character, which fails alone.
-5. **`train_bpe(corpus, vocab_size)`** returns `(merges, vocab)`. Start
-   `vocab` as `{i: bytes([i]) for i in range(256)}`. While the next ID is
-   below `vocab_size`, count pairs, stop if there are none, pick the best
-   pair with `min(counts, key=lambda p: (-counts[p], p))`, record it, add its
-   bytes to `vocab`, and merge it. Common mistake: breaking ties with `max`,
-   which picks the larger pair and fails the worked example.
-6. **`fertility(text, merges)`** returns a float, the token count from
-   `encode` divided by `len(text.split())`.
+1. `get_pair_counts(token_lists)` takes a list of lists of ints and returns a dict from pair tuples to counts. `zip` neighbours inside each word. Leave missing pairs out of the dict. The usual mistake is to join the words first. The loop has this shape:
+
+```python
+def get_pair_counts(token_lists):
+    counts = {}
+    # zip neighbours inside one word at a time
+    return counts
+```
+
+2. `merge_pair(token_lists, pair, new_id)` returns a separate list of lists. Use a `while` index so a hit jumps by two. The usual mistake turns `[5, 5, 5]` into `[20, 20]`. The index moves like this:
+
+```python
+def merge_pair(token_lists, pair, new_id):
+    # on a hit, write new_id and add 2 to the index
+    # otherwise write the current id and add 1
+    return merged
+```
+
+3. `encode(text, merges)` returns one flat list of ints. Call `_pretokenize`, then `list(piece.encode("utf-8"))`, then `merge_pair` at position $i$ with id $256 + i$. Flatten at the end. An empty list returns raw bytes. The calls sit in this order:
+
+```python
+def encode(text, merges):
+    # pretokenize, bytes, then merge i with id 256 + i
+    return ids
+```
+
+4. `decode(ids, vocab)` returns a string. Join the bytes, then call `.decode("utf-8")` once. The usual mistake decodes each id alone. Two operations do the job:
+
+```python
+def decode(ids, vocab):
+    # join vocab[i], then decode utf-8 once
+    return text
+```
+
+5. `train_bpe(corpus, vocab_size)` returns `(merges, vocab)`. Start from `{i: bytes([i]) for i in range(256)}`. Stop at `vocab_size`, or when no pair remains. Pick the winner, store the joined bytes, and merge. The usual mistake breaks ties with `max`. The loop has this shape:
+
+```python
+def train_bpe(corpus, vocab_size):
+    # while the next id is below vocab_size and a pair exists
+    # pick min(counts, key=lambda p: (-counts[p], p))
+    return merges, vocab
+```
+
+6. `fertility(text, merges)` returns a float from `encode` divided by `len(text.split())`. The ratio has this shape:
+
+```python
+def fertility(text, merges):
+    # len(encode(text, merges)) / len(text.split())
+    return ratio
+```
 
 ## Cost and scaling
 
-Training does one full pass over the corpus for every merge. With $n$ bytes
-of training text and $M$ merges, that's about $n \times M$ steps. The table
-shows how the pieces grow.
+Training walks the corpus once per merge. With $n$ bytes of text and $M$ merges, that is about $n \times M$ steps. Encoding one string does one pass per merge. A practical tokeniser keeps a priority queue of pair counts and updates only the pairs beside each merge, so it does not recount everything.
+
+The work grows as follows:
 
 | Piece | Work | Grows with |
 |---|---|---|
-| One round of counting pairs | one pass over all tokens | corpus size |
+| One counting pass | one walk over the tokens | corpus size |
 | Training | one pass per merge | corpus size times merges |
-| Encoding a text | one pass per merge | text length times merges |
-| Output layer in the model | $2Vd$ flops per token | vocabulary size |
-
-Real tokenisers avoid recounting everything. They keep a priority queue of
-pair counts and only update the pairs next to each merge.
+| Encoding one text | one pass per merge | text length times merges |
+| Output layer | $2Vd$ flops per token | vocabulary size |
 
 ## Where this breaks
 
-- **Numbers.** "1234" might be one token, "12" plus "34", or four digits,
-  depending on what the training text happened to contain. The model sees no
-  consistent place value, which makes arithmetic harder. Some tokenisers
-  always split digits one by one.
-- **Code indentation.** A run of spaces only becomes one token if that exact
-  run was common in training. Deeply nested code can cost one token per
-  space.
-- **Languages the tokeniser rarely saw.** If most training text is English,
-  most merges are English pieces. A script that needs two to four bytes per
-  character, with few merges of its own, can cost several tokens per
-  character. The same model then charges those users far more tokens for the
-  same meaning.
+Digits are unstable. `"1234"` can be one token, `"12"` plus `"34"`, or four separate digits, depending on the training text. There is then no fixed place value, and arithmetic gets harder. Some tokenisers split every digit on its own.
+
+Spaces have the same problem in code. A run of spaces becomes one token only when that exact run was common in training. Deep indentation can cost one token per space.
+
+A corpus that is mostly one language spends its merges there. A script that needs two to four bytes per character, with few merges of its own, can cost several tokens per character. Readers of that script then spend far more tokens for the same meaning.
 
 ## The exercise
 
-You build byte-level BPE from the bottom up: `get_pair_counts`, `merge_pair`,
-`encode`, `decode`, `train_bpe`, and `fertility`. The splitter `_pretokenize`
-is provided.
+You build byte-level BPE from the bottom: `get_pair_counts`, `merge_pair`, `encode`, `decode`, `train_bpe`, and `fertility`. The splitter `_pretokenize` is already written.
 
-The checks confirm the pair counts and merges on the small lists from this
-lesson, including the `[5, 5, 5]` case. They check that `encode` and `decode`
-round-trip text with accents, Chinese characters, and emoji, both with no
-merges and after training. They check that `train_bpe` on "aaabdaaabac"
-produces exactly the three merges you traced by hand, that the vocabulary
-reaches the requested size, and that running the merges out of order gives
-more tokens than running them in order. Finally, they check that fertility
-falls as the vocabulary grows.
+The checks confirm the pair counts and the left-to-right merge, including `[5, 5, 5]`. They check that `encode` and `decode` round-trip accents, Chinese characters, and emoji, both with no merges and after training. They check that `train_bpe` on `"aaabdaaabac"` returns the three merges from this lesson, that the vocabulary reaches the requested size, and that the reversed list produces more tokens. They also check that fertility falls as the vocabulary grows.

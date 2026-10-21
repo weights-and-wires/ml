@@ -2,14 +2,14 @@
 title: Linear regression
 slug: 02-linear-regression
 part: "Part 1 — Foundations"
-summary: Fit a straight line (or plane) to data by least squares, three ways, and see why the textbook formula loses accuracy.
+summary: Fit a line by least squares three ways, and see why the textbook formula loses correct digits.
 minutes: 60
 gpu: false
 objectives:
-  - Compute least squares weights with the normal equations, QR, and the SVD.
-  - Check a fit by confirming the leftover errors are at right angles to every feature column.
-  - Explain why forming X^T X loses about twice as many digits as QR or the SVD.
-  - Build the smallest-size solution when some features repeat information from others.
+  - Fit least squares weights with the normal equations, with QR, and with the SVD.
+  - Check a fit by testing that leftover errors meet every column at a right angle.
+  - Explain why building X transpose X loses about twice as many correct digits.
+  - Build the shortest weight vector when one column repeats another.
 prereqs:
   - 01-the-learning-problem
 exercise: 02-linear-regression
@@ -17,154 +17,207 @@ exercise: 02-linear-regression
 
 # Linear regression
 
-Linear regression draws the best straight line through a cloud of points. With more than one input feature, the line becomes a flat plane, but the idea is the same. You pick weights so that a weighted sum of the features lands as close as possible to each target.
+Three points sit on a page: (1, 1), (2, 2), and (3, 2).
 
-"As close as possible" has a precise meaning here. You square each error and add the squares up, then choose the weights that make that total smallest. This is called least squares, and it has an exact answer you can compute in one go, without any trial and error.
+No straight line hits all three. The line that guesses $x$ itself misses the third point by $3-2=1$, and that square is 1. You add the other squares and hunt for the smallest total.
 
-The catch is that the formula printed in most textbooks is a poor way to compute that answer on a real computer. It loses accuracy when features are similar to each other. In this lesson, you build that formula anyway, then two better methods, and you measure the difference.
+The usual formula throws away correct digits when two columns look alike. You build it, then two safer methods, and you compare the digits.
 
 ## What you already know
 
-- A model makes a prediction from features, and a loss measures how wrong the prediction is (lesson 1).
-- A matrix times a vector is a weighted sum of the matrix's columns.
-- The transpose $X^\top$ swaps rows and columns of $X$.
-- Solving $Aw = c$ for $w$ is a standard numpy call, `np.linalg.solve(A, c)`.
-- A derivative equal to zero marks the bottom of a bowl-shaped function.
+Five ideas from lesson 1 are enough to start:
 
-## The model and the loss
+- A miss of 0.5 squares to 0.25. Lesson 1 calls that score a loss.
+- Lesson 1 added losses 0.25, 0.25, 1, and 1 to get 2.5, then divided by 4 to get 0.625. That average is the empirical risk.
+- A weighted sum such as `1*1 + 2*0.5` equals 2. numpy writes a stack of those sums as `X @ w`.
+- The transpose of `[[1, 2], [3, 4]]` is `[[1, 3], [2, 4]]`. Rows become columns.
+- The bowl `(w - 3) ** 2` is lowest at $w=3$, where the slope is 0.
 
-Think of predicting a flat's rent from its size and its distance to the station. Each flat is one example. Each measured property is one feature. You guess the rent as a weighted sum of the features.
+## Score one line by hand
 
-You have $n$ examples and $d$ features. Stack them into the data matrix $X$, which has shape $n \times d$: one row per example, one column per feature. The targets go into a vector $y$ of length $n$. The weights $w$ form a vector of length $d$.
+Use the line that guesses $x$. At $x=1$ and at $x=2$ the square is 0. At $x=3$ the miss is 1 and the square is 1.
 
-The predictions for every example at once are
+Half of that total is $0.5\times(0+0+1)=0.5$. Stack the points into a table $X$ with a column of ones, and put the targets in $y$:
 
 $$
-\hat{y} = Xw
+X=\begin{bmatrix}1&1\\1&2\\1&3\end{bmatrix},\quad y=\begin{bmatrix}1\\2\\2\end{bmatrix}
 $$
 
-Read it aloud: for each row of $X$, multiply each feature by its weight and add them up. That sum is the prediction $\hat{y}$ for that row.
+The weights are $w_1=0$ and $w_2=1$. The three rows give $1\cdot0+1\cdot1=1$, then 2, then 3. The squares still add to 1, and half of that is 0.5.
+
+This is linear regression. The guesses are $\hat{y}=Xw$, where $\hat{y}$ (y-hat) is the vector of guesses. The loss is half the sum of squared misses.
+
+In symbols:
+
+$$
+L(w)=\tfrac{1}{2}\lVert Xw-y\rVert^2
+$$
+
+Here $\lVert v\rVert$ is the length of a vector $v$, so $\lVert v\rVert^2$ is the sum of squared entries. Plug in the error vector $(0,0,1)$. The sum of squares is 1, and half of it is 0.5 again.
+
+Keep the half-sum, because the half tidies the derivative, while dividing by the number of rows would report $1/3$. The column of ones carries the intercept. Sum the squares as follows:
 
 ```python
-y_hat = X @ w        # shape (n,)
+loss = 0.5 * np.sum((X @ w - y) ** 2)  # guesses have shape (n,)
 ```
 
-This lesson has no separate bias $b$. To get one, add a column of ones to $X$. The weight on that column plays the role of $b$.
+Dividing by $n$ reports $1/3$, so the slope no longer matches this loss.
 
-The loss is half the sum of squared errors:
+## Solve the 2 by 2 system
+
+The transpose $X^\top$ is $\begin{bmatrix}1&1&1\\1&2&3\end{bmatrix}$. Rows of $X$ became columns.
+
+The top-left of $X^\top X$ is $1+1+1=3$. The top-right is $1\cdot1+1\cdot2+1\cdot3=6$. The bottom-right is $1+4+9=14$.
+
+The targets give $X^\top y$. That is $1+2+2=5$ and $1+4+6=11$.
+
+You solve $Aw=c$ with this 2 by 2 matrix $A$ and this right-hand side $c$:
 
 $$
-L(w) = \tfrac{1}{2} \lVert Xw - y \rVert^2
+\begin{bmatrix}3&6\\6&14\end{bmatrix}\begin{bmatrix}w_1\\w_2\end{bmatrix}=\begin{bmatrix}5\\11\end{bmatrix}
 $$
 
-Read it aloud: take the error vector $Xw - y$, one error per example. Square each error and add them. The symbol $\lVert v \rVert$ is the norm, or length, of a vector $v$, so $\lVert v \rVert^2$ is the sum of its squared entries. The $\tfrac{1}{2}$ only tidies up the derivative.
+The determinant is $3\cdot14-6\cdot6=42-36=6$. Then $w_1=(14\cdot5-6\cdot11)/6=(70-66)/6=2/3$. And $w_2=(3\cdot11-6\cdot5)/6=(33-30)/6=1/2$.
+
+Check the product. $3\cdot(2/3)+6\cdot(1/2)=2+3=5$, and $6\cdot(2/3)+14\cdot(1/2)=4+7=11$.
+
+These are the normal equations. $X^\top X$ is $d\times d$, with $d=2$ columns, and it is the Gram matrix.
+
+In symbols:
+
+$$
+X^\top X\,w=X^\top y
+$$
+
+The left side times $(2/3,1/2)$ is $(5,11)$, which is the right side.
+
+The slope of the loss is $X^\top(Xw-y)$, one entry per weight. At $(2/3,1/2)$ that slope is the zero vector, the bottom of the bowl. At the trial weights $(0,1)$ the errors are $(0,0,1)$, and $X^\top$ of that is $(1,3)$, not zero.
+
+The textbook writes $w=(X^\top X)^{-1}X^\top y$. Do not form that inverse. A solve is the same arithmetic and keeps more digits.
+
+The exercise uses a Cholesky factor $L$, a lower triangle with $L L^\top$ equal to the Gram matrix. Two substitutions, through $L$ and then through $L^\top$, return $2/3$ and $1/2$. Solve it as follows:
 
 ```python
-loss = 0.5 * np.sum((X @ w - y) ** 2)
+w = np.linalg.solve(X.T @ X, X.T @ y)  # shape (d,)
 ```
 
-## The normal equations
+Forming the inverse, or forgetting $L^\top$ on the second substitution, gives a different vector.
 
-The loss is a bowl in weight space. Its lowest point is where the gradient is zero. The gradient is the vector of partial derivatives, one per weight, and it points uphill. For this loss the gradient is $X^\top(Xw - y)$. Setting it to zero gives the normal equations:
+## Check the leftovers
+
+The best guesses are $2/3+1/2=7/6$, $2/3+1=5/3$, and $2/3+3/2=13/6$. In decimals that is about 1.1667, 1.6667, and 2.1667.
+
+The leftovers are $1-7/6=-1/6$, $2-5/3=1/3$, and $2-13/6=-1/6$. Call this vector $r=y-Xw$, the residual.
+
+Dot $r$ with the column of ones: $-1/6+1/3-1/6=0$. Dot $r$ with $(1,2,3)$: $-1/6+2/3-3/6=0$.
+
+Those zeros are $X^\top r=0$. The residual meets every column at a right angle.
+
+In symbols:
 
 $$
-X^\top X \, w = X^\top y
+X^\top(y-Xw)=0
 $$
 
-Read it aloud: on the left, $X^\top X$ is a $d \times d$ matrix, sometimes called the Gram matrix. Each entry measures how much two features overlap. On the right, $X^\top y$ is a length-$d$ vector that measures how much each feature lines up with the targets. The best $w$ solves this square system.
+Plug in the two dots you computed. Both are 0.
 
-```python
-w = np.linalg.solve(X.T @ X, X.T @ y)
-```
-
-The textbook writes the answer as $w = (X^\top X)^{-1} X^\top y$. Never compute an explicit inverse. A solve is faster and more accurate.
-
-### The residual is at right angles to the features
-
-The residual is the leftover error, $r = y - Xw$. The normal equations say $X^\top r = 0$. In words, the residual has zero dot product with every feature column. Two vectors with zero dot product are orthogonal: they meet at a right angle.
-
-This gives you a free check on any solver. Compute $X^\top(y - Xw)$ and look at its largest absolute entry. At the least squares answer, it is zero up to rounding.
+The numpy check is one number, the largest absolute entry:
 
 ```python
 check = np.abs(X.T @ (y - X @ w)).max()
 ```
 
-> [!TIP]
-> Run this check after every solver you write. Compare it with `np.abs(X.T @ y).max()`: a result many orders of magnitude smaller means the fit is right.
-
-Geometrically, $Xw$ is the point in the space of all possible predictions that sits closest to $y$. Closest means the line from it to $y$ drops straight down, at a right angle. This is called a projection.
+Returning the vector fails the check, which wants one float. $Xw$ is the closest point to $y$ in the columns of $X$. That is a projection.
 
 > [!KEY]
-> Least squares projects $y$ onto the columns of $X$. The residual left over is at right angles to every column, so $X^\top(y - Xw) = 0$.
+> Least squares projects $y$ onto the columns of $X$. The residual meets every column at a right angle, so $X^\top(y-Xw)=0$.
 
-## A worked example by hand
+> [!TIP]
+> Compare that check with `np.abs(X.T @ y).max()`. A result many orders smaller means the fit is right.
 
-Fit a line $\hat{y} = w_1 + w_2 x$ to three points: $(1, 1)$, $(2, 2)$, and $(3, 2)$. The first column of ones gives the intercept $w_1$.
+## Read the two stretch numbers
 
-The data matrix and targets are:
+The stretches of $X$ are the square roots of the stretches of $X^\top X$. Those two numbers add to $3+14=17$ and multiply to $3\cdot14-6\cdot6=6$. They solve $t^2-17t+6=0$.
 
-$$
-X = \begin{bmatrix} 1 & 1 \\ 1 & 2 \\ 1 & 3 \end{bmatrix}, \quad y = \begin{bmatrix} 1 \\ 2 \\ 2 \end{bmatrix}
-$$
+The discriminant is $17^2-24=289-24=265$, and $\sqrt{265}\approx16.279$. The roots are $(17+16.279)/2\approx16.639$ and $(17-16.279)/2\approx0.361$.
 
-The two sides of the normal equations are:
+Then $\sqrt{16.639}\approx4.079$ and $\sqrt{0.361}\approx0.600$. These are the singular values of $X$, written $\sigma$ (sigma, said "sig-ma"). The large one is $\sigma_{\max}\approx4.079$ and the small one is $\sigma_{\min}\approx0.600$.
 
-$$
-X^\top X = \begin{bmatrix} 3 & 6 \\ 6 & 14 \end{bmatrix}, \quad X^\top y = \begin{bmatrix} 5 \\ 11 \end{bmatrix}
-$$
-
-The determinant of $X^\top X$ is $3 \cdot 14 - 6 \cdot 6 = 6$. Solving gives $w_1 = (14 \cdot 5 - 6 \cdot 11)/6 = 4/6 \approx 0.6667$ and $w_2 = (3 \cdot 11 - 6 \cdot 5)/6 = 3/6 = 0.5$.
-
-The predictions are $\hat{y} = (1.1667, 1.6667, 2.1667)$. The residuals are $r = (-0.1667, 0.3333, -0.1667)$. Check them: they add to $0$, and $1(-0.1667) + 2(0.3333) + 3(-0.1667) = 0$. So $X^\top r = 0$, as promised.
-
-The singular values of this $X$ are about $4.079$ and $0.600$, so its condition number (defined below) is about $6.79$.
-
-## Why the textbook formula loses digits
-
-The condition number of $X$ measures how close its columns are to repeating each other. It is the ratio of the largest to the smallest singular value, written $\kappa = \sigma_{\max}/\sigma_{\min}$. Singular values are defined in the SVD section below. For now, think of them as the stretch factors of $X$ along its main directions.
+numpy returns them largest first:
 
 ```python
-s = np.linalg.svd(X, compute_uv=False)   # sorted largest first
+s = np.linalg.svd(X, compute_uv=False)
+```
+
+Square roots of the diagonal entries 3 and 14 are not the singular values.
+
+## Count the digits you lose
+
+Divide 4.079 by 0.600 and you get about 6.79. This ratio is the condition number, written $\kappa$ (kappa, said "kap-pa").
+
+In symbols:
+
+$$
+\kappa=\sigma_{\max}/\sigma_{\min}
+$$
+
+Plug in 4.079 and 0.600 and you get about 6.79 again. The condition number of $X^\top X$ is $\kappa^2$, about $6.79^2\approx46.1$.
+
+A condition number of $10^k$ loses about $k$ digits, and a double carries about 16. So $\kappa=10^7$ keeps about 9 digits on $X$, while $X^\top X$, with condition $10^{14}$, keeps about 2. That is about twice as many lost digits.
+
+> [!KEY]
+> Forming $X^\top X$ squares the condition number. The normal equations lose about twice as many digits as QR or the SVD.
+
+Compute the ratio as follows:
+
+```python
 kappa = s[0] / s[-1]
 ```
 
-A rule of thumb: solving a problem with condition number $10^k$ loses about $k$ decimal digits. A computer double carries about 16 digits.
+Dividing the small stretch by the large one returns about 0.15. A condition number is at least 1, and a zero stretch must return `float("inf")`.
 
-Here is the problem. The condition number of $X^\top X$ is $\kappa^2$, the square of the condition number of $X$. So the normal equations lose about $2k$ digits, while a method that works on $X$ directly loses only $k$. In the worked example, $\kappa(X) \approx 6.79$ and $\kappa(X^\top X) \approx 46.1$. If $\kappa = 10^7$, the normal equations keep about 2 digits and a good method keeps about 9.
+## Split the matrix with QR
 
-> [!KEY]
-> Forming $X^\top X$ squares the condition number. So the normal equations lose about twice as many digits as QR or the SVD, which work on $X$ directly.
+QR writes $X=QR$. Classical steps on this $X$ go as follows.
 
-The two methods below never form $X^\top X$.
+The first column $(1,1,1)$ has length $\sqrt{3}\approx1.732$. Divide by that length. The second column $(1,2,3)$ dotted with that unit column is $6/\sqrt{3}\approx3.464$, which pulls off the vector $(2,2,2)$.
 
-## Solve with QR
+The remainder is $(-1,0,1)$, with length $\sqrt{2}\approx1.414$. Then $Q^\top y$ is about $(2.887,0.707)$, and $R$ is about $\begin{bmatrix}1.732&3.464\\0&1.414\end{bmatrix}$.
 
-The QR factorisation splits $X$ into $X = QR$. Here $Q$ has shape $n \times d$ and orthonormal columns: each column has length 1, and every pair is at right angles, so $Q^\top Q = I$. $R$ is $d \times d$ and upper triangular, meaning every entry below the diagonal is zero.
+Back-substitution: $1.414\,w_2=0.707$, so $w_2=0.5$. Then $1.732\,w_1+3.464\cdot0.5=2.887$, so $w_1=2/3$. Same weights.
 
-Substitute $X = QR$ into the normal equations and cancel. You get
+$Q$ is $n\times d$, here $3\times2$, with $Q^\top Q=I$. Each column has length 1, and columns meet at right angles. $R$ is $d\times d$ and upper triangular, so entries under the diagonal are 0.
+
+In symbols:
 
 $$
-R \, w = Q^\top y
+Rw=Q^\top y
 $$
 
-Read it aloud: rotate the targets into the $Q$ coordinates, then solve a triangular system. A triangular system is solved one unknown at a time from the bottom row up. This is called back substitution.
+numpy may flip a sign in a column of $Q$ and the matching row of $R$. The product $QR$, and the weights $(2/3,1/2)$, stay the same. Factor $X$ as follows:
 
 ```python
-Q, R = np.linalg.qr(X, mode="reduced")
-w = solve_triangular(R, Q.T @ y, lower=False)   # from scipy.linalg
+Q, R = np.linalg.qr(X, mode="reduced")  # Q is (n, d), R is (d, d)
+w = solve_triangular(R, Q.T @ y, lower=False)
 ```
 
-## Solve with the SVD
+`solve_triangular` comes from `scipy.linalg`. Full QR makes $Q$ shape `(n, n)` and the product no longer lines up.
 
-The singular value decomposition (SVD) splits $X$ into $X = U \Sigma V^\top$. $U$ is $n \times r$ with orthonormal columns. $\Sigma$ is a diagonal matrix of singular values $s_1 \geq s_2 \geq \dots \geq 0$. $V^\top$ is $r \times d$ with orthonormal rows. numpy returns $s$ as a vector and $V^\top$ as `vt`.
+## Divide by the stretch numbers
 
-The least squares weights are
+The SVD splits $X$ into $X=U\Sigma V^\top$. The columns of $U$, and the rows of $V^\top$, have length 1 and meet at right angles. $\Sigma$ (capital sigma) holds 4.079 and 0.600, and numpy calls $V^\top$ the matrix `vt`.
+
+For this $X$, rounded to three decimals, $U^\top y$ is about $(-2.963,0.246)$. Divide by the stretches: $-2.963/4.079\approx-0.726$ and $0.246/0.600=0.410$.
+
+Rotate back with $V$. The first weight is about $(-0.403)(-0.726)+(0.915)(0.410)\approx0.67$, and the second is about $(-0.915)(-0.726)+(-0.403)(0.410)\approx0.50$. Rounding aside, that is $(2/3,1/2)$ again.
+
+In symbols:
 
 $$
-w = V \, \Sigma^{-1} \, U^\top y
+w=V\,\Sigma^{-1}\,U^\top y
 $$
 
-Read it aloud from right to left: rotate $y$ into the $U$ coordinates, divide each coordinate by its singular value, then rotate back with $V$.
+Compute that product as follows:
 
 ```python
 U, s, vt = np.linalg.svd(X, full_matrices=False)
@@ -172,63 +225,111 @@ w = vt.T @ ((U.T @ y) / s)
 ```
 
 > [!WARNING]
-> numpy's `vt` is already $V^\top$. You get $V$ with `vt.T`. Transposing it again, or treating `vt` as $V$, silently gives the wrong weights.
+> numpy's `vt` is already $V^\top$. You get $V$ from `vt.T`. Treating `vt` as $V$ returns the wrong weights.
 
-### When features repeat each other
+Sometimes one column repeats another. Take columns $(1,2,3)$ and $(2,4,6)$, with targets $(1,1,1)$. Any weights $(a,b)$ with $a+2b=3/7$ fit equally well, and the shortest pair is $(3/35,6/35)$, about $(0.086,0.171)$.
 
-Sometimes one column of $X$ is a combination of others. Say one column holds a length in metres and another the same length in centimetres. Then many different $w$ give exactly the same predictions, because you can shift weight between the two columns. $X$ is called rank deficient, and at least one singular value is zero.
+The second singular value is about 0. Dividing by it blows the weights up to around $10^{14}$.
 
-Dividing by a zero singular value blows up. The fix is to drop every singular value at or below a small tolerance, `rcond * s.max()`, and keep only the rest. The result is the minimum-norm solution: of all the $w$ that fit equally well, it is the shortest one. It puts no weight at all in the directions that don't change the predictions.
+Drop every singular value at or below `rcond * s[0]`. What remains is the shortest of the equally good weight vectors, the minimum-norm solution. The mask is as follows:
 
 ```python
 keep = s > rcond * s[0]
 w = vt[keep].T @ ((U[:, keep].T @ y) / s[keep])
 ```
 
+Dividing by every singular value, including the zero, is the blow-up to $10^{14}$.
+
 > [!KEY]
-> When features repeat each other, many weight vectors fit equally well. Cutting the tiny singular values picks the shortest one, the minimum-norm solution.
+> When one column repeats another, many weight vectors fit equally well. Cutting the tiny singular values picks the shortest one.
 
 > [!RECAP]
-> - Predictions are `X @ w`, and the loss is half the sum of squared residuals.
-> - The least squares $w$ solves $X^\top X w = X^\top y$, so the residual is at right angles to every column of $X$.
-> - The condition number is `s[0] / s[-1]`, and the normal equations square it.
-> - QR solves $Rw = Q^\top y$ by back substitution. The SVD gives $w = V \Sigma^{-1} U^\top y$.
-> - For repeated features, keep only the singular values above `rcond * s[0]`.
+> - The loss is half the sum of squared residuals of `X @ w`.
+> - The best $w$ solves $X^\top Xw=X^\top y$, and the residual is orthogonal to every column.
+> - The condition number is `s[0] / s[-1]`, and $X^\top X$ squares it.
+> - QR solves $Rw=Q^\top y$. The SVD uses $w=V\Sigma^{-1}U^\top y$.
+> - For a repeated column, keep singular values above `rcond * s[0]`.
 
 ## Build it step by step
 
-The checks test the functions in this order. Each one takes `X` with shape `(n, d)` and, where needed, `y` with shape `(n,)`.
+The checks call the functions in this order. Do not call `lstsq` or `pinv`.
 
-1. **`condition_number(X)`** returns a float. Call `np.linalg.svd(X, compute_uv=False)` to get the singular values, sorted largest first, and divide the first by the last. Return `float("inf")` when the smallest is exactly zero. Common mistake: dividing the last by the first, which gives a number below 1.
-2. **`residual_orthogonality(X, y, w)`** returns a float, the largest absolute entry of $X^\top(y - Xw)$. Use `X @ w`, `X.T @ ...`, `np.abs`, and `.max()`. Common mistake: returning the array instead of one number.
-3. **`fit_qr(X, y)`** returns `w` with shape `(d,)`. Call `np.linalg.qr(X, mode="reduced")`, then `solve_triangular(R, Q.T @ y, lower=False)`. Common mistake: using the full QR, which makes `Q` shape `(n, n)` and breaks the shapes.
-4. **`fit_normal_equations(X, y)`** returns `w` with shape `(d,)`. Form `X.T @ X` and `X.T @ y`. Factor the Gram matrix with `np.linalg.cholesky`, which returns a lower-triangular `L` with `L @ L.T` equal to the Gram matrix. Then do two triangular solves: first `L z = X^T y` with `lower=True`, then `L^T w = z` with `lower=False`. Common mistake: forgetting the transpose in the second solve.
-5. **`fit_svd(X, y, rcond)`** returns `w` with shape `(d,)`. Call `np.linalg.svd(X, full_matrices=False)`. Build a boolean mask `keep` for singular values above `rcond * s[0]`, and use only those columns of `U`, entries of `s`, and rows of `vt`. Common mistake: dividing by every singular value, which puts huge weights in the directions that don't matter.
+1. **`condition_number(X)`** takes $X$ of shape `(n, d)` and returns one float, $\sigma_{\max}/\sigma_{\min}$:
 
-Don't call `np.linalg.lstsq` or `np.linalg.pinv` in the three solvers. They solve the whole problem for you, and a check rejects them.
+   ```python
+   s = np.linalg.svd(X, compute_uv=False)  # largest first
+   # Return s[0] / s[-1], or float("inf") if s[-1] is 0.
+   ```
+
+   Dividing the last singular value by the first returns a number below 1.
+
+2. **`residual_orthogonality(X, y, w)`** returns one float, the largest absolute entry of $X^\top(y-Xw)$:
+
+   ```python
+   # abs of X.T @ (y - X @ w), then .max(), then float.
+   ```
+
+   Returning the vector, instead of one number, fails the check.
+
+3. **`fit_qr(X, y)`** returns `w` of shape `(d,)`:
+
+   ```python
+   Q, R = np.linalg.qr(X, mode="reduced")
+   # solve_triangular(R, Q.T @ y, lower=False)
+   ```
+
+   Full QR makes `Q` shape `(n, n)`.
+
+4. **`fit_normal_equations(X, y)`** returns `w` of shape `(d,)` through Cholesky:
+
+   ```python
+   L = np.linalg.cholesky(X.T @ X)  # L @ L.T is the Gram matrix
+   # Solve L z = X.T @ y with lower=True.
+   # Solve L.T w = z with lower=False.
+   ```
+
+   The second solve without `L.T` returns the wrong weights.
+
+5. **`fit_svd(X, y, rcond)`** returns `w` of shape `(d,)`, the minimum-norm solution:
+
+   ```python
+   U, s, vt = np.linalg.svd(X, full_matrices=False)
+   keep = s > rcond * s[0]
+   # vt[keep].T times (U[:, keep].T @ y) / s[keep]
+   ```
+
+   Dividing by every singular value puts huge weights on repeated columns.
 
 ## Cost and scaling
 
-All three methods cost about the same when $n$ is much bigger than $d$. The table compares them.
+All three methods cost about the same when you have many more rows than columns. Memory is mostly the table $X$ itself.
 
-| Method | Rough work | Digits lost | Handles repeated features |
+Doubling the rows roughly doubles the time. Doubling the columns roughly quadruples it.
+
+Here $n$ is the number of rows, $d$ is the number of columns, and $k$ is the number of digits in the condition number. The work compares as follows:
+
+|Method|Rough work|Digits lost|Repeated columns|
 |---|---|---|---|
-| Normal equations | $nd^2$ to form $X^\top X$, then $d^3$ | about $2k$ | No, Cholesky fails |
-| QR | about $2nd^2$ | about $k$ | No, $R$ has a zero on its diagonal |
-| SVD | a few times $nd^2$ | about $k$ | Yes |
-
-Here $k$ is the number of digits in the condition number. Memory is dominated by storing $X$ itself, $n \times d$ numbers. Doubling the number of examples roughly doubles the time. Doubling the number of features roughly quadruples it.
+|Normal equations|$nd^2$ then $d^3$|about $2k$|No, Cholesky fails|
+|QR|about $2nd^2$|about $k$|No, a zero on the diagonal of $R$|
+|SVD|a few times $nd^2$|about $k$|Yes|
 
 ## Where this breaks
 
-- **Features on wildly different scales.** A feature in millimetres next to one in kilometres inflates the condition number. Standardise each column to mean 0 and standard deviation 1 before fitting.
-- **Nearly repeated features.** The weights become huge and swing wildly with small changes in the data. The SVD with a tolerance helps. Ridge regression, in lesson 4, is the standard fix.
-- **More features than examples.** With $d > n$ there are infinitely many perfect fits. The minimum-norm solution picks one, but it may not predict new data well.
-- **Outliers.** Squaring errors makes one far-off point pull the whole line toward it. Look at your residuals, and consider a loss that grows more slowly.
-- **A curved relationship.** A straight line can't fit a curve. Add features such as $x^2$, and the method still works, because it is linear in the weights.
+**Columns on wild scales.** Millimetres beside kilometres inflate the condition number. Standardise each column to mean 0 and standard deviation 1.
+
+**Nearly repeated columns.** Weights swing when the data twitch. Cut tiny singular values, or use ridge regression from lesson 4.
+
+**More columns than rows.** Many weight vectors fit perfectly. The shortest one can still miss unseen rows.
+
+**One far point.** Squaring pulls the line toward that point. Plot the residuals, and try a loss that grows more slowly.
+
+**A curved cloud.** A straight line misses a curve. Add a column such as $x^2$. The fit stays linear in the weights.
 
 ## The exercise
 
-You build five functions: `condition_number`, `residual_orthogonality`, `fit_qr`, `fit_normal_equations`, and `fit_svd`. The three solvers must give the same answer on a well-behaved problem, and each must leave a residual at right angles to the columns of `X`.
+You build `condition_number`, `residual_orthogonality`, `fit_qr`, `fit_normal_equations`, and `fit_svd`. On a well-behaved problem the three solvers must agree, and each must leave a residual orthogonal to the columns of `X`.
 
-The checks then push harder. `fit_svd` must return the minimum-norm solution when two columns repeat information from others. On a matrix with condition number $10^7$, `fit_qr` and `fit_svd` must keep about nine digits, while `fit_normal_equations` must visibly lose more. A final check confirms that none of the solvers calls `lstsq` or `pinv`.
+`condition_number` must report the large singular value divided by the small one. `residual_orthogonality` must be the largest absolute entry of $X^\top(y-Xw)$. `fit_svd` must return the minimum-norm weights when columns repeat.
+
+At condition number $10^7$, QR and the SVD must keep about nine digits, and the normal equations must lose more. None of the solvers may call `lstsq` or `pinv`.
