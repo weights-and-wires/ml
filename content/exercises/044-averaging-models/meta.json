@@ -1,0 +1,13 @@
+{
+  "id": "044-averaging-models",
+  "title": "Simulate correlated models and find the variance floor",
+  "brief": "Evaluate the variance of an average, build correlated model predictions from a shared and a private part, and count the models needed to get near the floor.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "bagging_variance is rho * sigma2 + (1 - rho) * sigma2 / B. With rho = 0.5, sigma2 = 4, B = 2 it is 3.",
+    "In correlated_estimators draw shared with rng.normal(size=(n_draws, 1)) and private with rng.normal(size=(n_draws, B)). Broadcasting gives every column in a row the same shared value.",
+    "trees_needed is ceil((1 - rho) / (tol * rho)), raised to at least 1. With rho = 0.3 and tol = 0.05 it is 47."
+  ]
+}

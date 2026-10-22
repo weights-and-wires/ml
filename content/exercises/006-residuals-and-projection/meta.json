@@ -1,0 +1,13 @@
+{
+  "id": "006-residuals-and-projection",
+  "title": "Check a fit with right angles",
+  "brief": "Measure how far a fit is from perpendicular, project the targets onto the column space, and decide when a fit is the best one.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "residual_orthogonality: r = y - X @ w, then float(np.abs(X.T @ r).max()).",
+    "project: the fitted values are X @ fit_normal_equations(X, y), which has shape (n,), not (d,).",
+    "is_best_fit: compare residual_orthogonality(X, y, w) with tol * np.abs(X.T @ y).max()."
+  ]
+}

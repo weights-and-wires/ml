@@ -1,0 +1,14 @@
+{
+  "id": "081-residual-block-forward",
+  "title": "Build a residual block and measure how far it moves its input",
+  "brief": "Write the forward pass of a block that outputs the input plus a correction, and see that a zero correction returns the input while a plain block with small weights does not.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "relu(z) is np.maximum(z, 0.0). It returns a new array and leaves z alone.",
+    "Each example is a row, so the layers are x @ W1.T + b1 and a1 @ W2.T + b2. The block's output is x + h2, with no ReLU after the sum.",
+    "The cache is the tuple (x, W1, W2, h1, a1), in that order. The next chapter's backward pass reads it.",
+    "A plain block's output is F(x), which equals y - x for the y your residual block returns. Its gap from x is the largest absolute value of F(x) - x."
+  ]
+}

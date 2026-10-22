@@ -1,0 +1,13 @@
+{
+  "id": "008-qr-and-svd",
+  "title": "Stable least squares with QR and the SVD",
+  "brief": "Solve least squares through QR and the SVD without forming X^T X, return the shortest weights for repeated columns, and count the rank.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy", "scipy"],
+  "hints": [
+    "fit_qr: Q, R = np.linalg.qr(X, mode='reduced'), then solve_triangular(R, Q.T @ y, lower=False).",
+    "fit_svd: U, s, vt = np.linalg.svd(X, full_matrices=False). keep = s > rcond * s[0]. Use U[:, keep], s[keep], and vt[keep], so the tiny singular values are dropped instead of divided by.",
+    "rank: s = np.linalg.svd(X, compute_uv=False), then count the entries above rcond * s[0]. Handle s[0] == 0 by returning 0."
+  ]
+}

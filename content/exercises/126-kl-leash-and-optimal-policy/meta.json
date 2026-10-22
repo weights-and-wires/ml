@@ -1,0 +1,13 @@
+{
+  "id": "126-kl-leash-and-optimal-policy",
+  "title": "Build the leash and the best policy",
+  "brief": "Compute KL divergence with the zero-probability rule, the best policy for a reward on a KL leash, and the penalised objective that proves nothing beats it.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "kl_divergence: where p is 0 the term is 0. Use safe_p = np.where(p > 0, p, 1.0) inside the log so the unused branch never evaluates log(0), then np.where(p > 0, p * np.log(safe_p / q), 0.0) and sum over axis=-1.",
+    "optimal_policy: logits = ref_logprobs + rewards / beta, subtract logits.max(axis=-1, keepdims=True), exponentiate, divide by the sum over axis=-1 with keepdims=True.",
+    "penalised_objective: np.sum(probs * rewards, axis=-1) - beta * kl_divergence(probs, ref_probs). The policy goes first in the KL."
+  ]
+}

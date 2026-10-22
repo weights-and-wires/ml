@@ -1,0 +1,13 @@
+{
+  "id": "123-merging-and-serving",
+  "title": "Merge an adapter into the weight",
+  "brief": "Fold the low-rank update into the frozen weight, count the multiplies the unmerged adapter would add, and check that merged and split outputs agree.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "merge_lora is W + (alpha / r) * (B @ A). B is (d_out, r) and A is (r, d_in), so B @ A has the shape of W. A @ B is the wrong product.",
+    "extra_multiplies: x @ A.T costs r * d_in multiplies and (that) @ B.T costs d_out * r. Return the sum as a plain int.",
+    "merged_matches_split compares x @ merge_lora(...).T with lora_forward(...) and returns np.abs(difference).max() as a float. lora_forward is already written for you above."
+  ]
+}

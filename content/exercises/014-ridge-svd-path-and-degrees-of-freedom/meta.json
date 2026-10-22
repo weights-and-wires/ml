@@ -1,0 +1,13 @@
+{
+  "id": "014-ridge-svd-path-and-degrees-of-freedom",
+  "title": "Read the whole ridge path off one SVD",
+  "brief": "Compute the per-direction shrink factors, turn them into the ridge weights for every lambda at once, and count the degrees of freedom each lambda leaves.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "shrink_factors: build the denominator s[None, :] ** 2 + lambdas[:, None], shape (m, r). Where it is exactly 0 (a zero singular value at lambda 0) return 0 instead of dividing, for example with np.divide(num, den, out=np.zeros_like(den), where=den > 0).",
+    "ridge_svd_path: compute U.T @ y once, multiply it by the (m, r) shrink factors, then multiply by Vt on the right. The result has shape (m, d).",
+    "effective_degrees_of_freedom: each direction contributes s ** 2 / (s ** 2 + lam). Sum over the direction axis (the last one) so an array of lambdas gives one number per lambda, and skip 0 / 0 the same way as in shrink_factors."
+  ]
+}

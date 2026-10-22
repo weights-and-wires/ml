@@ -1,0 +1,14 @@
+{
+  "id": "094-additive-attention",
+  "title": "Score each key with a small learned network",
+  "brief": "Write the additive scorer, the attention built on it, and the parameters that make it imitate a plain dot product.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "For every key at once, u = W1 @ query + keys @ W2.T has shape (T, h). W1 @ query has shape (h,) and is added to every row.",
+    "The scores are np.tanh(u) @ v, one number per key. W1 goes with the query and W2 with the keys; swapping them fails on a non-square case.",
+    "additive_attention is additive_scores followed by attend. The softmax and the blend are already written for you.",
+    "tanh(c * x) / c is close to x when c is small. So W1 = W2 = c * I turns each entry into c * x, and v = query / c undoes the shrink at the end."
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "059-width-adds-depth-multiplies",
+  "title": "Count the pieces of a folded network",
+  "brief": "Count the straight pieces of a one-input ReLU network exactly, then build the sawtooth network whose pieces double with every layer.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "Inside one stretch every unit's reading is slope * x + intercept. A ReLU unit changes behaviour where that line crosses 0, at x = -intercept / slope, and only a root strictly inside the stretch counts.",
+    "After splitting, test the sign of each reading at the stretch's midpoint. If it is negative and the layer is ReLU, replace that unit's slope and intercept with 0.",
+    "sawtooth_network's middle layers fold the previous tent's combination 2 h1 - 4 h2 into their own weights: W = [[2, -4], [2, -4]] and b = [0, -0.5]."
+  ]
+}

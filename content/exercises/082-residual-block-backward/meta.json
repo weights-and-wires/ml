@@ -1,0 +1,14 @@
+{
+  "id": "082-residual-block-backward",
+  "title": "Send the gradient back through a residual block",
+  "brief": "Write the ReLU mask, the branch's share of the input gradient, and the full backward pass of a residual block, and check all of it against finite differences.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "relu_mask(h) is (h > 0).astype(float). A unit at exactly 0 is off.",
+    "The branch share is dh1 @ W1, where dh1 = (dY @ W2) * relu_mask(h1). It does not include dY.",
+    "The shortcut hands dY straight to dx, so dx = dY + branch_gradient(dY, cache). Add the branch term on top of dY, not instead of it.",
+    "Each weight gradient is the upstream gradient, transposed, times that layer's input: dW2 = dY.T @ a1 and dW1 = dh1.T @ x. Each bias gradient sums over axis 0."
+  ]
+}

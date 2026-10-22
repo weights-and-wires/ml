@@ -1,0 +1,13 @@
+{
+  "id": "114-loss-from-size-and-data",
+  "title": "Split a loss into a floor and two penalties",
+  "brief": "Evaluate the loss law E + A/N^alpha + B/D^beta, break it into its three parts, and measure what growing the model buys.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "Unpack the tuple in the documented order: E, A, B, alpha, beta = coeffs. The size penalty is A / N**alpha and the data penalty is B / D**beta.",
+    "predict_loss can add the three parts from loss_terms, or evaluate the formula directly. Both give the same number.",
+    "marginal_gain is the loss before the change minus the loss after it: predict_loss(N, D, coeffs) - predict_loss(factor * N, D, coeffs). A positive number means the loss fell."
+  ]
+}

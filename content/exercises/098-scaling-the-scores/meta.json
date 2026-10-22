@@ -1,0 +1,13 @@
+{
+  "id": "098-scaling-the-scores",
+  "title": "Measure the spread, then scale the scores",
+  "brief": "Measure how the spread of dot products grows with the key width, then build scaled dot-product attention that undoes it.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "attention_score_scale(d_k) is 1.0 / np.sqrt(d_k). For d_k = 64 it returns 0.125.",
+    "score_std: make rng = np.random.default_rng(seed), draw q and k with rng.normal(size=(n, d_k)), take the dot product of each row pair with np.sum(q * k, axis=1), and return float(np.std(...)).",
+    "scaled_dot_product_attention: scores = q @ k.T * attention_score_scale(q.shape[-1]), then softmax along the last axis, then weights @ v. Return both the output and the weights."
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "118-the-kv-cache",
+  "title": "Build a key-value cache",
+  "brief": "Size a KV cache in bytes, build one that stores keys and values a row at a time, and decode through it with the same answer as a full recompute.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "kv_cache_bytes is 2 * n_layer * n_kv * d_head * seq_len * bytes_per_elt. The leading 2 is one copy for keys and one for values.",
+    "KVCache.append should add one array of shape (n_kv, d_head) to a per-layer list. KVCache.get should np.stack that list on axis 0, and return empty (0, n_kv, d_head) arrays when nothing is stored.",
+    "cached_attention_step: scores = K @ q / sqrt(d_head), softmax them (subtract the max first), then return weights @ V. One query against T cached rows gives a (d_head,) vector."
+  ]
+}

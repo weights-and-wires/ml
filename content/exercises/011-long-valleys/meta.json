@@ -1,0 +1,13 @@
+{
+  "id": "011-long-valleys",
+  "title": "Measure how slow a long valley is",
+  "brief": "Compute the condition number, measure the shrink ratio of a walk, and count the steps to reach a tolerance on round and stretched bowls.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "condition_number is L / mu, and eigenvalue_range(A) already returns (mu, L).",
+    "contraction_ratios: errors = np.linalg.norm(path - w_star, axis=1), then errors[1:] / errors[:-1].",
+    "steps_to_tolerance: np.nonzero(errors < tol * errors[0])[0]. Return the first index, or -1 when the array is empty."
+  ]
+}

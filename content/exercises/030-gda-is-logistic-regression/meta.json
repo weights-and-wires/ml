@@ -1,0 +1,13 @@
+{
+  "id": "030-gda-is-logistic-regression",
+  "title": "Read a logistic regression off two Gaussians",
+  "brief": "Turn fitted means, a shared covariance and priors into the weights, the log odds and the boundary of the equivalent logistic regression, with no gradient descent.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy", "scipy"],
+  "hints": [
+    "w = solve(cov, means[1] - means[0]). Use np.linalg.solve instead of forming the inverse. The bias is log(priors[1] / priors[0]) - 0.5 * (means[0] + means[1]) @ w.",
+    "The log odds is the log posterior of class 1 minus the log posterior of class 0. Take both columns from gda_log_posterior.",
+    "In one dimension w is (mu1 - mu0) / var and b is log(pi1 / pi0) - w * (mu0 + mu1) / 2. The boundary is where w * x + b = 0, so x = -b / w."
+  ]
+}

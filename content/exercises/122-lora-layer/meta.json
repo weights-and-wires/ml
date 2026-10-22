@@ -1,0 +1,13 @@
+{
+  "id": "122-lora-layer",
+  "title": "Build the LoRA layer",
+  "brief": "Count the trained parameters, initialise the two low-rank factors, and write the forward pass that adds a squeezed and expanded correction to a frozen layer.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "lora_parameter_count is r * (d_in + d_out). Return a plain int, not a numpy scalar.",
+    "lora_init: rng = np.random.default_rng(seed), A = rng.normal(size=(r, d_in)) / np.sqrt(d_in), B = np.zeros((d_out, r)). Draw A before anything else so a given seed always gives the same A.",
+    "lora_forward is x @ W.T + (alpha / r) * (x @ A.T) @ B.T. Do not form B @ A here; the squeeze through r numbers is the point. W is (d_out, d_in), so it is W.T, not W."
+  ]
+}

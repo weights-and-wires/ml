@@ -1,0 +1,13 @@
+{
+  "id": "060-count-parameters-and-flops",
+  "title": "Budget a network on paper",
+  "brief": "Count the parameters, flops, and stored activations of a network from its layer shapes, and see why the sawtooth is cheap in depth.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "Each layer holds W with shape (out, in) and b with shape (out,). Their sizes are out * in and out.",
+    "Per layer, flops are 2 * in * out for the product, out for the bias, and out times the bend cost: relu 1, gelu 9, identity 0.",
+    "For stored activations, count the input once, then add the number of outputs of every layer, which is W.shape[0]."
+  ]
+}

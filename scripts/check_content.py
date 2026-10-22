@@ -14,14 +14,17 @@ one. An exercise whose starter already passes is not an exercise.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-LESSONS = ROOT / "content" / "lessons"
-EXERCISES = ROOT / "content" / "exercises"
+# CONTENT_DIR points the checker at another tree, such as a draft of a rewrite.
+CONTENT = Path(os.environ.get("CONTENT_DIR") or ROOT / "content").resolve()
+LESSONS = CONTENT / "lessons"
+EXERCISES = CONTENT / "exercises"
 HARNESS = ROOT / "backend" / "app" / "runner" / "harness.py"
 
 REQUIRED_FRONTMATTER = {
@@ -30,10 +33,13 @@ REQUIRED_FRONTMATTER = {
 REQUIRED_SECTIONS = [
     "## What you already know",
     "## Build it step by step",
-    "## Cost and scaling",
-    "## Where this breaks",
     "## The exercise",
 ]
+# Colours in a figure come from the fig-* classes, so it follows the theme.
+RAW_COLOUR = re.compile(
+    r"""(?:fill|stroke|color)\s*[=:]\s*["']?\s*(?:#|rgb|hsl|black|white|red|blue|green)""",
+    re.I,
+)
 CALLOUTS = ("KEY", "TIP", "WARNING", "RECAP")
 BANNED = [
     r"\bsimply\b", r"\bjust simply\b", r"\beasily\b", r"\bobviously\b",
@@ -99,6 +105,16 @@ def check_exercise(exercise_id: str, problems: list[str]) -> None:
         problems.append(f"{exercise_id}: meta.json id is {meta.get('id')!r}")
 
     timeout = int(meta.get("timeout", 60))
+
+    # A starter that does not parse still "fails" its checks, which would pass
+    # the test below, so every file must compile first.
+    for name in ("starter.py", "solution.py", "tests.py"):
+        source = (where / name).read_text()
+        try:
+            compile(source, str(where / name), "exec")
+        except SyntaxError as exc:
+            problems.append(f"{exercise_id}: {name} does not parse: line {exc.lineno}: {exc.msg}")
+            return
 
     # A temporary copy keeps `solution.py` out of the import path the reader gets.
     import shutil
@@ -182,9 +198,26 @@ def check_lesson(path: Path, problems: list[str], seen_exercises: set[str]) -> N
     if not body.lstrip().startswith("# "):
         problems.append(f"{path.name}: the body must open with a single '# ' heading")
 
-    words = len(body.split())
-    if words < 900:
-        problems.append(f"{path.name}: {words} words, the contract asks for 1000 or more")
+    figures = re.findall(r"^```figure\n(.*?)^```", body, flags=re.S | re.M)
+    if not figures:
+        problems.append(f"{path.name}: no ```figure block; every chapter needs one")
+    for i, figure in enumerate(figures, 1):
+        if "<svg" not in figure or "</svg>" not in figure or "viewBox" not in figure:
+            problems.append(f"{path.name}: figure {i} needs one <svg viewBox=...>...</svg>")
+        if RAW_COLOUR.search(figure):
+            problems.append(
+                f"{path.name}: figure {i} sets a raw colour; use the fill-* and "
+                "stroke-* classes so it follows the theme"
+            )
+        caption = figure[figure.rfind("</svg>") + 6 :].strip()
+        if not caption:
+            problems.append(f"{path.name}: figure {i} has no caption after </svg>")
+
+    words = len(re.sub(r"```figure\n.*?```", "", body, flags=re.S).split())
+    if words < 800:
+        problems.append(f"{path.name}: {words} words, the contract asks for 900 or more")
+    if words > 2600:
+        problems.append(f"{path.name}: {words} words; split the chapter, the contract caps it near 2000")
 
     prose = re.sub(r"```.*?```", "", body, flags=re.S)
     for pattern in BANNED:

@@ -1,0 +1,14 @@
+{
+  "id": "071-batch-norm-and-layer-norm",
+  "title": "Normalise a batch by column and by row",
+  "brief": "Rescale a group of numbers to mean 0 and variance 1, then apply the same rule down each column for batch norm and along each row for layer norm.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "normalise_group: subtract x.mean(), then divide by np.sqrt(x.var() + eps). np.var already divides by the number of values, which is what you want.",
+    "batchnorm_forward reduces over axis 0 and layernorm_forward over axis 1. Pass keepdims=True to mean and var so the results broadcast against x.",
+    "Compute istd = 1 / np.sqrt(var + eps) and xhat = (x - mean) * istd, and return out = gamma * xhat + beta. gamma and beta have shape (D,) and broadcast across the rows for both layers.",
+    "The cache is the tuple (xhat, istd, gamma, axis). The next chapter reads it for the backward pass."
+  ]
+}

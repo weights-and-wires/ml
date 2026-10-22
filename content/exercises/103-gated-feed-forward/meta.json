@@ -1,0 +1,13 @@
+{
+  "id": "103-gated-feed-forward",
+  "title": "Build SiLU, SwiGLU, and the parameter budget",
+  "brief": "Write a stable SiLU, the gated feed-forward network that uses it, and the weight count that explains the two-thirds width.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "silu(z) is z times the sigmoid of z. The sigmoid is 0.5 * (1 + np.tanh(z / 2)), which does not overflow for large negative z.",
+    "swiglu computes gate = x @ W_gate, up = x @ W_up, then (silu(gate) * up) @ W_down. SiLU goes on the gate only.",
+    "A plain feed-forward network has 2 * d_model * d_ff weights. A gated one has 3 * d_model * d_h, with d_h = round(2 * d_ff / 3)."
+  ]
+}

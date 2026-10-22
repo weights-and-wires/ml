@@ -1,0 +1,200 @@
+{
+ "01-the-learning-problem": [
+  "001-scoring-a-guess",
+  "002-honest-scores",
+  "003-fitting-curves",
+  "004-bias-variance-noise"
+ ],
+ "02-linear-regression": [
+  "005-least-squares-line",
+  "006-residuals-and-projection",
+  "007-lost-digits",
+  "008-qr-and-svd"
+ ],
+ "03-gradient-descent": [
+  "009-walking-downhill",
+  "010-how-big-a-step",
+  "011-long-valleys",
+  "012-momentum"
+ ],
+ "04-regularisation": [
+  "013-ridge-penalty-and-closed-form",
+  "014-ridge-svd-path-and-degrees-of-freedom",
+  "015-lasso-and-soft-thresholding",
+  "016-ista-and-fista"
+ ],
+ "05-logistic-regression": [
+  "017-sigmoid-and-probability",
+  "018-log-loss",
+  "019-gradient-descent-for-logistic",
+  "020-newton-method"
+ ],
+ "06-exponential-families": [
+  "021-one-dial-three-distributions",
+  "022-one-loss-one-gradient",
+  "023-curvature-and-fisher-scoring"
+ ],
+ "07-model-selection": [
+  "024-cross-validation",
+  "025-leave-one-out-shortcut",
+  "026-learning-curves",
+  "027-winners-curse-and-flexibility"
+ ],
+ "08-generative-classifiers": [
+  "028-bayes-rule-classifier",
+  "029-gaussian-discriminant-analysis",
+  "030-gda-is-logistic-regression",
+  "031-naive-bayes"
+ ],
+ "09-support-vector-machines": [
+  "032-widest-road-hinge-loss",
+  "033-dual-multipliers-kernels",
+  "034-support-vectors-kkt",
+  "035-smo-two-at-a-time"
+ ],
+ "10-kernels": [
+  "036-kernels-as-similarity",
+  "037-valid-kernels",
+  "038-kernel-ridge-regression",
+  "039-representer-and-random-features"
+ ],
+ "11-decision-trees": [
+  "040-leaves-and-impurity",
+  "041-gain-and-best-split",
+  "042-grow-and-predict",
+  "043-pruning"
+ ],
+ "12-ensembles": [
+  "044-averaging-models",
+  "045-bootstrap-and-bagging",
+  "046-out-of-bag-error",
+  "047-gradient-boosting"
+ ],
+ "13-pca-and-svd": [
+  "048-spread-shadows-first-direction",
+  "049-svd-hands-you-every-direction",
+  "050-compress-and-know-what-you-lost",
+  "051-power-iteration",
+  "052-probabilistic-pca-em"
+ ],
+ "14-clustering-and-em": [
+  "053-kmeans-lloyd",
+  "054-kmeans-plusplus-seeding",
+  "055-gmm-soft-assignment",
+  "056-em-refit-and-converge"
+ ],
+ "15-multilayer-perceptrons": [
+  "057-why-layers-need-a-bend",
+  "058-forward-pass-and-gelu",
+  "059-width-adds-depth-multiplies",
+  "060-count-parameters-and-flops"
+ ],
+ "16-backpropagation": [
+  "061-backprop-the-graph-and-reverse-order",
+  "062-backprop-array-operations",
+  "063-softmax-cross-entropy-gradient",
+  "064-backprop-mlp-and-gradient-check"
+ ],
+ "17-optimisers": [
+  "065-stochastic-gradients",
+  "066-adam",
+  "067-adamw",
+  "068-lr-schedules"
+ ],
+ "18-initialisation-and-norm": [
+  "069-signal-size-through-layers",
+  "070-xavier-and-he",
+  "071-batch-norm-and-layer-norm",
+  "072-normalisation-backward"
+ ],
+ "19-deep-regularisation": [
+  "073-weight-decay",
+  "074-early-stopping-ridge",
+  "075-dropout",
+  "076-label-smoothing"
+ ],
+ "20-convolutions": [
+  "077-sliding-a-filter",
+  "078-output-size-and-receptive-field",
+  "079-convolution-as-matrix-multiply",
+  "080-convolution-backward"
+ ],
+ "21-residual-networks": [
+  "081-residual-block-forward",
+  "082-residual-block-backward",
+  "083-gradient-through-deep-stacks",
+  "084-bottleneck-cost"
+ ],
+ "22-recurrent-networks": [
+  "085-recurrent-cell",
+  "086-backprop-through-time",
+  "087-vanishing-and-exploding-gradients",
+  "088-truncation-and-clipping"
+ ],
+ "23-gated-recurrence": [
+  "089-why-rnns-forget-the-belt",
+  "090-gates-and-the-lstm-update",
+  "091-lstm-backward-step",
+  "092-gru-and-parameter-counts"
+ ],
+ "24-seq2seq-attention": [
+  "093-attention-as-soft-lookup",
+  "094-additive-attention",
+  "095-attention-gradients",
+  "096-alignment-and-copy-decoder"
+ ],
+ "25-self-attention": [
+  "097-attention-scores-and-weights",
+  "098-scaling-the-scores",
+  "099-heads-and-causal-mask",
+  "100-attention-backward-and-cost"
+ ],
+ "26-the-transformer-block": [
+  "101-position-clocks",
+  "102-rotary-embeddings",
+  "103-gated-feed-forward",
+  "104-the-residual-block"
+ ],
+ "27-training-a-transformer": [
+  "105-next-token-loss",
+  "106-safe-steps",
+  "107-the-training-loop",
+  "108-cost-of-training"
+ ],
+ "28-tokenisation": [
+  "109-bytes-and-the-vocabulary-trade",
+  "110-training-bpe",
+  "111-encode-and-decode",
+  "112-fertility-and-fairness"
+ ],
+ "29-scaling-laws": [
+  "113-power-laws-log-log",
+  "114-loss-from-size-and-data",
+  "115-counting-parameters-and-flops",
+  "116-compute-optimal-split"
+ ],
+ "30-inference-and-decoding": [
+  "117-why-decoding-waits-on-memory",
+  "118-the-kv-cache",
+  "119-temperature-and-sampling",
+  "120-speculative-decoding"
+ ],
+ "31-parameter-efficient-tuning": [
+  "121-fine-tuning-memory-bill",
+  "122-lora-layer",
+  "123-merging-and-serving",
+  "124-low-rank-reach-and-training"
+ ],
+ "32-alignment": [
+  "125-reward-from-preferences",
+  "126-kl-leash-and-optimal-policy",
+  "127-ppo-the-sampling-loop",
+  "128-dpo-implicit-reward"
+ ],
+ "33-mixtures-of-experts": [
+  "129-top-k-routing",
+  "130-router-gradient",
+  "131-load-balancing",
+  "132-capacity-and-dropping"
+ ]
+}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
+import DownloadBook from "./components/DownloadBook";
 import Mark from "./components/Mark";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
@@ -144,6 +145,7 @@ export default function App() {
           </span>
         )}
 
+        <DownloadBook />
         <AccountMenu username={username} />
       </header>
 

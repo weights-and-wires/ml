@@ -1,0 +1,14 @@
+{
+  "id": "062-backprop-array-operations",
+  "title": "Give the engine array rules",
+  "brief": "Write unbroadcast, the matrix-product rule, and the ReLU rule, so slopes flow through a layer that multiplies, adds a bias, and bends.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "unbroadcast: first sum over leading axes until grad has as many dimensions as shape, then sum with keepdims=True over every axis where shape has size 1 and grad does not.",
+    "For out = self @ other: self.grad += out.grad @ other.value.T and other.grad += self.value.T @ out.grad. If a shape does not fit, you transposed the wrong factor.",
+    "For relu, the slope passes where the input was positive: self.grad += out.grad * (self.value > 0).",
+    "Use += in every rule, so a tensor that feeds two operations collects both slopes."
+  ]
+}

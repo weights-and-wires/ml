@@ -1,13 +1,17 @@
 # Machine learning
 
 A hands-on course that teaches machine learning to undergraduates by having them
-build it. Thirty-three lessons run from fitting a line to mixtures of experts.
-Each one explains an idea in plain words, works a small example by hand, and
-then walks you through implementing it, in an editor beside the text, against
-checks that verify the results rather than the shape of your code.
+build it. A hundred and thirty-two short chapters run from scoring a guess to
+mixtures of experts. Each one teaches a single idea: it starts from a concrete
+question, shows a picture, works a small example by hand, and only then gives
+the formula and walks you through implementing it, in an editor beside the
+text, against checks that verify the results rather than the shape of your
+code.
 
 The reading pane is on the left and the editor is on the right, the way a
-programming-problem site arranges them. **Run** executes your file and streams
+programming-problem site arranges them. Fold the editor away with the button in
+its header, or with Cmd or Ctrl and the period key, to read at full width. The
+**PDF book** button in the header downloads the whole course as one book. **Run** executes your file and streams
 its output. **Check** runs the exercise's checks and reports them one at a time
 as they finish.
 
@@ -23,7 +27,8 @@ computes it. Each lesson ends with a step-by-step guide to its exercise.
 
 | Path | Contents |
 |---|---|
-| `content/lessons/` | Thirty-three lessons, in Markdown with YAML front matter. |
+| `content/lessons/` | A hundred and thirty-two chapters, in Markdown with YAML front matter and inline SVG figures. |
+| `content/renames.json` | Each lesson of the first edition and the chapters that replaced it, so progress carries over. |
 | `content/exercises/` | One directory per exercise: a starter file, checks, and a worked solution. |
 | `backend/` | FastAPI: auth, content, progress, drafts, and the run stream. |
 | `backend/app/runner/` | The harness, the assertion library the checks use, and the two execution backends. |
@@ -35,26 +40,27 @@ computes it. Each lesson ends with a step-by-step guide to its exercise.
 
 ## The curriculum
 
-**Part 1 — Foundations.** The learning problem, linear regression, gradient
-descent, ridge and lasso, logistic regression, exponential families and GLMs.
+**Part 1 — Foundations.** Scoring a guess, honest test scores, bias and
+variance, least squares and why it loses digits, gradient descent and momentum,
+ridge and lasso, logistic regression, and exponential families.
 
-**Part 2 — Classical machine learning.** Generalisation and model selection,
-generative classifiers, support vector machines, kernels, decision trees,
-ensembles, PCA and the SVD, clustering and expectation maximisation.
+**Part 2 — Classical models.** Cross-validation, learning curves, generative
+classifiers, support vector machines, and kernels.
 
-**Part 3 — Neural networks.** Multilayer perceptrons, backpropagation as
-reverse-mode automatic differentiation, optimisers, initialisation and
-normalisation, regularisation.
+**Part 3 — Trees, ensembles, and unsupervised learning.** Decision trees,
+bagging and boosting, PCA and the SVD, k-means, and EM for Gaussian mixtures.
 
-**Part 4 — Vision and sequences.** Convolutions, residual networks, recurrent
-networks and backpropagation through time, gated recurrence, sequence to
-sequence with attention.
+**Part 4 — Neural networks.** Why layers need a bend, backpropagation, SGD and
+Adam, initialisation and normalisation, and regularisation.
 
-**Part 5 — Transformers.** Self-attention, the transformer block, training a
-transformer.
+**Part 5 — Vision and sequences.** Convolutions, residual networks, recurrent
+networks, LSTMs and GRUs, and attention for sequence to sequence.
 
-**Part 6 — Large language models.** Tokenisation, scaling laws, inference and
-decoding, parameter-efficient fine-tuning, alignment, mixtures of experts.
+**Part 6 — Transformers.** Self-attention, position encodings, the transformer
+block, and training one.
+
+**Part 7 — Large language models.** Tokenisation, scaling laws, inference and
+decoding, LoRA, alignment, and mixtures of experts.
 
 [The full list, with what each exercise delivers](docs/CURRICULUM.md).
 
@@ -101,17 +107,24 @@ checks are written against.
 Validate what you write:
 
 ```bash
-.venv/bin/python scripts/check_content.py 05-logistic-regression
+.venv/bin/python scripts/check_content.py 017-sigmoid-and-probability
 ```
 
 ```bash
-node scripts/check_math.mjs content/lessons/05-logistic-regression.md
+node scripts/check_math.mjs content/lessons/017-sigmoid-and-probability.md
 ```
 
-That checks the front matter, the required sections, and the word count; runs
+That checks the front matter, the required sections, the word count, and the
+figures; runs
 every check against `solution.py`, which must pass all of them; and runs them
 against `starter.py`, which must fail at least one. Omit the slug to validate
 everything. The same script runs in CI on every push.
+
+To look at a chapter's figures without starting the site, render them to PNG:
+
+```bash
+node scripts/render_figures.mjs /tmp/figs content/lessons/005-least-squares-line.md
+```
 
 `check_math.mjs` compiles every math segment with the frontend's own KaTeX, so
 math that fails only at render time fails here instead. Run `npm install` in
@@ -148,8 +161,7 @@ existing progress identities, for example `ifkash:enderboi,ananya:michu`.
 
 ## The GPU backend
 
-Two lessons — `21-residual-networks` and `27-training-a-transformer` — are
-marked `gpu: true`. Their checks run on the CPU like every other exercise, and
+One chapter, `107-the-training-loop`, is marked `gpu: true`. Their checks run on the CPU like every other exercise, and
 the GPU is there for the larger run in the starter file's `__main__` block.
 
 `backend/app/runner/runpod.py` sends a submission to a RunPod serverless

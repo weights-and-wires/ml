@@ -1,0 +1,13 @@
+{
+  "id": "108-cost-of-training",
+  "title": "Estimate a run's flops and memory, and rescue a tiny gradient",
+  "brief": "Write the 6ND flop count and the four-copies memory estimate, then simulate loss scaling through float16 to see a gradient of 1e-8 vanish and come back.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "training_flops is 6 * params * tokens: 2 per weight per token forward, and 4 backward.",
+    "training_memory_bytes is params * bytes_per_number * copies. The defaults are 4 bytes and 4 copies (weights, gradients, m, v), so a million weights need 16 million bytes.",
+    "scaled_grad_survives: stored = fp16_roundtrip(true_grad * scale), then return stored / scale. The division is in float64 here, standing in for the fp32 unscale. At scale 1 the gradient 1e-8 rounds to zero, and 1e5 overflows to infinity."
+  ]
+}

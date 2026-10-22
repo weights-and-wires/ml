@@ -1,0 +1,15 @@
+{
+  "id": "087-vanishing-and-exploding-gradients",
+  "title": "Predict how far a gradient travels",
+  "brief": "Compute the spectral radius, use it to predict how large a gradient is after many steps, and ask how many steps it takes to fall below a threshold. Then compare the prediction with the gradient your own backward pass measures.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "np.linalg.eigvals returns complex numbers for many real matrices. Take np.abs of them before np.max.",
+    "gradient_scale_over_time is (kappa * rho) ** T, with rho from your spectral_radius.",
+    "steps_until_below: solve rate ** T < threshold. Taking logs flips the inequality because log(rate) is negative, so T > log(threshold) / log(rate), and the answer is the next whole number above that. Return None when the rate is 1 or more."
+  ]
+}

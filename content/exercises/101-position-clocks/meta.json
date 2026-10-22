@@ -1,0 +1,14 @@
+{
+  "id": "101-position-clocks",
+  "title": "Build the sinusoidal position clocks",
+  "brief": "Write the sinusoidal encoding, the matrix that moves it k positions, and the step that adds it to token vectors.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "Hand i turns at speed omega_i = 10000 ** (-2 * i / d). The angle at position p is p * omega_i, so np.arange(T)[:, None] * omega[None, :] gives every angle at once.",
+    "Write the sines into columns 0::2 and the cosines into columns 1::2 of an empty (T, d) array.",
+    "In offset_rotation, the block for hand i sits at rows and columns 2*i and 2*i + 1 and equals [[cos, sin], [-sin, cos]] for the angle k * omega_i.",
+    "add_positions returns a new array: x + pe[:T]. Do not use += on x."
+  ]
+}

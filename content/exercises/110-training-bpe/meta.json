@@ -1,0 +1,14 @@
+{
+  "id": "110-training-bpe",
+  "title": "Train a byte-pair encoder: count, merge, repeat",
+  "brief": "Write the pair counter, the left-to-right merger, and the training loop that learns an ordered merge list.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "get_pair_counts walks each inner list on its own: for a, b in zip(tokens, tokens[1:]): counts[(a, b)] = counts.get((a, b), 0) + 1. A word with the pair twice adds 2.",
+    "merge_pair scans with a while loop. On a match write new_id and move on by two, otherwise write the current id and move on by one. That is why [5, 5, 5] becomes [20, 5].",
+    "train_bpe splits with _pretokenize, turns each piece into a list of bytes, and loops while 256 + len(merges) < vocab_size. Pick the winner with min(counts, key=lambda p: (-counts[p], p)), store vocab[256 + i] = vocab[a] + vocab[b], then merge.",
+    "Stop when get_pair_counts returns an empty dict, so a short corpus gives fewer merges than vocab_size asks for."
+  ]
+}

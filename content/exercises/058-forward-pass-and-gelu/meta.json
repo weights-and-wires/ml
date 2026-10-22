@@ -1,0 +1,13 @@
+{
+  "id": "058-forward-pass-and-gelu",
+  "title": "Run a network forward with ReLU and GELU",
+  "brief": "Write GELU and its slope, then a forward pass that runs a list of layers, each with a named bend.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "Compute u = sqrt(2/pi) * (x + 0.044715 * x**3) once, then t = np.tanh(u). gelu is 0.5 * x * (1 + t).",
+    "gelu_grad has two terms: 0.5 * (1 + t), plus 0.5 * x * (1 - t**2) times the slope of u, which is sqrt(2/pi) * (1 + 3 * 0.044715 * x**2).",
+    "In mlp_forward, h @ W.T + b keeps the rows of W as units. Pick the bend with if/elif on the name and raise ValueError for anything else."
+  ]
+}

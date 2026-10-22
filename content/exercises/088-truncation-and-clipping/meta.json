@@ -1,0 +1,15 @@
+{
+  "id": "088-truncation-and-clipping",
+  "title": "Cut the gradient into chunks and cap its length",
+  "brief": "Split a long sequence into chunks, backpropagate through each chunk alone, and clip a gradient by its global norm. The truncated gradient is checked against finite differences of a loss that treats each chunk's starting state as a constant.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "chunk_bounds is a list comprehension over range(0, T, k). The end of each chunk is min(start + k, T).",
+    "For clip_by_global_norm, add up the squared entries of every array, take one square root, and use the factor min(1, max_norm / G). Guard G == 0 so a zero gradient does not divide by zero.",
+    "truncated_bptt runs rnn_forward once. For a chunk that starts at step s, the state entering it is h_seq[s - 1], or h0 when s is 0. Pass that state to bptt along with the slices dH[s:e] and x[s:e], keep dx for the slice, add the weight gradients, and throw away dh0."
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "033-dual-multipliers-kernels",
+  "title": "Build the Gram matrix and score the dual",
+  "brief": "Compute a table of pairwise similarities, then score points and the dual objective from the pushes alone.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy", "scipy"],
+  "hints": [
+    "The linear Gram matrix is X @ X.T. The RBF kernel needs squared distances: ||a - b||^2 = ||a||^2 + ||b||^2 - 2 a.b, so build it from the linear Gram matrix and its diagonal.",
+    "Squared distances computed this way can come out as -1e-16 on the diagonal. Clip them at 0 before you call exp, or take them from broadcasting differences instead.",
+    "dual_scores is f = (alpha * y) @ K + b. The vector alpha * y holds each house's signed push.",
+    "dual_objective is alpha.sum() - 0.5 * v @ K @ v with v = alpha * y. Dropping the labels in v is the usual mistake."
+  ]
+}

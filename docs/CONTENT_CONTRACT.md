@@ -11,18 +11,37 @@ depend on it.
 Readers are undergraduates who are new to machine learning. They have taken a
 first course in calculus, linear algebra, and probability, but they are rusty,
 and dense notation stops them cold. They can write Python and have used numpy a
-little. They read a lesson to understand an idea well enough to build it, and
-they learn by building. Write for them:
+little. They read a chapter to understand an idea well enough to build it, and
+they learn by building.
 
-- Start with the intuition in plain words. Before any formula, say what the
-  method does, in one or two sentences a first-year student could repeat to a
-  friend. Use an everyday analogy when one fits.
-- Make every formula earn its place. Include a formula only when the exercise
-  implements it or the reader needs it to follow the next step. Everything else
-  is stated in words.
+Students said an earlier version of this course was "easy to read but not easy
+to understand", and that it threw things at them instead of building intuition.
+Short sentences were not the problem. The problem was facts in a row with no
+reason connecting them. Every rule below serves one goal: the reader should be
+able to say *why* each step happens before they see *how* to compute it.
+
+## Build intuition first
+
+- One chapter, one idea. A chapter teaches a single idea well enough that the
+  reader could explain it to a friend without notes. When a draft needs a
+  second big idea, that idea is the next chapter.
+- Start from a question the reader already cares about, with a concrete
+  situation: a handful of houses and prices, a spam folder, a blurry photo.
+  Say what goes wrong without the idea before you introduce it.
+- Climb the ladder in order: picture, then words, then a tiny example with real
+  numbers, then the formula, then code. The formula comes last, as a compact
+  summary of something the reader already believes.
+- Try the obvious approach first and show where it fails. "Why not just…?" is
+  the question the reader is asking. Answer it before they have to.
+- Explain the reason, not only the step. Connect sentences with "because",
+  "so", and "which means". A paragraph is a short argument, not a list of
+  facts. Prefer three connected sentences to five disconnected ones.
+- Use one running example through the chapter, and reuse it across chapters
+  of the same part where it fits, so the reader is not decoding new data every
+  page.
 - Read each formula aloud. After every display equation, say in plain English
-  what each piece is and what the whole thing computes. Then show the same
-  formula as one or two lines of numpy.
+  what each piece is and what the whole thing computes, then show it as one or
+  two lines of numpy.
 - Work one small example by hand. Use tiny numbers, two or three data points or
   a two-by-two matrix, and show every intermediate value, so the reader can
   check their code against it.
@@ -30,25 +49,72 @@ they learn by building. Write for them:
   that feel basic, such as "gradient", "i.i.d.", or "norm". Prefer an ordinary
   word to jargon when both mean the same thing.
 - Avoid heavy notation. No `\mathcal` sets, no measure-theoretic language, no
-  proofs. Prefer `x`, `w`, and `y` with plain subscripts. A sum over data
-  points is better written once as a loop in words than as nested indices.
-- Keep the conditions honest. When a result needs an assumption, such as data
-  drawn independently from the same distribution, say so in plain words and say
-  what goes wrong without it.
-- Connect ideas to code. The reader should finish every section knowing which
-  numpy operations they will write.
+  proofs. Prefer `x`, `w`, and `y` with plain subscripts.
+- Keep the conditions honest. When a result needs an assumption, say so in
+  plain words and say what goes wrong without it.
+- Close the loop. End the substance with a short "what you now know" paragraph
+  in a `[!KEY]` callout that ties the idea back to the opening question.
 
 Every result on the page must still be correct. Simpler wording must never
 change what a result says.
+
+## Figures
+
+Every chapter has at least one figure, and most have two or three. A figure
+earns its place when it shows something words struggle with: a shape (a loss
+bowl, a decision boundary), a motion (a step downhill, a vector rotating), a
+flow (data through layers, a gradient flowing back), or a comparison (before
+and after, good and bad). Put the main figure near the top, where it carries
+the chapter's central picture, and refer to it in the text.
+
+A figure is a fenced block tagged `figure`. It holds one inline SVG, then a
+caption on the lines after `</svg>`:
+
+````markdown
+```figure
+<svg viewBox="0 0 560 220" role="img" aria-label="Three points and the best line">
+  <line x1="40" y1="190" x2="520" y2="190" class="stroke-muted"/>
+  <circle cx="120" cy="150" r="5" class="fill-a"/>
+  <line x1="80" y1="170" x2="500" y2="40" class="stroke-b"/>
+  <text x="430" y="40">best line</text>
+</svg>
+Figure 1. The best line passes between the points, not through them.
+```
+````
+
+Rules for figures:
+
+- Colour only with these classes, never with `fill="#..."`, `stroke="red"`, or
+  a `style` colour, so the figure follows the light and dark themes and prints
+  in the PDF book. Shapes draw nothing until a class colours them.
+  - Fills: `fill-ink`, `fill-muted`, `fill-paper`, `fill-sunk`, `fill-a`,
+    `fill-b`, `fill-c`, `fill-d`, `fill-bad`, and the pale area fills
+    `fill-soft-a`, `fill-soft-b`, `fill-soft-c`, `fill-soft-d`.
+  - Strokes: `stroke-ink`, `stroke-muted`, `stroke-grid`, `stroke-a`,
+    `stroke-b`, `stroke-c`, `stroke-d`, `stroke-bad`, plus `dashed`.
+  - Text is ink-coloured at 13 px by default. Add `fig-small`, `fig-bold`, or
+    `fig-mono` as needed. `a` is blue, `b` is orange, `c` is green, `d` is
+    purple. Use them consistently: `a` for data, `b` for the model's output.
+- Set a `viewBox` about 560 to 640 units wide and no `width` or `height`. The
+  figure scales to the column. Keep text at least 11 units high.
+- Give the `svg` an `aria-label` that says what it shows.
+- Draw from real numbers. If the figure plots the chapter's worked example,
+  the points must be the example's points, computed, not eyeballed.
+- Text inside SVG is plain text. KaTeX does not render there, so write
+  `w1`, `x²`, or `σ` instead of `$w_1$`.
+- Arrowheads need a `<marker>` in `<defs>` whose path carries a fill class.
+  Give each marker an `id` prefixed with the chapter number, such as
+  `c07-arrow`, because every figure on a page shares one document.
+- Start the caption with `Figure N.` and say what the reader should notice,
+  not only what is drawn.
 
 ## Prose style
 
 Follow the Google developer documentation style guide:
 
 - Address the reader as "you". Use active voice and present tense.
-- One idea per sentence. Split any sentence that needs a second comma-spliced
-  clause to land. Long subordinate chains are the main thing that made these
-  lessons hard to read.
+- Keep sentences short, but never at the cost of the connection between them.
+  A sentence that says why something happens is worth its length.
 - Sentence case for every heading. Start task headings with a bare infinitive.
 - Serial commas. Em dashes with no surrounding spaces.
 - Code, filenames, and identifiers in code font. No `simply`, `just`, `easily`,
@@ -59,27 +125,26 @@ Follow the Google developer documentation style guide:
 
 ## Lesson file
 
-Path: `content/lessons/NN-slug.md`, where `NN` is the two-digit order prefix and
+Path: `content/lessons/NNN-slug.md`, where `NNN` is the three-digit order prefix and
 `slug` matches the `slug` field.
 
 The file starts with YAML front matter:
 
 ```yaml
 ---
-title: Logistic regression
-slug: 05-logistic-regression
+title: From a score to a probability
+slug: 017-sigmoid-and-probability
 part: "Part 1 — Foundations"
 summary: One sentence, under 140 characters, that says what the lesson delivers.
-minutes: 55
+minutes: 35
 gpu: false
 objectives:
+  - Explain why a straight-line score makes a poor probability.
   - Turn a score into a probability with the sigmoid, and compute it without overflow.
-  - Write the loss and its gradient, and check the gradient numerically.
-  - Explain why perfectly separable data makes the weights grow without limit.
+  - Read a probability back as odds and log-odds.
 prereqs:
-  - 02-linear-regression
-  - 03-gradient-descent
-exercise: 05-logistic-regression
+  - 012-momentum
+exercise: 017-sigmoid-and-probability
 ---
 ```
 
@@ -124,28 +189,32 @@ The body is Markdown with these conventions:
 
 Every lesson body includes, in this order:
 
-1. An opening that says, in plain words, what problem the lesson solves and why
-   it matters. Two or three short paragraphs. No heading, and no formulas.
+1. An opening that says, in plain words, what problem the chapter solves and
+   why it matters, starting from a concrete situation. Two or three short
+   paragraphs. No heading, and no formulas.
 2. `## What you already know` — a short list of the ideas the lesson builds on,
    each in one plain sentence. Keep it to five bullets.
-3. The substance, in as many `##` sections as the material needs. Each section
-   leads with intuition, then gives the formula, reads it aloud, and shows it
-   as numpy. Include at least one small example worked by hand with real
-   numbers.
+3. The substance, in as many `##` sections as the material needs, following
+   the ladder in "Build intuition first": picture, words, a tiny example, the
+   formula, code. Include at least one small example worked by hand with real
+   numbers, and at least one figure.
 4. `## Build it step by step` — a numbered walkthrough of the exercise, one
    step per function in the order the checks test them. Each step says what the
    function takes and returns, the numpy operations it needs, and the mistake
    people most often make. It gives the shape of the code, never the full
    answer.
-5. `## Cost and scaling` — how the running time and memory grow as the data or
-   the model gets bigger, in plain words. A short table works well.
-6. `## Where this breaks` — the common ways the method fails in practice, and
-   what people do about each one.
+5. `## Cost and scaling` — optional. How the running time and memory grow as
+   the data or the model gets bigger, in plain words. Include it when cost is
+   part of the idea, and leave it out of a chapter where it is filler.
+6. `## Where this breaks` — optional. The common ways the method fails in
+   practice, and what people do about each one.
 7. `## The exercise` — one or two paragraphs that say what the reader builds
    and what the checks verify. Name the functions by their exact identifiers.
 
-Aim for 1200 to 2200 words of body, plus math. Short sentences and short
-paragraphs matter more than the word count.
+Aim for 1000 to 1800 words of body, plus math and figures. A chapter is
+a sitting of about 30 to 45 minutes, reading and building together. When a
+draft runs past 2000 words, it holds two ideas: split it. `scripts/check_content.py`
+rejects a chapter under 800 or over 2600 words, and one with no figure.
 
 ## Exercise directory
 
@@ -156,7 +225,7 @@ field. It holds exactly four files.
 
 ```json
 {
-  "id": "05-logistic-regression",
+  "id": "017-sigmoid-and-probability",
   "title": "Fit a logistic regression two ways",
   "brief": "Implement the gradient and the Newton step, and watch them disagree on iteration count.",
   "needs_gpu": false,
@@ -238,6 +307,9 @@ The `mlcheck` module is on the path at run time. Its API:
 | `equal` | `equal(got, want, label=None)` | Exact equality, for shapes, dtypes, and integers. |
 | `fail` | `fail("message")` | Fails the check with that message. |
 | `shape` | `shape(array, (3, 4), label=None)` | Asserts a shape. |
+| `finite` | `finite(array, label=None)` | Fails when any element is NaN or infinite. |
+| `has` | `has(sub, "name")` | Returns `sub.name`, failing readably when the reader has not defined it. |
+| `finite_difference` | `finite_difference(f, x, eps=1e-6)` | Central-difference gradient of a scalar function, for checking gradients. |
 | `almost` | `almost(got, want, tol, label=None)` | Scalar comparison within `tol`. |
 | `timed` | `with timed("matmul") as t:` | Records elapsed seconds, reported to the reader. |
 
@@ -246,7 +318,7 @@ Rules for checks:
 - Each check receives `sub`, the reader's module, as its only argument.
 - Seed every random number generator. `np.random.default_rng(0)` for numpy,
   `torch.manual_seed(0)` for torch. A check that passes intermittently is a bug.
-- Write six to ten checks per exercise, ordered from the smallest piece to the
+- Write four to eight checks per exercise, ordered from the smallest piece to the
   whole. The first check must pass as soon as the reader gets one function right,
   so the pane shows progress early.
 - Check the mathematics, not the implementation. Verify a gradient against a

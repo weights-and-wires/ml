@@ -1,0 +1,13 @@
+{
+  "id": "073-weight-decay",
+  "title": "Pull the weights toward zero",
+  "brief": "Write the slope of the ridge fee, the decayed gradient step, and the angle a sideways step turns a weight vector through.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "The slope of (lam / 2) * sum(w**2) with respect to w is lam * w. The array has the same shape as w.",
+    "A decayed step is an ordinary gradient step on the total slope. Add the fee's slope to grad first, then multiply the sum by lr.",
+    "The angle is the arctangent of (lr times the length of grad) divided by the length of w. np.arctan returns radians."
+  ]
+}

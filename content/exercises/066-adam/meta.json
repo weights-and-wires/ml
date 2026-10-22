@@ -1,0 +1,14 @@
+{
+  "id": "066-adam",
+  "title": "Adam from moving averages",
+  "brief": "Build the moving average, its bias correction, and Adam's step, then race Adam against SGD and momentum on a long valley.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "ema_update is one line: beta * prev + (1 - beta) * x. The old value keeps the weight beta, and the new value gets 1 - beta.",
+    "bias_correct divides by 1 - beta**t. Raise ValueError when t < 1, because at t = 0 the divisor is zero.",
+    "adam_step reads state.get('t', 0) + 1, updates m with grad and v with grad**2 using ema_update, corrects both, and stores the raw m, the raw v, and t.",
+    "On the first step with a constant gradient g, m_hat equals g and sqrt(v_hat) equals |g|, so every weight moves about lr no matter how big g is."
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "092-gru-and-parameter-counts",
+  "title": "Build a GRU step and count what each cell costs",
+  "brief": "Write the blend that keeps part of the old state and writes part of a candidate, the full GRU step with its reset gate, and the parameter count for a plain RNN, a GRU, and an LSTM.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "gru_update_blend is (1 - z) * h + z * candidate. At z = 0 it returns h exactly, and at z = 1 it returns the candidate exactly.",
+    "In gru_cell_forward, the reset gate acts before the candidate's recurrent matrix: np.tanh(x @ Wh + (r * h) @ Uh + bh). Writing r * (h @ Uh) gives the same shape and the wrong numbers.",
+    "One gate's worth of weights is d_x * d_h + d_h * d_h + d_h numbers. A plain RNN has one such set, a GRU three, and an LSTM four."
+  ]
+}
