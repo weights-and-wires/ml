@@ -62,15 +62,15 @@ decoding, parameter-efficient fine-tuning, alignment, mixtures of experts.
 
 You need Python 3.12 or later and Node 20 or later.
 
-1. Copy the environment file and set a session secret:
+1. Copy the environment file and configure the shared SSO proxy secret:
 
    ```bash
    cp .env.example .env
    python3 -c "import secrets; print(secrets.token_urlsafe(48))"
    ```
 
-   Put that value in `SESSION_SECRET`.
-
+   Set the generated value as `SSO_PROXY_SECRET` in `.env` and as
+   `ML_SSO_PROXY_SECRET` in Caddy's environment. They must match.
 2. Install and start the backend:
 
    ```bash
@@ -87,9 +87,10 @@ You need Python 3.12 or later and Node 20 or later.
    ```
 
 Open `http://localhost:5173`. The Vite dev server proxies `/api` to the backend
-on port 8000. To use a backend on another port, set `API_TARGET`, for example
-`API_TARGET=http://127.0.0.1:8011 npm run dev`.
-Sign in with one of the names in `APP_USERS` and the password in `APP_PASSWORD`.
+on port 8000. Authenticated development requires routing the site through the
+trusted Caddy/Authelia proxy; a direct backend request has no trusted identity
+and private endpoints return 401. Do not simulate identity with browser-supplied
+headers.
 
 ## Write a lesson
 
@@ -135,11 +136,15 @@ the filesystem and the network.
 
 ## Authentication
 
-Two people share one password, set in `APP_PASSWORD`, and sign in under one of
-the names in `APP_USERS`. The username is not a secret: it scopes progress,
-drafts, and run history so that two readers keep separate state. A signed,
-HTTP-only cookie carries the session. Set `COOKIE_SECURE=true` once the app is
-served over HTTPS.
+The site uses the central Authelia portal at `https://auth.ifkash.dev/`. When a
+visitor is not authenticated, the app redirects there with the exact current
+URL as the `rd` return destination. Caddy runs Authelia `forward_auth` before
+proxying requests, strips incoming identity headers, and forwards the vetted
+`Remote-User` identity plus `X-SSO-Proxy`. Set the same unpredictable
+`SSO_PROXY_SECRET` in the app environment and `ML_SSO_PROXY_SECRET` in Caddy;
+without it, the app rejects all identities. Private APIs and the PDF remain
+protected by the identity dependency. `SSO_USERS` can map portal usernames to
+existing progress identities, for example `ifkash:enderboi,ananya:michu`.
 
 ## The GPU backend
 
@@ -197,9 +202,9 @@ external `edge` network. This bundle never publishes 80 or 443 itself.
 The repository is private and the organisation disables deploy keys, so the VM
 holds no GitHub credential. The script ships the committed tree with
 `git archive` over SSH, rebuilds, and waits until `/api/health` reports the
-commit it sent. `.env` on the VM is never touched, because it holds the session
-secret and the RunPod key. `Caddyfile.example` holds the vhost
-block, including the buffering and timeout settings the run stream needs.
+commit it sent. `.env` on the VM is never touched; it holds the SSO proxy secret
+and RunPod key. `Caddyfile.example` holds the vhost block, including the
+Authelia forward-auth and streaming settings.
 
 The script also builds the PDF book on your workstation, because printing it
 needs Chrome and the VM has little memory or disk to spare. It copies the PDF to
@@ -218,8 +223,8 @@ ssh -L 8093:127.0.0.1:8093 ifkash@vm.ifkash.dev
 The **PDF** button in the header downloads the whole course as one book: every
 lesson, every exercise with its starter file and hints, and the solutions in an
 appendix. The book has a contents page with page numbers, a bookmark for every
-lesson and section, and running heads. Like the lessons, the download needs a
-signed-in session.
+lesson and section, and running heads. Like the lessons, the download requires
+an authenticated Authelia identity through Caddy.
 
 To build the book, run the following command:
 

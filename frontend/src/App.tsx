@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
-import DownloadBook from "./components/DownloadBook";
-import Login from "./components/Login";
 import Mark from "./components/Mark";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
@@ -36,8 +34,11 @@ export default function App() {
   useEffect(() => {
     api
       .session()
-      .then((body) => setUsername(body.username))
-      .catch(() => setUsername(null))
+      .then((body) => {
+        if (body.username) setUsername(body.username);
+        else redirectToSso();
+      })
+      .catch(redirectToSso)
       .finally(() => setReady(true));
   }, []);
 
@@ -81,12 +82,8 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!ready) {
+  if (!ready || !username) {
     return <div className="h-full bg-canvas" aria-busy="true" />;
-  }
-
-  if (!username) {
-    return <Login onSignedIn={setUsername} />;
   }
 
   const onLesson = location.pathname.startsWith("/lessons/");
@@ -147,17 +144,7 @@ export default function App() {
           </span>
         )}
 
-        <DownloadBook />
-
-        <AccountMenu
-          username={username}
-          onSignOut={() =>
-            api
-              .logout()
-              .then(() => setUsername(null))
-              .catch(() => undefined)
-          }
-        />
+        <AccountMenu username={username} />
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -189,6 +176,11 @@ export default function App() {
     </div>
   );
 }
+function redirectToSso() {
+  const portal = new URL("https://auth.ifkash.dev/");
+  portal.searchParams.set("rd", window.location.href);
+  window.location.assign(portal.toString());
+}
 
 const THEMES: { mode: ThemeMode; label: string }[] = [
   { mode: "system", label: "Match the system" },
@@ -196,8 +188,8 @@ const THEMES: { mode: ThemeMode; label: string }[] = [
   { mode: "dark", label: "Dark" },
 ];
 
-/** The reader's name, with the theme choice and sign-out behind it. */
-function AccountMenu({ username, onSignOut }: { username: string; onSignOut: () => void }) {
+/** The reader's name, with the theme choice behind it. */
+function AccountMenu({ username }: { username: string }) {
   const [open, setOpen] = useState(false);
   const { mode, setMode } = useTheme();
   const box = useRef<HTMLDivElement>(null);
@@ -257,10 +249,10 @@ function AccountMenu({ username, onSignOut }: { username: string; onSignOut: () 
             </button>
           ))}
           <div className="my-1 border-t border-rule" />
-          <button type="button" role="menuitem" onClick={onSignOut} className="menu-item">
+          <a href="https://auth.ifkash.dev/logout" role="menuitem" className="menu-item">
             <span className="w-3" aria-hidden />
             Sign out
-          </button>
+          </a>
         </div>
       )}
     </div>

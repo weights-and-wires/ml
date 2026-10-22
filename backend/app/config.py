@@ -13,21 +13,9 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    # Auth. Two people share one password; the username scopes their progress
-    # and their saved drafts, and nothing else.
-    app_users: str = "michu,enderboi"
-    app_password: str = "mochimochi"
-    session_secret: str = "dev-only-insecure-secret"
-    session_days: int = 30
-    cookie_secure: bool = False
-
-    # Single sign-on, off while the secret is empty. Caddy asks Authelia about
-    # every request and, when the browser has an Authelia session, adds
-    # Remote-User and this secret in X-SSO-Proxy. Everyone else still gets the
-    # password form, so readers without an SSO account keep working.
+    # Authelia identity is accepted only with the shared secret added by Caddy.
+    # Map portal usernames onto existing progress identities where needed.
     sso_proxy_secret: str = ""
-    # Maps an Authelia username to the name that holds that reader's progress,
-    # such as "ifkash:enderboi,ananya:michu". Unmapped users keep their own name.
     sso_users: str = ""
 
     @property
@@ -63,9 +51,6 @@ class Settings(BaseSettings):
 
     git_sha: str = "unknown"
 
-    @property
-    def users(self) -> list[str]:
-        return [name.strip() for name in self.app_users.split(",") if name.strip()]
 
     @property
     def db_path(self) -> Path:
