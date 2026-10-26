@@ -82,7 +82,8 @@ def run_harness(mode: str, exercise: Path, submission: Path, timeout: int) -> li
         text=True,
         timeout=timeout,
         cwd=str(exercise),
-        env={**__import__("os").environ, "PYTHONPATH": env_path},
+        # Agg, as in the app's runner, so a plot never opens a window here.
+        env={**__import__("os").environ, "PYTHONPATH": env_path, "MPLBACKEND": "Agg"},
     )
     events = []
     for line in proc.stdout.splitlines():

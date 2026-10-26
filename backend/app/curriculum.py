@@ -95,35 +95,43 @@ def lesson_list() -> list[dict[str, Any]]:
     return [{k: v for k, v in lesson.items() if k != "body"} for lesson in load_lessons()]
 
 
+PROJECTS = "Projects"
+
+
 def parts() -> list[dict[str, Any]]:
-    """Lessons grouped into parts, in the order the parts first appear."""
+    """Chapters grouped into parts, in the order the parts first appear.
+
+    Projects leave their part and close the list as one section of their own,
+    in the order of the chapters each one needs.
+    """
     grouped: list[dict[str, Any]] = []
     index: dict[str, dict[str, Any]] = {}
     for lesson in lesson_list():
-        part = lesson["part"]
+        part = PROJECTS if lesson["kind"] == "project" else lesson["part"]
         if part not in index:
             index[part] = {"part": part, "lessons": []}
             grouped.append(index[part])
         index[part]["lessons"].append(lesson)
-    return grouped
+    return sorted(grouped, key=lambda group: group["part"] == PROJECTS)
 
 
 def get_lesson(slug: str) -> dict[str, Any] | None:
     """One lesson with its body, and the slugs on either side of it.
 
-    `index` and `count` place it among lessons of its own kind, so chapters
-    read "Lesson 24 of 132" and projects "Project 1 of 7".
+    `index`, `count`, `prev`, and `next` place it among lessons of its own
+    kind, so chapters read "Lesson 24 of 132" and projects "Project 1 of 8".
     """
     lessons = load_lessons()
     order = {lesson["slug"]: i for i, lesson in enumerate(lessons)}
     if slug not in order:
         return None
-    i = order[slug]
-    lesson = dict(lessons[i])
-    lesson["prev"] = lessons[i - 1]["slug"] if i > 0 else None
-    lesson["next"] = lessons[i + 1]["slug"] if i + 1 < len(lessons) else None
+    lesson = dict(lessons[order[slug]])
+    # Chapters and projects sit in separate lists, so each steps through its own.
     same_kind = [other["slug"] for other in lessons if other["kind"] == lesson["kind"]]
-    lesson["index"] = same_kind.index(slug) + 1
+    i = same_kind.index(slug)
+    lesson["prev"] = same_kind[i - 1] if i > 0 else None
+    lesson["next"] = same_kind[i + 1] if i + 1 < len(same_kind) else None
+    lesson["index"] = i + 1
     lesson["count"] = len(same_kind)
     return lesson
 

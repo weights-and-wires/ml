@@ -133,6 +133,9 @@ export default function ExercisePane({
                 { kind: event.type, text: event.text },
               ]);
               break;
+            case "figure":
+              setLines((current) => [...current, { kind: "figure", png: event.png }]);
+              break;
             case "error":
               setLines((current) => [
                 ...current,

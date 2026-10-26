@@ -2,12 +2,16 @@
 
 A hands-on course that teaches machine learning to undergraduates by having them
 build it. A hundred and thirty-two short chapters run from scoring a guess to
-mixtures of experts, and each of the seven parts ends with a project that puts
-the part to work on a realistic problem. Each one teaches a single idea: it starts from a concrete
+mixtures of experts. Each one teaches a single idea: it starts from a concrete
 question, shows a picture, works a small example by hand, and only then gives
 the formula and walks you through implementing it, in an editor beside the
 text, against checks that verify the results rather than the shape of your
 code.
+
+Eight projects, listed in their own section after the chapters, put that work
+to use on realistic problems. The first teaches you to load, clean, plot, and
+question a dataset before you model it, and the others each draw on a whole
+part. Every project says which chapter to finish before you start it.
 
 The reading pane is on the left and the editor is on the right, the way a
 programming-problem site arranges them. Fold the editor away with the button in
@@ -28,7 +32,7 @@ computes it. Each lesson ends with a step-by-step guide to its exercise.
 
 | Path | Contents |
 |---|---|
-| `content/lessons/` | A hundred and thirty-two chapters and seven projects, in Markdown with YAML front matter and inline SVG figures. |
+| `content/lessons/` | A hundred and thirty-two chapters and eight projects, in Markdown with YAML front matter and inline SVG figures. |
 | `content/renames.json` | Each lesson of the first edition and the chapters that replaced it, so progress carries over. |
 | `content/exercises/` | One directory per exercise: a starter file, checks, and a worked solution. |
 | `backend/` | FastAPI: auth, content, progress, drafts, and the run stream. |

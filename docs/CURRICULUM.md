@@ -1,7 +1,7 @@
 # Curriculum
 
-132 chapters and 7 projects, in 7 parts. Each part ends with a project that
-puts the whole part to work on a realistic problem. Each row is one Markdown file under
+132 chapters in 7 parts, and 8 projects in a section of their own. Each
+project lists the chapter to finish before you start it. Each row is one Markdown file under
 `content/lessons/` and one directory under `content/exercises/`. The `Needs GPU`
 column marks the exercises that run on RunPod rather than in the app container.
 
@@ -36,7 +36,6 @@ that replaced it, so readers keep their progress.
 | `021-one-dial-three-distributions` | One dial, three distributions | Write A(eta), its slope, and its bend for the Gaussian, Bernoulli, and Poisson families, and watch the mean and variance fall out of one derivative each. | No |
 | `022-one-loss-one-gradient` | One loss and one gradient for every family | Write the loss A(eta) - y eta and its gradient X^T(mu - y), then fit a Poisson model by walking downhill. | No |
 | `023-curvature-and-fisher-scoring` | Curvature and Fisher scoring | Build the bend table X^T D X, take Newton steps with it, and fit Poisson, Gaussian, and Bernoulli models with one loop. | No |
-| `023p-project-price-houses` | Project: Price houses honestly | Price listings and predict fast sales with a split, QR, ridge, lasso, and Newton logistic pipeline that you judge on untouched test rows. | No |
 
 ## Part 2 — Classical models
 
@@ -58,7 +57,6 @@ that replaced it, so readers keep their progress.
 | `037-valid-kernels` | What makes a similarity a valid kernel | Compute the smallest eigenvalue of a Gram matrix, find the squared length of a combination of points, and use both to build a positive semidefinite test. | No |
 | `038-kernel-ridge-regression` | Kernel ridge regression: a weighted sum of similarities | Solve (K + lambda I) alpha = y with a Cholesky factor, predict with a matrix of query-to-training similarities, and recover the primal weights of a linear kernel. | No |
 | `039-representer-and-random-features` | The representer theorem and random Fourier features | Evaluate the regularised objective for a candidate with extra centres, build random Fourier features for the RBF kernel, and fit ridge regression on them. | No |
-| `039p-project-spam-filter` | Project: Build and choose a spam filter | Build two spam classifiers, tune each with your own cross-validation, and report an honest test score on mail that selection never saw. | No |
 
 ## Part 3 — Trees, ensembles, and unsupervised learning
 
@@ -81,7 +79,6 @@ that replaced it, so readers keep their progress.
 | `054-kmeans-plusplus-seeding` | k-means++: starting well and choosing k | Turn squared distances into seeding probabilities, build the full k-means++ seeding, and keep the best of several restarts. | No |
 | `055-gmm-soft-assignment` | Gaussian mixtures and soft assignment | Write the log density of a Gaussian, a log-sum-exp that survives huge negative scores, and the E-step that turns scores into responsibilities. | No |
 | `056-em-refit-and-converge` | EM: refit the blobs and watch the likelihood rise | Write the weighted M-step, the lower bound that explains why the likelihood never falls, and the full EM loop, then watch the likelihood rise. | No |
-| `056p-project-segment-customers` | Project: Find customer segments and predict who leaves | Compress a customer table with PCA, find segments with k-means and a Gaussian mixture, then predict churn with bagged trees. | No |
 
 ## Part 4 — Neural networks
 
@@ -107,7 +104,6 @@ that replaced it, so readers keep their progress.
 | `074-early-stopping-ridge` | Early stopping is a ridge penalty in disguise | Run gradient descent on one coordinate, compute the ridge penalty that k steps match, and pick a stopping step from a jumpy validation curve. | No |
 | `075-dropout` | Dropout: train a crowd of thinned networks | Draw a keep-mask, apply inverted dropout in the forward pass, and send the gradient back through the same mask. | No |
 | `076-label-smoothing` | Label smoothing: ask for a little less certainty | Build the smoothed target, the loss against it, and its gradient, then find where the loss is lowest. | No |
-| `076p-project-read-digits` | Project: Train a digit reader from scratch | Build, check, and train a regularised two-hidden-layer network in numpy that reads noisy 10 by 10 digits and beats a linear baseline. | No |
 
 ## Part 5 — Vision and sequences
 
@@ -133,7 +129,6 @@ that replaced it, so readers keep their progress.
 | `094-additive-attention` | Additive attention: let a small network score the match | Write the additive scorer, the attention built on it, and the parameters that make it imitate a plain dot product. | No |
 | `095-attention-gradients` | Backpropagation through attention | Write the backward rule for the softmax, for the blend, and for the whole additive attention, and check every gradient against finite differences. | No |
 | `096-alignment-and-copy-decoder` | Where the decoder looks: the alignment matrix and a copy decoder | Stack the attention weights of every decoder step into an alignment matrix, hand-set a scorer so each step reads the right source position, and compare it with an order-blind summary. | No |
-| `096p-project-spot-defects` | Project: Spot defects on a production line | Build a small residual CNN in numpy that finds scratches and dents anywhere in a part's photo, and show why a flat network cannot. | No |
 
 ## Part 6 — Transformers
 
@@ -151,7 +146,6 @@ that replaced it, so readers keep their progress.
 | `106-safe-steps` | Taking safe steps: warmup, cosine decay, and gradient clipping | Write the warmup-then-cosine schedule, the global norm of a list of gradients, and a clip that shortens them in place without turning them. | No |
 | `107-the-training-loop` | One training step and the loop around it | Write one AdamW update for a single tensor, then wire loss, backward, clip, schedule, and update into train_step, and watch a tiny transformer learn a line of text. | No |
 | `108-cost-of-training` | The cost of a run: flops, memory, and number formats | Write the 6ND flop count and the four-copies memory estimate, then simulate loss scaling through float16 to see a gradient of 1e-8 vanish and come back. | No |
-| `108p-project-train-a-tiny-transformer` | Project: Train a tiny transformer to reverse digits | Build every piece of a small decoder-only transformer, train it from scratch, and prove it reverses digit strings it has never seen. | No |
 
 ## Part 7 — Large language models
 
@@ -181,4 +175,20 @@ that replaced it, so readers keep their progress.
 | `130-router-gradient` | Why the gate weight lets the router learn | Compute the gradient on each gate logit, assemble it into the router's weight gradient, and confirm it against finite differences. | No |
 | `131-load-balancing` | Keep the load balanced | Count each expert's share of the routing slots, average the router probabilities, and combine them into the auxiliary loss. | No |
 | `132-capacity-and-dropping` | When an expert is full: capacity and dropping | Compute the capacity of an expert, run a capacity-limited forward pass that drops overflow assignments, and report the dropped fraction. | No |
-| `132p-project-serve-a-tiny-model` | Project: Serve a small language model | Ship a tiny transformer with a tokeniser, KV cache, sampling, speculative decoding, and a LoRA adapter, proving each stage against its slow twin. | No |
+
+## Projects
+
+Each project puts several chapters to work on a realistic problem. The number
+in its slug is the last chapter it needs, so `023p-project-price-houses` can
+start once you have finished chapter 23.
+
+| Slug | Title | Exercise delivers | Needs GPU |
+|---|---|---|---|
+| `004p-project-explore-before-you-model` | Explore before you model | Load, clean, summarise, and plot a messy export of rental listings, then show that cleaning makes a straight-line rent model honest. | No |
+| `023p-project-price-houses` | Price houses honestly | Price listings and predict fast sales with a split, QR, ridge, lasso, and Newton logistic pipeline that you judge on untouched test rows. | No |
+| `039p-project-spam-filter` | Build and choose a spam filter | Build two spam classifiers, tune each with your own cross-validation, and report an honest test score on mail that selection never saw. | No |
+| `056p-project-segment-customers` | Find customer segments and predict who leaves | Compress a customer table with PCA, find segments with k-means and a Gaussian mixture, then predict churn with bagged trees. | No |
+| `076p-project-read-digits` | Train a digit reader from scratch | Build, check, and train a regularised two-hidden-layer network in numpy that reads noisy 10 by 10 digits and beats a linear baseline. | No |
+| `096p-project-spot-defects` | Spot defects on a production line | Build a small residual CNN in numpy that finds scratches and dents anywhere in a part's photo, and show why a flat network cannot. | No |
+| `108p-project-train-a-tiny-transformer` | Train a tiny transformer to reverse digits | Build every piece of a small decoder-only transformer, train it from scratch, and prove it reverses digit strings it has never seen. | No |
+| `132p-project-serve-a-tiny-model` | Serve a small language model | Ship a tiny transformer with a tokeniser, KV cache, sampling, speculative decoding, and a LoRA adapter, proving each stage against its slow twin. | No |

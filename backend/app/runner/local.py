@@ -111,6 +111,9 @@ async def run_local(
                 "PYTHONDONTWRITEBYTECODE": "1",
                 "PYTHONUNBUFFERED": "1",
                 "MPLBACKEND": "Agg",
+                # The image builds matplotlib's font cache here once; without it
+                # every run would rebuild the cache in its scratch home.
+                "MPLCONFIGDIR": os.environ.get("MPLCONFIGDIR", scratch),
                 # Keep BLAS from claiming every core for one reader's run.
                 "OMP_NUM_THREADS": "2",
                 "OPENBLAS_NUM_THREADS": "2",
@@ -129,6 +132,9 @@ async def run_local(
                 env=environment,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                # A plot arrives as one line of base64, far past the 64 KiB
+                # default a line may reach before readline gives up.
+                limit=16 * 1024 * 1024,
                 preexec_fn=_limits(settings.local_memory_mb, timeout),
             )
 

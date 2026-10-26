@@ -75,13 +75,18 @@ function plain(text: string): string {
 }
 
 /** Lessons grouped into parts, in the order the parts first appear. */
+/**
+ * Lessons grouped into parts. Projects leave their part and make up one more
+ * part after the last, so the book prints them as "Part 8. Projects".
+ */
 function groupParts(lessons: Numbered[]) {
   const parts: { part: string; number: string; name: string; lessons: Numbered[] }[] = [];
+  const sectionOf = (lesson: BookLesson) => (lesson.kind === "project" ? "Projects" : lesson.part);
   for (const entry of lessons) {
     let last = parts[parts.length - 1];
-    if (!last || last.part !== entry.lesson.part) {
-      const { number, name } = splitPart(entry.lesson.part);
-      last = { part: entry.lesson.part, number: number || String(parts.length + 1), name, lessons: [] };
+    if (!last || last.part !== sectionOf(entry.lesson)) {
+      const { number, name } = splitPart(sectionOf(entry.lesson));
+      last = { part: sectionOf(entry.lesson), number: number || String(parts.length + 1), name, lessons: [] };
       parts.push(last);
     }
     last.lessons.push(entry);
@@ -127,8 +132,13 @@ function fitToMeasure(): string[] {
 }
 
 export default function Book({ data }: { data: BookData }) {
-  const numbers = lessonNumbers(data.lessons);
-  const numbered: Numbered[] = data.lessons.map((lesson) => ({
+  // Every chapter comes first and the projects follow, as in the app's list.
+  const ordered = [
+    ...data.lessons.filter((lesson) => lesson.kind !== "project"),
+    ...data.lessons.filter((lesson) => lesson.kind === "project"),
+  ];
+  const numbers = lessonNumbers(ordered);
+  const numbered: Numbered[] = ordered.map((lesson) => ({
     lesson,
     n: numbers.get(lesson.slug) ?? "",
     exercise: lesson.exercise ? data.exercises[lesson.exercise] : undefined,
@@ -358,8 +368,8 @@ function About({ lessons, projects }: { lessons: number; projects: number }) {
       <div className="lesson">
         <p>
           This course teaches machine learning by having you build it. There are {lessons} lessons, from fitting a line
-          to mixtures of experts, and {projects} projects, one at the end of each part, that put the part to work on a realistic
-          problem. Every lesson and project ends with an exercise: a Python file of functions to fill in, and a set
+          to mixtures of experts, and {projects} projects, collected in the last part, that put what you have learned to work on
+          realistic problems. Each project says which chapter to finish before you start it. Every lesson and project ends with an exercise: a Python file of functions to fill in, and a set
           of checks that test what your functions compute, not how your code looks.
         </p>
         <p>

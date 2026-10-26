@@ -26,6 +26,12 @@ RUN pip install -r backend/requirements.txt
 # library, which this container has no use for, so pull the CPU build instead.
 RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.9.1
 
+# Matplotlib builds a font cache the first time it is imported, which takes a
+# few seconds. Build it once here, so a reader's plot does not pay for it on
+# every run.
+ENV MPLCONFIGDIR=/opt/matplotlib
+RUN mkdir -p /opt/matplotlib && python -c "import matplotlib.pyplot"
+
 COPY backend/ ./backend/
 COPY content/ ./content/
 COPY docs/ ./docs/
@@ -38,7 +44,7 @@ ENV GIT_SHA=$GIT_SHA
 
 RUN useradd --create-home --uid 10001 app
 RUN mkdir -p /data
-RUN chown -R app:app /data /app
+RUN chown -R app:app /data /app /opt/matplotlib
 USER app
 
 EXPOSE 8000

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NavLink, useParams } from "react-router-dom";
 
 import type { Part, ProgressMap } from "../lib/api";
-import { lessonNumbers, splitPart } from "../lib/parts";
+import { lessonNumbers, projectAfter, splitPart } from "../lib/parts";
 import StatusMark from "./StatusMark";
 
 type Props = {
@@ -219,8 +219,10 @@ export default function Sidebar({
                                 {numbers.get(lesson.slug)}
                               </span>
                               <span className="min-w-0 flex-1">
-                                {lesson.kind === "project" && <span className="project-tag">Project</span>}
                                 {lesson.title}
+                                {lesson.kind === "project" && (
+                                  <span className="block text-[11.5px] text-ink-4">{projectAfter(lesson.slug)}</span>
+                                )}
                               </span>
                               <StatusMark state={state} className="mt-[3px]" />
                             </NavLink>

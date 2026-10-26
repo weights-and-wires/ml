@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import StatusMark from "../components/StatusMark";
 import { api, type Part, type ProgressMap } from "../lib/api";
-import { lessonNumbers, splitPart, titleOf } from "../lib/parts";
+import { lessonNumbers, projectAfter, splitPart, titleOf } from "../lib/parts";
 
 type Props = { parts: Part[]; progress: ProgressMap };
 
@@ -118,10 +118,12 @@ export default function Dashboard({ parts, progress }: Props) {
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block text-[15px] font-medium leading-snug text-ink group-hover:text-accent">
-                              {lesson.kind === "project" && <span className="project-tag">Project</span>}
                               {lesson.title}
                             </span>
                             <span className="mt-0.5 block text-[13.5px] leading-snug text-ink-3">
+                              {lesson.kind === "project" && (
+                                <span className="text-ink-4">{projectAfter(lesson.slug)} · </span>
+                              )}
                               {lesson.summary}
                             </span>
                           </span>

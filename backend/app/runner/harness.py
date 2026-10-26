@@ -87,14 +87,45 @@ def format_exception(exc: BaseException, submission: Path) -> str:
     return "\n".join(lines + [head])
 
 
+def emit_figures() -> None:
+    """Send every open matplotlib figure to the reader as a PNG, then close it.
+
+    The runner has no display, so `plt.show()` is pointed here: each figure
+    becomes one `figure` event that the console draws as an image.
+    """
+    import base64
+
+    import matplotlib.pyplot as plt
+
+    for number in plt.get_fignums():
+        buffer = io.BytesIO()
+        plt.figure(number).savefig(buffer, format="png", dpi=100, bbox_inches="tight")
+        emit({"type": "figure", "png": base64.b64encode(buffer.getvalue()).decode("ascii")})
+    plt.close("all")
+
+
 def run_mode(submission: Path) -> int:
     out, err = LineStream("stdout"), LineStream("stderr")
     started = time.perf_counter()
+    # Importing matplotlib costs a few hundred milliseconds, so only a file that
+    # uses it pays for it.
+    plots = "matplotlib" in submission.read_text()
+    if plots:
+        import matplotlib.pyplot as plt
+
+        def show(*args: object, **kwargs: object) -> None:
+            out.flush()
+            emit_figures()
+
+        plt.show = show  # type: ignore[assignment]
     try:
         with redirect_stdout(out), redirect_stderr(err):
             runpy.run_path(str(submission), run_name="__main__")
         out.flush()
         err.flush()
+        if plots:
+            # A figure drawn without a call to show() still reaches the reader.
+            emit_figures()
     except NotImplementedError as exc:
         out.flush()
         err.flush()

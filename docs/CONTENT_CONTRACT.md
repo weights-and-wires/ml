@@ -239,7 +239,7 @@ field. It holds exactly four files.
 ```
 
 `packages` is documentation only; the runtime image already carries `numpy`,
-`scipy`, and `torch` on the CPU. `timeout` is in seconds and must leave headroom:
+`scipy`, `pandas`, `matplotlib`, and `torch` on the CPU. `timeout` is in seconds and must leave headroom:
 set it to about four times the reference solution's runtime, and never above 120
 for a CPU exercise.
 
@@ -248,7 +248,8 @@ for a CPU exercise.
 What the reader sees when the lesson opens. It must:
 
 - Import only from the standard library, `numpy`, and, when the lesson needs it,
-  `torch`.
+  `torch`, `pandas`, or `matplotlib`. When **Run** calls `plt.show()`, each open
+  figure appears in the console as an image, in order with the printed output.
 - Define every function the checks call, with the exact signature, a docstring
   that states the contract including array shapes, and a body that raises
   `NotImplementedError`.
@@ -331,7 +332,8 @@ Rules for checks:
 
 ## Projects
 
-Each part ends with a project. A chapter teaches one idea; a project asks the
+The course has a set of projects, listed in their own section after the
+chapters. A chapter teaches one idea; a project asks the
 reader to combine the ideas of a whole part to answer a realistic question, the
 way they would on the job. A project is a lesson file and an exercise directory,
 like a chapter, and everything above applies unless this section says
@@ -340,9 +342,16 @@ otherwise.
 ### Where a project lives
 
 Path: `content/lessons/NNNp-project-slug.md`, where `NNN` is the prefix of the
-last chapter in its part. The `p` sorts the project after that chapter and
-before the next part, so `023p-project-price-houses` follows
-`023-curvature-and-fisher-scoring`. The exercise directory has the same name.
+last chapter the project needs, usually the last chapter of its part. The app
+and the PDF book list every project in one Projects section after the
+chapters, in that order, and tell the reader "After chapter 23" for
+`023p-project-price-houses`. The exercise directory has the same name.
+
+One project needs only the first four chapters:
+`004p-project-explore-before-you-model`, because looking at the data comes
+before every model in the rest of the course. It teaches its own skills, loading, cleaning, plotting, and
+summarising data, so unlike the other projects it explains each one rather
+than only linking a chapter.
 
 The front matter adds one field, and lists the chapters the project draws on:
 
@@ -354,8 +363,9 @@ prereqs:
   - 019-gradient-descent-for-logistic
 ```
 
-`part` is the part the project closes. List at least three chapters in
-`prereqs`, every one a real slug from that part or an earlier one. Set
+`part` is the part whose chapters the project draws on most; the reader shows
+it beside the project's title. List at least three chapters in `prereqs`, every
+one a real slug from that part or an earlier one. Set
 `minutes` honestly; a project is two to four hours of work.
 
 ### What a project body holds
@@ -415,7 +425,9 @@ words, or with fewer than two figures.
   standardisation, must miss it.
 - Keep the whole suite within `timeout`, which may go up to 120 seconds on the
   CPU. Use numpy. Use torch only when the part is about networks large enough
-  that writing every backward pass by hand would bury the point.
+  that writing every backward pass by hand would bury the point. Use pandas
+  and matplotlib only where loading, reshaping, and plotting data is the
+  point, as in the data-exploration project.
 
 ## Mathematical accuracy
 

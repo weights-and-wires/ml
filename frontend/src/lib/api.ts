@@ -57,6 +57,7 @@ export type RunEvent =
   | { type: "plan"; total: number }
   | { type: "stdout"; text: string }
   | { type: "stderr"; text: string }
+  | { type: "figure"; png: string }
   | {
       type: "check";
       index: number;

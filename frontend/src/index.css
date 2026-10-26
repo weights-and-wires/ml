@@ -239,21 +239,6 @@
     }
   }
 
-  /* Marks a project, which closes a part, among the chapters of a list. */
-  .project-tag {
-    display: inline-block;
-    margin-right: 0.4rem;
-    padding: 0 0.35rem;
-    border-radius: 4px;
-    background: color-mix(in oklab, var(--accent) 14%, transparent);
-    color: var(--accent);
-    font-size: 10.5px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    line-height: 1.5;
-    vertical-align: 1px;
-  }
-
   .icon-btn {
     display: inline-flex;
     width: 2rem;

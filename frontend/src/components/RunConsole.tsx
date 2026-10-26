@@ -5,7 +5,8 @@ import type { RunEvent } from "../lib/api";
 
 export type ConsoleLine =
   | { kind: "stdout" | "stderr" | "status"; text: string }
-  | { kind: "error"; text: string; detail?: string | null };
+  | { kind: "error"; text: string; detail?: string | null }
+  | { kind: "figure"; png: string };
 
 export type CheckResult = Extract<RunEvent, { type: "check" }>;
 
@@ -307,6 +308,16 @@ function Glyph({
 function Line({ line }: { line: ConsoleLine }) {
   if (line.kind === "status") {
     return <p className="fade-in py-px font-sans text-[12px] text-ink-4">{line.text}</p>;
+  }
+  if (line.kind === "figure") {
+    // Plots are drawn on white, so they keep a light frame in the dark theme.
+    return (
+      <img
+        src={`data:image/png;base64,${line.png}`}
+        alt="A figure your code drew"
+        className="fade-in my-2 max-w-full rounded-md bg-white shadow-[0_0_0_1px_var(--rule)]"
+      />
+    );
   }
   if (line.kind === "error") {
     return (
