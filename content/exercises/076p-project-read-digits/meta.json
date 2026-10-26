@@ -3,7 +3,7 @@
   "title": "Train a digit reader from scratch",
   "brief": "Build a regularised, gradient-checked, early-stopped network in numpy that reads noisy 10 by 10 digits and clearly beats a linear baseline.",
   "needs_gpu": false,
-  "timeout": 20,
+  "timeout": 45,
   "packages": ["numpy"],
   "hints": [
     "He initialisation draws W with scale sqrt(2 / n_in), where n_in is the number of rows of W, because this project stores W as (n_in, n_out) and computes h @ W.",

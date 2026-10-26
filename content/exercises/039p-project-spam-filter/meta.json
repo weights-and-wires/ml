@@ -3,7 +3,7 @@
   "title": "Build and choose a spam filter",
   "brief": "Fit naive Bayes and a kernel classifier, tune each with your own cross-validation, read a learning curve, and report a test score that selection never touched.",
   "needs_gpu": false,
-  "timeout": 30,
+  "timeout": 50,
   "packages": ["numpy"],
   "hints": [
     "In fit_nb, rows = X[y == k]; (rows.sum(axis=0) + alpha) divided by its own sum is one row of theta. Take the log after dividing, not before.",

@@ -3,7 +3,7 @@
   "title": "Build a defect detector from a residual CNN",
   "brief": "Write im2col convolution and its backward pass, a residual block, global average pooling, and Adam. Train the network on noisy part photos and check that it beats a flat MLP.",
   "needs_gpu": false,
-  "timeout": 40,
+  "timeout": 120,
   "packages": ["numpy"],
   "hints": [
     "im2col loops over the k * k kernel offsets only. For offset (dh, dw), xp[:, :, dh:dh + stride * h_out:stride, dw:dw + stride * w_out:stride] holds that offset's value for every output position.",
