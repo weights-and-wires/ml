@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import StatusMark from "../components/StatusMark";
 import { api, type Part, type ProgressMap } from "../lib/api";
-import { splitPart, titleOf } from "../lib/parts";
+import { lessonNumbers, splitPart, titleOf } from "../lib/parts";
 
 type Props = { parts: Part[]; progress: ProgressMap };
 
@@ -27,7 +27,8 @@ export default function Dashboard({ parts, progress }: Props) {
     return started[0] ?? lessons.find((l) => !progress[l.slug]) ?? lessons[0];
   }, [lessons, progress]);
   const resuming = next ? !!progress[next.slug] : false;
-  const nextNumber = next ? lessons.indexOf(next) + 1 : 0;
+  const numbers = useMemo(() => lessonNumbers(lessons), [lessons]);
+  const nextLabel = next ? `${next.kind === "project" ? "Project" : "Lesson"} ${numbers.get(next.slug)}` : "";
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -72,7 +73,7 @@ export default function Dashboard({ parts, progress }: Props) {
           >
             <span className="min-w-0 flex-1">
               <span className="block text-[12.5px] font-medium text-ink-3">
-                {resuming ? "Continue where you left off" : "Start here"} · Lesson {nextNumber}
+                {resuming ? "Continue where you left off" : "Start here"} · {nextLabel}
               </span>
               <span className="mt-1 block font-serif text-[1.35rem] font-semibold leading-snug text-ink">
                 {next.title}
@@ -113,10 +114,11 @@ export default function Dashboard({ parts, progress }: Props) {
                           className="group -mx-3 flex items-start gap-3 rounded-md px-3 py-3.5 transition-colors hover:bg-[color-mix(in_oklab,var(--ink)_4%,transparent)]"
                         >
                           <span className="w-6 shrink-0 pt-0.5 text-[13px] tabular-nums text-ink-4">
-                            {lessons.indexOf(lesson) + 1}
+                            {numbers.get(lesson.slug)}
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block text-[15px] font-medium leading-snug text-ink group-hover:text-accent">
+                              {lesson.kind === "project" && <span className="project-tag">Project</span>}
                               {lesson.title}
                             </span>
                             <span className="mt-0.5 block text-[13.5px] leading-snug text-ink-3">

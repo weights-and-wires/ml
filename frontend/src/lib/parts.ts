@@ -16,3 +16,17 @@ export function titleOf(slug: string, lessons: LessonMeta[]): string {
   const words = slug.replace(/^\d+-/, "").replace(/-/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
+
+/**
+ * The number each lesson shows in lists: chapters count 1, 2, 3, and the
+ * projects that close each part count P1, P2, P3 on their own.
+ */
+export function lessonNumbers(lessons: Pick<LessonMeta, "slug" | "kind">[]): Map<string, string> {
+  const numbers = new Map<string, string>();
+  let chapters = 0;
+  let projects = 0;
+  for (const lesson of lessons) {
+    numbers.set(lesson.slug, lesson.kind === "project" ? `P${++projects}` : String(++chapters));
+  }
+  return numbers;
+}

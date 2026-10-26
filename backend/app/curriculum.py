@@ -82,6 +82,8 @@ def load_lessons() -> list[dict[str, Any]]:
                 "prereqs": _text_list(meta.get("prereqs", [])),
                 "exercise": meta.get("exercise"),
                 "gpu": bool(meta.get("gpu", False)),
+                # A project closes a part; chapters and projects are numbered apart.
+                "kind": "project" if meta.get("kind") == "project" else "chapter",
                 "body": post.content,
             }
         )
@@ -107,7 +109,11 @@ def parts() -> list[dict[str, Any]]:
 
 
 def get_lesson(slug: str) -> dict[str, Any] | None:
-    """One lesson with its body, and the slugs on either side of it."""
+    """One lesson with its body, and the slugs on either side of it.
+
+    `index` and `count` place it among lessons of its own kind, so chapters
+    read "Lesson 24 of 132" and projects "Project 1 of 7".
+    """
     lessons = load_lessons()
     order = {lesson["slug"]: i for i, lesson in enumerate(lessons)}
     if slug not in order:
@@ -116,8 +122,9 @@ def get_lesson(slug: str) -> dict[str, Any] | None:
     lesson = dict(lessons[i])
     lesson["prev"] = lessons[i - 1]["slug"] if i > 0 else None
     lesson["next"] = lessons[i + 1]["slug"] if i + 1 < len(lessons) else None
-    lesson["index"] = i + 1
-    lesson["count"] = len(lessons)
+    same_kind = [other["slug"] for other in lessons if other["kind"] == lesson["kind"]]
+    lesson["index"] = same_kind.index(slug) + 1
+    lesson["count"] = len(same_kind)
     return lesson
 
 

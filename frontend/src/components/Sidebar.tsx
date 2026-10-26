@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NavLink, useParams } from "react-router-dom";
 
 import type { Part, ProgressMap } from "../lib/api";
-import { splitPart } from "../lib/parts";
+import { lessonNumbers, splitPart } from "../lib/parts";
 import StatusMark from "./StatusMark";
 
 type Props = {
@@ -45,11 +45,7 @@ export default function Sidebar({
     }
   }, [shutParts]);
 
-  const numbers = useMemo(() => {
-    const map = new Map<string, number>();
-    parts.flatMap((part) => part.lessons).forEach((lesson, i) => map.set(lesson.slug, i + 1));
-    return map;
-  }, [parts]);
+  const numbers = useMemo(() => lessonNumbers(parts.flatMap((part) => part.lessons)), [parts]);
 
   const query = filter.trim().toLowerCase();
   const shown = useMemo(() => {
@@ -222,7 +218,10 @@ export default function Sidebar({
                               <span className="w-5 shrink-0 pt-px text-[11.5px] tabular-nums text-ink-4">
                                 {numbers.get(lesson.slug)}
                               </span>
-                              <span className="min-w-0 flex-1">{lesson.title}</span>
+                              <span className="min-w-0 flex-1">
+                                {lesson.kind === "project" && <span className="project-tag">Project</span>}
+                                {lesson.title}
+                              </span>
                               <StatusMark state={state} className="mt-[3px]" />
                             </NavLink>
                           </li>

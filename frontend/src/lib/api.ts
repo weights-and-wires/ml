@@ -10,6 +10,7 @@ export type LessonMeta = {
   prereqs: string[];
   exercise: string | null;
   gpu: boolean;
+  kind: "chapter" | "project";
 };
 
 export type ExerciseDetail = {

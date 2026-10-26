@@ -22,7 +22,7 @@ import Markdown from "../components/Markdown";
 import Mark from "../components/Mark";
 import type { ExerciseDetail, LessonMeta } from "../lib/api";
 import { KIND_LABEL, sections } from "../lib/lessonOutline";
-import { splitPart } from "../lib/parts";
+import { lessonNumbers, splitPart } from "../lib/parts";
 
 hljs.registerLanguage("python", python);
 
@@ -59,7 +59,10 @@ const exerciseId = (slug: string) => `ex-${slug}`;
 const solutionId = (slug: string) => `sol-${slug}`;
 const pageName = (slug: string) => `pg-${slug}`;
 
-type Numbered = { lesson: BookLesson; n: number; exercise?: BookExercise };
+/** `n` is the lesson's printed number: 1 to 132 for chapters, P1 on for projects. */
+type Numbered = { lesson: BookLesson; n: string; exercise?: BookExercise };
+
+const noun = (lesson: BookLesson) => (lesson.kind === "project" ? "Project" : "Lesson");
 
 /** A CSS string literal, for the running heads. */
 function cssString(text: string): string {
@@ -124,11 +127,14 @@ function fitToMeasure(): string[] {
 }
 
 export default function Book({ data }: { data: BookData }) {
-  const numbered: Numbered[] = data.lessons.map((lesson, index) => ({
+  const numbers = lessonNumbers(data.lessons);
+  const numbered: Numbered[] = data.lessons.map((lesson) => ({
     lesson,
-    n: index + 1,
+    n: numbers.get(lesson.slug) ?? "",
     exercise: lesson.exercise ? data.exercises[lesson.exercise] : undefined,
   }));
+  const projects = data.lessons.filter((lesson) => lesson.kind === "project").length;
+  const chapters = data.lessons.length - projects;
   const bySlug = new Map(numbered.map((entry) => [entry.lesson.slug, entry]));
   const parts = groupParts(numbered);
   const withSolutions = numbered.filter((entry) => entry.exercise?.solution);
@@ -180,7 +186,7 @@ export default function Book({ data }: { data: BookData }) {
       window.__book = {
         ready: true,
         title: TITLE,
-        subject: `A hands-on course in ${numbered.length} lessons, from fitting a line to mixtures of experts, with every exercise and its solution.`,
+        subject: `A hands-on course in ${chapters} lessons and ${projects} projects, from fitting a line to mixtures of experts, with every exercise and its solution.`,
         outline,
         katexErrors: Array.from(document.querySelectorAll<HTMLElement>(".katex-error")).map(
           (node) => `${node.closest("[data-where]")?.getAttribute("data-where") ?? "?"}: ${node.title || node.textContent}`,
@@ -217,9 +223,9 @@ export default function Book({ data }: { data: BookData }) {
     <div className="book">
       <style>{`${heads}\n${pageRules}`}</style>
 
-      <Cover parts={parts} lessons={numbered.length} commit={data.commit} />
+      <Cover parts={parts} lessons={chapters} projects={projects} commit={data.commit} />
       <Contents parts={parts} solutions={withSolutions.length > 0} />
-      <About lessons={numbered.length} />
+      <About lessons={chapters} projects={projects} />
 
       {parts.map((part) => (
         <div key={part.part}>
@@ -256,10 +262,12 @@ export default function Book({ data }: { data: BookData }) {
 function Cover({
   parts,
   lessons,
+  projects,
   commit,
 }: {
   parts: ReturnType<typeof groupParts>;
   lessons: number;
+  projects: number;
   commit: string;
 }) {
   const built = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
@@ -270,7 +278,9 @@ function Cover({
         <span className="cover-site">{SITE}</span>
       </div>
       <div className="cover-main">
-        <p className="cover-kicker">{lessons} lessons, each with an exercise to build</p>
+        <p className="cover-kicker">
+          {lessons} lessons and {projects} projects, each with an exercise to build
+        </p>
         <h1 className="cover-title">{TITLE}</h1>
         <p className="cover-subtitle">A hands-on course, from fitting a line to mixtures of experts</p>
         <div className="cover-edition">
@@ -341,14 +351,15 @@ function Contents({ parts, solutions }: { parts: ReturnType<typeof groupParts>; 
   );
 }
 
-function About({ lessons }: { lessons: number }) {
+function About({ lessons, projects }: { lessons: number; projects: number }) {
   return (
     <section id="about" className="front about">
       <h1 className="front-title">How to use this book</h1>
       <div className="lesson">
         <p>
           This course teaches machine learning by having you build it. There are {lessons} lessons, from fitting a line
-          to mixtures of experts, and every one ends with an exercise: a Python file of functions to fill in, and a set
+          to mixtures of experts, and {projects} projects, one at the end of each part, that put the part to work on a realistic
+          problem. Every lesson and project ends with an exercise: a Python file of functions to fill in, and a set
           of checks that test what your functions compute, not how your code looks.
         </p>
         <p>
@@ -427,7 +438,7 @@ function Lesson({ entry, bySlug }: { entry: Numbered; bySlug: Map<string, Number
     <article className="chapter">
       <header id={lessonId(lesson.slug)} className="opener">
         <p className="opener-kicker">
-          <span className="opener-n">Lesson {n}</span>
+          <span className="opener-n">{noun(lesson)} {n}</span>
           <span>{part.number ? `Part ${part.number}, ${part.name}` : part.name}</span>
           {lesson.minutes ? <span className="opener-minutes">About {lesson.minutes} minutes</span> : null}
         </p>
@@ -504,7 +515,7 @@ function Lesson({ entry, bySlug }: { entry: Numbered; bySlug: Map<string, Number
   );
 }
 
-function Exercise({ slug, n, exercise }: { slug: string; n: number; exercise: BookExercise }) {
+function Exercise({ slug, n, exercise }: { slug: string; n: string; exercise: BookExercise }) {
   return (
     <section id={exerciseId(slug)} className="exercise" data-where={`${slug} exercise`}>
       <p className="exercise-kicker">
@@ -570,7 +581,7 @@ function Solutions({ entries }: { entries: Numbered[] }) {
               </a>
             </p>
             <h2 className="exercise-title">{exercise!.title}</h2>
-            <p className="solution-lesson">For lesson {n}, {lesson.title}</p>
+            <p className="solution-lesson">For {noun(lesson).toLowerCase()} {n}, {lesson.title}</p>
             <CodeFile name="solution.py" code={exercise!.solution} />
           </section>
         ))}

@@ -222,7 +222,7 @@ export default function LessonReader({ lesson, lessons, onStartExercise }: Props
 
       <div className="mx-auto max-w-[44rem] px-5 pb-16 pt-9 sm:px-8 lg:pt-12">
         <p className="text-[13px] text-ink-3">
-          Lesson {lesson.index} of {lesson.count}
+          {lesson.kind === "project" ? "Project" : "Lesson"} {lesson.index} of {lesson.count}
           <span className="mx-1.5 text-ink-4">·</span>
           {part.number ? `Part ${part.number}, ${part.name}` : part.name}
           {lesson.minutes ? (
@@ -239,7 +239,7 @@ export default function LessonReader({ lesson, lessons, onStartExercise }: Props
 
         {lesson.objectives.length > 0 && (
           <section className="mt-7 rounded-lg bg-chrome px-5 py-4 shadow-[inset_0_0_0_1px_var(--rule)]">
-            <h2 className="text-[13px] font-semibold text-ink">By the end of this lesson you can</h2>
+            <h2 className="text-[13px] font-semibold text-ink">By the end of this {lesson.kind === "project" ? "project" : "lesson"} you can</h2>
             <ul className="mt-2.5 space-y-1.5">
               {lesson.objectives.map((objective, index) => (
                 <li key={index} className="flex gap-2.5 text-[14.5px] leading-snug text-ink-2">

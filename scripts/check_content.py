@@ -35,6 +35,18 @@ REQUIRED_SECTIONS = [
     "## Build it step by step",
     "## The exercise",
 ]
+# A project gives the reader a job rather than a lecture, so it has its own
+# sections. See "Projects" in the contract.
+PROJECT_SECTIONS = [
+    "## The brief",
+    "## What you will use",
+    "## Meet the data",
+    "## Plan the build",
+    "## Build it step by step",
+    "## Read your results",
+    "## Take it further",
+    "## The exercise",
+]
 # Colours in a figure come from the fig-* classes, so it follows the theme.
 RAW_COLOUR = re.compile(
     r"""(?:fill|stroke|color)\s*[=:]\s*["']?\s*(?:#|rgb|hsl|black|white|red|blue|green)""",
@@ -83,7 +95,7 @@ def run_harness(mode: str, exercise: Path, submission: Path, timeout: int) -> li
     return events
 
 
-def check_exercise(exercise_id: str, problems: list[str]) -> None:
+def check_exercise(exercise_id: str, problems: list[str], project: bool = False) -> None:
     where = EXERCISES / exercise_id
     if not where.is_dir():
         problems.append(f"{exercise_id}: no exercise directory")
@@ -140,9 +152,10 @@ def check_exercise(exercise_id: str, problems: list[str]) -> None:
                 f"{c['description']} -> {c.get('message', '')[:200]}" for c in failed[:3]
             )
             problems.append(f"{exercise_id}: solution.py fails its own checks: {detail}")
-        elif len(checks) < 4:
+        elif len(checks) < (8 if project else 4):
             problems.append(
-                f"{exercise_id}: only {len(checks)} checks, the contract asks for six"
+                f"{exercise_id}: only {len(checks)} checks, the contract asks for "
+                f"{'eight' if project else 'six'}"
             )
         elif done.get("seconds", 0) > timeout * 0.6:
             problems.append(
@@ -192,7 +205,23 @@ def check_lesson(path: Path, problems: list[str], seen_exercises: set[str]) -> N
                     "quotes."
                 )
 
-    for heading in REQUIRED_SECTIONS:
+    project = meta.get("kind") == "project"
+    if project:
+        if not re.fullmatch(r"\d{3}p-project-[a-z0-9-]+", path.stem):
+            problems.append(f"{path.name}: a project file is named NNNp-project-slug")
+        prereqs = meta.get("prereqs") or []
+        if len(prereqs) < 3:
+            problems.append(f"{path.name}: a project lists at least three chapters in prereqs")
+        for slug in prereqs:
+            if not (LESSONS / f"{slug}.md").is_file():
+                problems.append(f"{path.name}: prereq {slug!r} is not a lesson")
+        for slug in re.findall(r"\]\(/lessons/([^)#\s]+)", body):
+            if not (LESSONS / f"{slug}.md").is_file():
+                problems.append(f"{path.name}: links to {slug!r}, which is not a lesson")
+    elif "kind" in meta:
+        problems.append(f"{path.name}: kind {meta['kind']!r} is not 'project'")
+
+    for heading in PROJECT_SECTIONS if project else REQUIRED_SECTIONS:
         if heading not in body:
             problems.append(f"{path.name}: no {heading!r} section")
     if not body.lstrip().startswith("# "):
@@ -201,6 +230,8 @@ def check_lesson(path: Path, problems: list[str], seen_exercises: set[str]) -> N
     figures = re.findall(r"^```figure\n(.*?)^```", body, flags=re.S | re.M)
     if not figures:
         problems.append(f"{path.name}: no ```figure block; every chapter needs one")
+    elif project and len(figures) < 2:
+        problems.append(f"{path.name}: a project needs at least two figures")
     for i, figure in enumerate(figures, 1):
         if "<svg" not in figure or "</svg>" not in figure or "viewBox" not in figure:
             problems.append(f"{path.name}: figure {i} needs one <svg viewBox=...>...</svg>")
@@ -214,9 +245,10 @@ def check_lesson(path: Path, problems: list[str], seen_exercises: set[str]) -> N
             problems.append(f"{path.name}: figure {i} has no caption after </svg>")
 
     words = len(re.sub(r"```figure\n.*?```", "", body, flags=re.S).split())
-    if words < 800:
-        problems.append(f"{path.name}: {words} words, the contract asks for 900 or more")
-    if words > 2600:
+    low, high = (1200, 4000) if project else (800, 2600)
+    if words < low:
+        problems.append(f"{path.name}: {words} words, the contract asks for {low} or more")
+    if words > high:
         problems.append(f"{path.name}: {words} words; split the chapter, the contract caps it near 2000")
 
     prose = re.sub(r"```.*?```", "", body, flags=re.S)
@@ -247,7 +279,7 @@ def check_lesson(path: Path, problems: list[str], seen_exercises: set[str]) -> N
 
     exercise_id = meta["exercise"]
     seen_exercises.add(exercise_id)
-    check_exercise(exercise_id, problems)
+    check_exercise(exercise_id, problems, project)
 
 
 def main() -> int:
