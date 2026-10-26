@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 
 import DownloadBook from "./components/DownloadBook";
 import Mark from "./components/Mark";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
 import LessonPage from "./pages/LessonPage";
+import Projects from "./pages/Projects";
 import { api, type Part, type ProgressMap } from "./lib/api";
 import { useTheme, type ThemeMode } from "./lib/theme";
 
@@ -31,6 +32,13 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(rememberedCollapse);
   const location = useLocation();
   const lessons = useMemo(() => parts.flatMap((part) => part.lessons), [parts]);
+  // Projects have a page of their own in the header, so the lesson list and
+  // the contents page keep to the chapters.
+  const chapterParts = useMemo(
+    () => parts.filter((part) => part.lessons.some((lesson) => lesson.kind !== "project")),
+    [parts],
+  );
+  const projects = useMemo(() => lessons.filter((lesson) => lesson.kind === "project"), [lessons]);
 
   useEffect(() => {
     api
@@ -88,6 +96,9 @@ export default function App() {
   }
 
   const onLesson = location.pathname.startsWith("/lessons/");
+  const onProject =
+    location.pathname === "/projects" ||
+    projects.some((project) => location.pathname === `/lessons/${project.slug}`);
 
   return (
     <div className="flex h-full flex-col bg-canvas">
@@ -119,18 +130,30 @@ export default function App() {
           aria-label="Machine learning, course contents"
         >
           <Mark size={20} />
-          <span className="font-serif text-[15.5px] font-semibold tracking-tight text-ink">
+          <span className="whitespace-nowrap font-serif text-[15.5px] font-semibold tracking-tight text-ink">
             Machine learning
           </span>
         </Link>
 
-        {onLesson && (
+        {(onLesson || onProject) && (
           <Link
             to="/"
             className="ml-1 hidden rounded-md px-2 py-1 text-[13px] text-ink-3 transition-colors hover:text-ink sm:block"
           >
             Contents
           </Link>
+        )}
+
+        {projects.length > 0 && (
+          <NavLink
+            to="/projects"
+            aria-current={onProject ? "page" : undefined}
+            className={`ml-1 shrink-0 rounded-md px-2 py-1 text-[13px] transition-colors hover:text-ink ${
+              onProject ? "font-medium text-ink" : "text-ink-3"
+            }`}
+          >
+            Projects
+          </NavLink>
         )}
 
         <div className="flex-1" />
@@ -151,7 +174,7 @@ export default function App() {
 
       <div className="flex min-h-0 flex-1">
         <Sidebar
-          parts={parts}
+          parts={chapterParts}
           progress={progress}
           open={menuOpen}
           collapsed={collapsed}
@@ -163,8 +186,9 @@ export default function App() {
           <Routes>
             <Route
               path="/"
-              element={<Dashboard parts={parts} progress={progress} />}
+              element={<Dashboard parts={chapterParts} progress={progress} />}
             />
+            <Route path="/projects" element={<Projects projects={projects} progress={progress} />} />
             <Route
               path="/lessons/:slug"
               element={

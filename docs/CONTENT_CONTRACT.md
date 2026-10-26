@@ -343,8 +343,8 @@ otherwise.
 
 Path: `content/lessons/NNNp-project-slug.md`, where `NNN` is the prefix of the
 last chapter the project needs, usually the last chapter of its part. The app
-and the PDF book list every project in one Projects section after the
-chapters, in that order, and tell the reader "After chapter 23" for
+lists every project on its own Projects page, linked from the header, and the
+PDF book prints them as a last part after the chapters, both in that order, and tell the reader "After chapter 23" for
 `023p-project-price-houses`. The exercise directory has the same name.
 
 One project needs only the first four chapters:

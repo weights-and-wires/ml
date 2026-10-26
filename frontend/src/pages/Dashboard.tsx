@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import StatusMark from "../components/StatusMark";
 import { api, type Part, type ProgressMap } from "../lib/api";
-import { lessonNumbers, projectAfter, splitPart, titleOf } from "../lib/parts";
+import { lessonNumbers, splitPart, titleOf } from "../lib/parts";
 
 type Props = { parts: Part[]; progress: ProgressMap };
 
@@ -28,7 +28,7 @@ export default function Dashboard({ parts, progress }: Props) {
   }, [lessons, progress]);
   const resuming = next ? !!progress[next.slug] : false;
   const numbers = useMemo(() => lessonNumbers(lessons), [lessons]);
-  const nextLabel = next ? `${next.kind === "project" ? "Project" : "Lesson"} ${numbers.get(next.slug)}` : "";
+  const nextLabel = next ? `Lesson ${numbers.get(next.slug)}` : "";
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -121,9 +121,6 @@ export default function Dashboard({ parts, progress }: Props) {
                               {lesson.title}
                             </span>
                             <span className="mt-0.5 block text-[13.5px] leading-snug text-ink-3">
-                              {lesson.kind === "project" && (
-                                <span className="text-ink-4">{projectAfter(lesson.slug)} · </span>
-                              )}
                               {lesson.summary}
                             </span>
                           </span>

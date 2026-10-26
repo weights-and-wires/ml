@@ -8,7 +8,7 @@ the formula and walks you through implementing it, in an editor beside the
 text, against checks that verify the results rather than the shape of your
 code.
 
-Eight projects, listed in their own section after the chapters, put that work
+Eight projects, on a page of their own linked from the header, put that work
 to use on realistic problems. The first teaches you to load, clean, plot, and
 question a dataset before you model it, and the others each draw on a whole
 part. Every project says which chapter to finish before you start it.
