@@ -1,0 +1,13 @@
+{
+  "id": "070-output-size-and-receptive-field",
+  "title": "Count outputs, count the view, and pool",
+  "brief": "Write the output-size formula for one axis, the receptive field after every layer of a stack, and a max-pooling layer.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "The reach of a dilated kernel is dilation * (kernel_size - 1) + 1. Subtract it from size + 2 * padding, divide by the stride with //, and add 1.",
+    "receptive_field_per_layer: keep two numbers, r (the field) and jump (the distance in input pixels between neighbouring units). For each layer, r += (k - 1) * jump first, append r, and only then jump *= stride.",
+    "max_pool_forward: loop over output positions, slice the window x[:, :, top:top + pool_size, left:left + pool_size], and take .max(axis=(2, 3)) so each channel keeps its own maximum."
+  ]
+}

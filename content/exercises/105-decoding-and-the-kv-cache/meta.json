@@ -1,0 +1,15 @@
+{
+  "id": "105-decoding-and-the-kv-cache",
+  "title": "Count flops against bytes, then build a key-value cache",
+  "brief": "Compute the flops per byte of a weight matrix, the time one token takes to read the weights, and the batch that saturates a chip, then size a KV cache, build one, and decode through it with the same answer as a full recompute.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "A matrix times a batch of B vectors does 2 * B flops per weight and reads b bytes per weight, so the ratio is 2 * B / b. Decoding one token reads every weight once, so the time is n_params * bytes_per_elt / bandwidth.",
+    "The ridge point is peak_flops / bandwidth. You need 2 * B / b >= ridge, so B >= ridge * b / 2. Round up, because a batch is a whole number.",
+    "kv_cache_bytes is 2 * n_layer * n_kv * d_head * seq_len * bytes_per_elt. The leading 2 is one copy for keys and one for values.",
+    "KVCache.append should add one array of shape (n_kv, d_head) to a per-layer list. KVCache.get should np.stack that list on axis 0, and return empty (0, n_kv, d_head) arrays when nothing is stored.",
+    "cached_attention_step: scores = K @ q / sqrt(d_head), softmax them (subtract the max first), then return weights @ V. One query against T cached rows gives a (d_head,) vector."
+  ]
+}

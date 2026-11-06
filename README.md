@@ -1,7 +1,7 @@
 # Machine learning
 
 A hands-on course that teaches machine learning to undergraduates by having them
-build it. A hundred and thirty-two short chapters run from scoring a guess to
+build it. A hundred and seventeen short chapters run from scoring a guess to
 mixtures of experts. Each one teaches a single idea: it starts from a concrete
 question, shows a picture, works a small example by hand, and only then gives
 the formula and walks you through implementing it, in an editor beside the
@@ -32,8 +32,8 @@ computes it. Each lesson ends with a step-by-step guide to its exercise.
 
 | Path | Contents |
 |---|---|
-| `content/lessons/` | A hundred and thirty-two chapters and eight projects, in Markdown with YAML front matter and inline SVG figures. |
-| `content/renames.json` | Each lesson of the first edition and the chapters that replaced it, so progress carries over. |
+| `content/lessons/` | A hundred and seventeen chapters and eight projects, in Markdown with YAML front matter and inline SVG figures. |
+| `content/renames.json` | Each slug from earlier editions and the chapters that replaced it, so progress carries over. |
 | `content/exercises/` | One directory per exercise: a starter file, checks, and a worked solution. |
 | `backend/` | FastAPI: auth, content, progress, drafts, and the run stream. |
 | `backend/app/runner/` | The harness, the assertion library the checks use, and the two execution backends. |
@@ -112,11 +112,11 @@ checks are written against.
 Validate what you write:
 
 ```bash
-.venv/bin/python scripts/check_content.py 017-sigmoid-and-probability
+.venv/bin/python scripts/check_content.py 015-sigmoid-and-probability
 ```
 
 ```bash
-node scripts/check_math.mjs content/lessons/017-sigmoid-and-probability.md
+node scripts/check_math.mjs content/lessons/015-sigmoid-and-probability.md
 ```
 
 That checks the front matter, the required sections, the word count, and the
@@ -166,7 +166,7 @@ existing progress identities, for example `ifkash:enderboi,ananya:michu`.
 
 ## The GPU backend
 
-One chapter, `107-the-training-loop`, is marked `gpu: true`. Their checks run on the CPU like every other exercise, and
+One chapter, `097-the-training-loop`, is marked `gpu: true`. Their checks run on the CPU like every other exercise, and
 the GPU is there for the larger run in the starter file's `__main__` block.
 
 `backend/app/runner/runpod.py` sends a submission to a RunPod serverless

@@ -1,0 +1,16 @@
+{
+  "id": "007-stable-least-squares",
+  "title": "Lose digits, then keep them with QR and the SVD",
+  "brief": "Measure a condition number, solve the normal equations with Cholesky, then solve with QR and the SVD, return the shortest weights for repeated columns, and count the rank.",
+  "needs_gpu": false,
+  "timeout": 40,
+  "packages": ["numpy", "scipy"],
+  "hints": [
+    "condition_number: s = np.linalg.svd(X, compute_uv=False) is sorted largest first, so return s[0] / s[-1], or float('inf') when s[-1] is 0.",
+    "digits_kept: k = np.log10(kappa), then max(0.0, 16 - k), or max(0.0, 16 - 2 * k) when squared is True.",
+    "fit_normal_equations: L = np.linalg.cholesky(X.T @ X). Solve L z = X.T @ y with lower=True, then L.T w = z with lower=False.",
+    "fit_qr: Q, R = np.linalg.qr(X, mode='reduced'), then solve_triangular(R, Q.T @ y, lower=False).",
+    "fit_svd: U, s, vt = np.linalg.svd(X, full_matrices=False). keep = s > rcond * s[0]. Use U[:, keep], s[keep], and vt[keep], so the tiny singular values are dropped instead of divided by.",
+    "rank: count the entries of the singular values above rcond * s[0], and return 0 when s[0] == 0."
+  ]
+}

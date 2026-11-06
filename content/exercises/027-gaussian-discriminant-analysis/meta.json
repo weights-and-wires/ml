@@ -1,0 +1,14 @@
+{
+  "id": "027-gaussian-discriminant-analysis",
+  "title": "Fit a Gaussian cloud to each class",
+  "brief": "Estimate class means, one shared covariance and priors by averaging, score points with a Cholesky-based Gaussian log density, and combine them with Bayes' rule.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy", "scipy"],
+  "hints": [
+    "Add diff.T @ diff for every class into one (d, d) array, where diff = X[y == k] - means[k], then divide once by n, the total number of rows.",
+    "Factor once with L = np.linalg.cholesky(cov). Then z = np.linalg.solve(L, (x - mean).T) gives a (d, n) array, and np.sum(z**2, axis=0) is the squared Mahalanobis distance for every row.",
+    "log det cov = 2 * np.sum(np.log(np.diag(L))). The full log density is -0.5 * d * log(2 pi) - 0.5 * log det - 0.5 * distance.",
+    "Stack the per-class log densities into an (n, K) array, then call log_posterior_from_log_density, which already adds the priors and normalises."
+  ]
+}

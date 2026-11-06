@@ -1,0 +1,15 @@
+{
+  "id": "086-attention-gradients",
+  "title": "Send the blame back through attention",
+  "brief": "Write the backward rule for the softmax, for the blend, and for the whole additive attention, and check every gradient against finite differences.",
+  "needs_gpu": false,
+  "timeout": 40,
+  "packages": ["numpy"],
+  "hints": [
+    "softmax_backward: dscores = weights * (dweights - np.sum(weights * dweights)). The subtracted number is the weighted average of dweights, and the answer always sums to zero.",
+    "context_backward: context = weights @ values, so dweights = values @ dcontext and dvalues = np.outer(weights, dcontext).",
+    "In attention_backward, rerun the forward pass first. Keep t = np.tanh(u), because the tanh step needs 1 - t**2.",
+    "The query is added to every row of u, so sum du over axis 0 before using it for dW1 and dquery: dW1 = np.outer(du.sum(axis=0), query).",
+    "dW2 = du.T @ keys and dkeys = du @ W2. dv = t.T @ dscores. Each gradient must have the shape of the thing it belongs to."
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "071-convolution-as-matrix-multiply",
+  "title": "Build conv2d from im2col and one matrix multiply",
+  "brief": "Lay every window out as a column, multiply by the flattened kernels, and check the result against a slow loop. Then write the 1 by 1 convolution as a plain matrix multiply.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "im2col needs a loop over the k * k kernel offsets only, not over output positions. For offset (dh, dw), x_padded[:, :, dh:dh + stride * h_out:stride, dw:dw + stride * w_out:stride] holds that offset's value for every output position at once.",
+    "Store the slices in an array of shape (N, C, k, k, H_out, W_out), then reshape to (N, C * k * k, H_out * W_out). The reshape flattens in (channel, kernel row, kernel column) order, which matches w.reshape(C_out, -1).",
+    "conv2d_forward: np.einsum('oc,ncl->nol', w.reshape(C_out, -1), col) + b[None, :, None], then reshape to (N, C_out, H_out, W_out).",
+    "conv1x1_as_matmul: flatten the spatial axes with x.reshape(N, C_in, H * W), multiply by w.reshape(C_out, C_in) on the left, add b[:, None], and reshape back."
+  ]
+}

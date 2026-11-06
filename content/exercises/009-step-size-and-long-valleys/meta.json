@@ -1,0 +1,18 @@
+{
+  "id": "009-step-size-and-long-valleys",
+  "title": "Find the safe step and measure the slow valley",
+  "brief": "Read the curvatures of a bowl, predict the shrink factor on each axis, pick the best step along a line, then measure the condition number, the shrink ratio of a walk, and the steps to reach a tolerance.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "np.linalg.eigvalsh(A) returns the eigenvalues of a symmetric matrix in ascending order, so the first is mu and the last is L.",
+    "axis_factors is np.abs(1 - step * eigenvalues). At step 0.3 on the bowl with curvatures 1 and 10 it is [0.7, 2.0].",
+    "exact_line_search_step is (g @ g) / (g @ A @ g). On the running bowl at (0, 0) it is 101 / 1001.",
+    "condition_number is L / mu, and eigenvalue_range(A) already returns (mu, L).",
+    "contraction_ratios: errors = np.linalg.norm(path - w_star, axis=1), then errors[1:] / errors[:-1].",
+    "steps_to_tolerance: np.nonzero(errors < tol * errors[0])[0]. Return the first index, or -1 when the array is empty."
+  ]
+}

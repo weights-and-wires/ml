@@ -1,0 +1,14 @@
+{
+  "id": "084-attention-as-soft-lookup",
+  "title": "Build a soft lookup: softmax, attend, and dot-product attention",
+  "brief": "Write a stable softmax, the blend that turns scores into a context vector, and a dot-product scorer with an optional matrix in the middle.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "Subtract z.max() before np.exp. The weights do not change, because every score moves by the same amount, but e**800 no longer overflows.",
+    "attend(scores, values) is two lines: weights = softmax(scores), then context = weights @ values. The product of a (T,) vector and a (T, d_v) matrix is the blend.",
+    "With W given, score i is query @ W @ keys[i]. Compute it for every key at once as keys @ (W.T @ query), or as (query @ W) @ keys.T.",
+    "Test for a missing matrix with `W is None`. Writing `if W:` fails on a numpy array."
+  ]
+}

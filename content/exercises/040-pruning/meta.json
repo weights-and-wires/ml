@@ -1,0 +1,15 @@
+{
+  "id": "040-pruning",
+  "title": "Price each leaf and prune",
+  "brief": "Write the cost of a tree with a fee per leaf, the break-even fee of a split, and the bottom-up prune that keeps a split only when it pays.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "tree_cost: add node.n_samples * node.impurity over the leaves, then add alpha times the number of leaves. At alpha 0 on a mean-leaf tree this is the sum of squared misses.",
+    "break_even_alpha: collapsing costs n * I + alpha. Keeping costs R + alpha * L, where R = tree_cost(node, 0.0) and L = count_leaves(node). Setting them equal gives (n * I - R) / (L - 1). For the four-house split that is (53 - 4) / (2 - 1) = 49.",
+    "cost_complexity_prune: prune both children first and get back (node, cost). Collapse when n * I + alpha <= left_cost + right_cost. Build new Node objects rather than editing the input."
+  ]
+}

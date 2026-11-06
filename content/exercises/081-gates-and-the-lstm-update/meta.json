@@ -1,0 +1,13 @@
+{
+  "id": "081-gates-and-the-lstm-update",
+  "title": "Build a gate and one LSTM step",
+  "brief": "Write the gate that decides how much to let through, the repeated belt update that holds a number, and the full forward step of an LSTM cell.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "A gate is sigmoid(x @ W + h @ U + b). Use the provided _sigmoid, and do not transpose W: it is already shaped (d_x, d_h).",
+    "carry_cell repeats c = f * c + i * g, `steps` times, with the same f, i, and g every time. A for loop is the clearest way to write it.",
+    "In lstm_cell_forward, f, i, and o are gates, and the candidate g is np.tanh(x @ Wg + h @ Ug + bg). Then c_new = f * c + i * g and h_new = o * np.tanh(c_new). Save tanh(c_new) in the cache, because the backward pass reuses it."
+  ]
+}

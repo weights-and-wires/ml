@@ -1,0 +1,13 @@
+{
+  "id": "062-xavier-and-he",
+  "title": "Choose the weight scale for tanh and for ReLU",
+  "brief": "Write the Xavier and He scales, measure what a ReLU does to a signal's size, and check on a fifty-layer network that He keeps the signal alive and Xavier does not.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "xavier_scale and he_scale return a standard deviation, so take the square root of 2 / (n_in + n_out) and of 2 / n_in.",
+    "relu_mean_square_ratio is np.mean(np.maximum(x, 0.0) ** 2) divided by np.mean(x ** 2). Use the mean square, not np.var, because np.var subtracts the mean.",
+    "On symmetric data the ratio is close to 0.5. If you get about 0.25, you squared the ReLU output twice."
+  ]
+}

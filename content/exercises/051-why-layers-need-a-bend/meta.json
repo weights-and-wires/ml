@@ -1,0 +1,13 @@
+{
+  "id": "051-why-layers-need-a-bend",
+  "title": "Bend the points, then cut with one line",
+  "brief": "Write ReLU, its slope, and the merge of two affine layers, then watch two ReLU units turn XOR into a problem for one straight line.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "relu is np.maximum(x, 0.0). np.max would reduce the array to one number instead of comparing entry by entry.",
+    "relu_grad returns floats: (x > 0).astype(float). A boolean array fails the finite-difference comparison.",
+    "Apply the first layer, then the second, and write the result as W x + b: the first layer's matrix is on the right of the product, W2 @ W1, and b1 goes through the second layer as W2 @ b1."
+  ]
+}

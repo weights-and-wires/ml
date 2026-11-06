@@ -1,0 +1,13 @@
+{
+  "id": "025-winners-curse-and-flexibility",
+  "title": "Measure the winner's curse, and score a choice honestly",
+  "brief": "Simulate why the best of many noisy scores is too good, estimate how well a set of models fits random signs, and build nested cross-validation to score a penalty choice on data it never saw.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "best_of_m_gap: estimates = true_error + noise_sd * rng.standard_normal((trials, m)). The winner of each trial is estimates.min(axis=1); return the mean of true_error minus that minimum.",
+    "empirical_rademacher: signs = rng.choice(np.array([-1.0, 1.0]), size=(num_draws, n)). Then losses_matrix @ signs.T has shape (num_models, num_draws). Take .max(axis=0), then the mean, then divide by n.",
+    "nested_cv_score: for each outer test fold, pick the penalty with the lowest mean cross_val_score on the outer training rows only, refit with that penalty on all outer training rows, and score the outer test fold. Return the mean of the outer fold errors."
+  ]
+}

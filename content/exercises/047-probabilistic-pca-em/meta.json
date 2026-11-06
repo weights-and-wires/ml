@@ -1,0 +1,13 @@
+{
+  "id": "047-probabilistic-pca-em",
+  "title": "Fit probabilistic PCA by guess and refit",
+  "brief": "Write the E-step, the M-step, and the log-likelihood of probabilistic PCA, then watch the supplied EM loop raise the likelihood and land on the PCA plane.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "ppca_e_step: M_inv = np.linalg.inv(W.T @ W + sigma2 * np.eye(k)); Ez = Xc @ W @ M_inv; Ezz_sum = n * sigma2 * M_inv + Ez.T @ Ez.",
+    "ppca_m_step: W_new = (Xc.T @ Ez) @ np.linalg.inv(Ezz_sum). Then sigma2 = (sum(Xc**2) - 2 * sum(Ez * (Xc @ W_new)) + trace(Ezz_sum @ W_new.T @ W_new)) / (n * d), using W_new in every term.",
+    "ppca_loglik: C = W @ W.T + sigma2 * I, S = Xc.T @ Xc / n, then -0.5 * n * (d * log(2 pi) + slogdet(C)[1] + trace(solve(C, S)))."
+  ]
+}

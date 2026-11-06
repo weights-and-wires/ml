@@ -1,0 +1,16 @@
+{
+  "id": "015-sigmoid-and-probability",
+  "title": "Turn scores into probabilities",
+  "brief": "Build a sigmoid that stays finite at a score of 800, its inverse the logit, and a function that scores a whole data matrix.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "Build a mask pos = z >= 0. On the positive part use 1 / (1 + np.exp(-z)). On the rest use np.exp(z) / (1 + np.exp(z)). Neither exponent is ever positive.",
+    "Allocate the output with np.empty_like(z) after converting z to a float array, and fill it through the mask. np.where evaluates both branches on every entry, so it overflows.",
+    "logit(p) is np.log(p / (1 - p)). It must undo sigmoid: logit(sigmoid(z)) returns z.",
+    "predict_proba is one line once sigmoid works: apply sigmoid to X @ w. The result has shape (n,)."
+  ]
+}

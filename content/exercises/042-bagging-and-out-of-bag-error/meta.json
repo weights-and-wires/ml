@@ -1,0 +1,18 @@
+{
+  "id": "042-bagging-and-out-of-bag-error",
+  "title": "Bag stumps, then score them on the rows they missed",
+  "brief": "Draw bootstrap samples, fit and average one stump per draw, then compute the out-of-bag error from the rows each stump never saw.",
+  "needs_gpu": false,
+  "timeout": 40,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "bootstrap_indices is one call: rng.integers(0, n, size=n). Every entry is an independent draw from 0 to n - 1, so repeats are expected.",
+    "In fit_bagged_stumps, draw idx once per estimator, fit _fit_stump(X[idx], y[idx]), and append both the stump and idx. The out-of-bag functions need idx to know which rows each stump missed.",
+    "bagged_predict stacks one prediction vector per stump into an array of shape (len(stumps), n), then averages down axis 0.",
+    "oob_mask starts from in_bag = np.zeros(n, dtype=bool), sets in_bag[idx] = True, and returns ~in_bag. A repeated index writes the same slot twice, so you do not need np.unique.",
+    "In oob_predictions keep total and count arrays of shape (n,). For each stump, add its predictions into total[mask] and add 1 into count[mask], where mask = oob_mask(idx, n). Divide only where count > 0 and put np.nan elsewhere.",
+    "In out_of_bag_error, average the squared error over the rows where count > 0, and raise ValueError when there are none. On the hand example the answer is 50."
+  ]
+}

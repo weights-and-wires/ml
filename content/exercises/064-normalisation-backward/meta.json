@@ -1,0 +1,14 @@
+{
+  "id": "064-normalisation-backward",
+  "title": "Send the gradient back through batch norm and layer norm",
+  "brief": "Compute the gradients of the scale and shift, then the compact formula for the input gradient, and check both layers against finite differences and two sanity properties.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "affine_param_grads sums over axis 0 for both layers: dbeta = dout.sum(axis=0) and dgamma = (dout * xhat).sum(axis=0). gamma and beta have one entry per feature and are shared by every example.",
+    "The input gradient is dx = (istd / M) * (M * dxhat - dxhat.sum(axis, keepdims=True) - xhat * (dxhat * xhat).sum(axis, keepdims=True)), with dxhat = dout * gamma and M = dout.shape[axis].",
+    "The cache is (xhat, istd, gamma, axis). Batch norm and layer norm differ only in the axis stored in it, so one helper can serve both backward functions.",
+    "Check your dx against a finite difference of the scalar np.sum(dout * forward(x)[0]). If the check fails by a small amount everywhere, look at the sign of the variance term."
+  ]
+}

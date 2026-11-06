@@ -4,7 +4,7 @@
 Run it over everything, or over one lesson while you write it:
 
     python3 scripts/check_content.py
-    python3 scripts/check_content.py 05-logistic-regression
+    python3 scripts/check_content.py 015-sigmoid-and-probability
 
 For each exercise it runs the checks twice: once against `solution.py`, which
 must pass every check, and once against `starter.py`, which must fail at least

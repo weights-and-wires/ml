@@ -1,0 +1,15 @@
+{
+  "id": "094-the-residual-block",
+  "title": "Assemble a pre-norm transformer block",
+  "brief": "Write layer norm, wire attention with rotary embeddings and SwiGLU into one residual block, and count its parameters.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "layer_norm: subtract the mean over the last axis, divide by sqrt(variance + eps), then multiply by gain and add bias. Use keepdims=True so the shapes broadcast.",
+    "Reshape q, k, v with .reshape(T, heads, d_head).transpose(1, 0, 2). The rotary tables have shape (T, d_head) and broadcast over the heads axis.",
+    "scores = q @ k.transpose(0, 2, 1) / np.sqrt(d_head) + mask. Softmax over the last axis after subtracting the row maximum.",
+    "Add the attention output and the SwiGLU output to the raw x, not to the normed copy.",
+    "block_parameter_count is 4 * d**2 + 3 * d * d_h + 4 * d with d_h = round(2 * d_ff / 3). The number of heads does not change it."
+  ]
+}

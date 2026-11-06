@@ -1,0 +1,15 @@
+{
+  "id": "037-leaves-and-impurity",
+  "title": "Score how bad one answer is for a box",
+  "brief": "Write Gini impurity, entropy, and variance impurity, and confirm that the mean is the best single answer for a box.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "gini is 1 - np.sum(p**2), where p = np.bincount(y.astype(int)) / y.size. For labels [0, 0, 1, 1, 1, 2] the fractions are 2/6, 3/6, 1/6 and the answer is 22/36.",
+    "entropy uses the same fractions, but drop the classes with a zero count before the log: counts[counts > 0]. Then it is -np.sum(p * np.log(p)). Labels [0, 1, 2, 3] give log 4.",
+    "variance_impurity is np.mean((y - y.mean()) ** 2). Return 0.0 for an empty array before you call mean, or numpy warns and returns nan."
+  ]
+}

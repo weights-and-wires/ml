@@ -32,8 +32,8 @@ export function lessonNumbers(lessons: Pick<LessonMeta, "slug" | "kind">[]): Map
 }
 
 /**
- * When a project is ready to start: "After chapter 23" for
- * `023p-project-price-houses`, whose prefix names the last chapter it needs.
+ * When a project is ready to start: "After chapter 21" for
+ * `021p-project-price-houses`, whose prefix names the last chapter it needs.
  */
 export function projectAfter(slug: string): string {
   const match = /^(\d+)p-/.exec(slug);

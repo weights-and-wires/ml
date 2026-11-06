@@ -202,13 +202,13 @@ $$
 
 The determinant is $3\cdot14-6\cdot6=6$. Then $w_1=(14\cdot5-6\cdot11)/6=4/6=2/3$ and $w_2=(3\cdot11-6\cdot5)/6=3/6=1/2$. Check the first equation: $3\cdot\tfrac23+6\cdot\tfrac12=2+3=5$. Check the second: $6\cdot\tfrac23+14\cdot\tfrac12=4+7=11$. The best line is price $=2/3+\tfrac12\times$ size, and a house of size 4 gets a predicted price of $2/3+2\approx2.67$ lakhs.
 
-This system has exactly one answer when no column is a copy of another. When one is, many weights fit equally well, and the chapter Stable fits with QR and the SVD deals with that. Ask numpy to solve the system, not to invert the matrix:
+This system has exactly one answer when no column is a copy of another. When one is, many weights fit equally well, and the chapter Lost digits, and how QR and the SVD keep them deals with that. Ask numpy to solve the system, not to invert the matrix:
 
 ```python
 w = np.linalg.solve(X.T @ X, X.T @ y)  # shape (d,)
 ```
 
-Why not compute the inverse $(X^\top X)^{-1}$ and multiply? In exact arithmetic you get the same weights. On a computer, a solve does fewer operations and avoids one extra round of rounding, so it is faster and a little more accurate. The chapter "Why the textbook formula loses digits" shows when that matters.
+Why not compute the inverse $(X^\top X)^{-1}$ and multiply? In exact arithmetic you get the same weights. On a computer, a solve does fewer operations and avoids one extra round of rounding, so it is faster and a little more accurate. The chapter "Lost digits, and how QR and the SVD keep them" shows when that matters.
 
 ## Why squares make the bottom easy to find
 
@@ -278,7 +278,7 @@ The starter gives you `add_ones_column`, which builds $X$ from a one-dimensional
    # np.linalg.solve(X.T @ X, X.T @ y)
    ```
 
-   Calling `np.linalg.inv` also passes these checks on small tables, because the two routes agree on well-behaved data. Use `solve` anyway, to build the habit before the chapter "Why the textbook formula loses digits" shows the cost.
+   Calling `np.linalg.inv` also passes these checks on small tables, because the two routes agree on well-behaved data. Use `solve` anyway, to build the habit before the chapter "Lost digits, and how QR and the SVD keep them" shows the cost.
 
 ## Where this breaks
 

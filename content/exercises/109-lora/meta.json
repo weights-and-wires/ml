@@ -1,0 +1,15 @@
+{
+  "id": "109-lora",
+  "title": "Build a LoRA layer and merge it into the weight",
+  "brief": "Count the trained parameters, initialise the two low-rank factors, write the forward pass, then fold the update into the frozen weight and check that merged and split outputs agree.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "lora_parameter_count is r * (d_in + d_out), and extra_multiplies is the same count: x @ A.T costs r * d_in multiplies and (that) @ B.T costs d_out * r. Return a plain int.",
+    "lora_init: rng = np.random.default_rng(seed), A = rng.normal(size=(r, d_in)) / np.sqrt(d_in), B = np.zeros((d_out, r)). Draw A before anything else so a given seed always gives the same A.",
+    "lora_forward is x @ W.T + (alpha / r) * (x @ A.T) @ B.T. Do not form B @ A here; the squeeze through r numbers is the point. W is (d_out, d_in), so it is W.T, not W.",
+    "merge_lora is W + (alpha / r) * (B @ A). B is (d_out, r) and A is (r, d_in), so B @ A has the shape of W. A @ B is the wrong product.",
+    "merged_matches_split compares x @ merge_lora(...).T with lora_forward(...) and returns np.abs(difference).max() as a float."
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "074-gradient-through-deep-stacks",
+  "title": "Measure the gradient that survives fifty layers",
+  "brief": "Build orthogonal layers, then backpropagate a unit gradient through fifty of them with and without a shortcut, and compare the length that arrives with the toy scalar model.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "A matrix Q is orthogonal when Q.T @ Q is the identity. Take q, r = np.linalg.qr(rng.normal(size=(d, d))) and multiply the columns of q by np.sign(np.diag(r)).",
+    "The toy model has one factor per layer: J for a plain layer, 1 + J for a residual layer, all raised to the number of layers.",
+    "Build the layers first with a single rng, in order, then walk them in reverse. Use g = g @ W for a plain layer and g = g + g @ W for a residual layer.",
+    "Each plain layer shortens g by exactly 0.1, because the orthogonal part keeps the length. If your plain length is not 0.1 ** depth, the matrices are not orthogonal."
+  ]
+}

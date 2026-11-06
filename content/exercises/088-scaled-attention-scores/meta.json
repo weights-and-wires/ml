@@ -1,0 +1,16 @@
+{
+  "id": "088-scaled-attention-scores",
+  "title": "Score, weigh, blend, and scale",
+  "brief": "Write the pieces of a soft lookup, measure how the spread of dot products grows with the key width, and build scaled dot-product attention that undoes it.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "dot_scores is one line: q @ k.T. Row i, column j is the dot product of query i with key j, so the result has shape (T_q, T_k).",
+    "softmax: subtract np.max(x, axis=axis, keepdims=True) before np.exp, then divide by the sum of the exponentials along the same axis with keepdims=True.",
+    "blend_values is weights @ v. With weights [1, 0] you get exactly the first row of v.",
+    "attention_score_scale(d_k) is 1.0 / np.sqrt(d_k). For d_k = 64 it returns 0.125.",
+    "score_std: make rng = np.random.default_rng(seed), draw q and k with rng.normal(size=(n, d_k)), take np.sum(q * k, axis=1), and return float(np.std(...)).",
+    "scaled_dot_product_attention: scores = dot_scores(q, k) * attention_score_scale(q.shape[-1]), add mask if given, then softmax along the last axis, then blend_values. Return both the output and the weights."
+  ]
+}

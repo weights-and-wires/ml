@@ -1,0 +1,14 @@
+{
+  "id": "075-bottleneck-cost",
+  "title": "Count the cost of a bottleneck block",
+  "brief": "Count the multiply-adds of a convolution, build the cost of a three-step bottleneck from it, and measure how much cheaper it is than two full-width 3x3 convolutions.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "A convolution has h * w * c_out output numbers, and each one needs c_in * k * k products. The cost is their product.",
+    "A 1x1 convolution has k = 1, so it has no factor of 9. The middle step of a bottleneck has k = 3.",
+    "bottleneck_flops is conv_flops(c_in, c_mid, 1, h, w) + conv_flops(c_mid, c_mid, 3, h, w) + conv_flops(c_mid, c_out, 1, h, w).",
+    "bottleneck_savings divides the cost of two 3x3 convolutions at c channels by the bottleneck's cost, so the answer is above 1, near 16.9 when c is divisible by 4."
+  ]
+}

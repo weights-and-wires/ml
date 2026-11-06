@@ -1,0 +1,13 @@
+{
+  "id": "099-bytes-and-the-vocabulary-trade",
+  "title": "Turn text into bytes and count unknown words",
+  "brief": "Write the byte encoder and decoder that make every text representable, and measure how many words a fixed word list misses.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "text_to_bytes is list(text.encode('utf-8')). An accented letter gives two numbers and an emoji gives four, so the list can be longer than the string.",
+    "bytes_to_text is bytes(ids).decode('utf-8'). Decode the whole list at once, never one id at a time.",
+    "unknown_rate splits the text with text.split(), counts the words that are not in word_vocab, and divides by the number of words. Return 0.0 when there are no words."
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "089-heads-and-causal-mask",
+  "title": "Many heads under a causal mask",
+  "brief": "Build the causal mask, split a projection into column-slice heads, and join the heads into multi-head attention.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "causal_mask: start from np.zeros((T, T)) and set mask[np.triu_indices(T, k=1)] = -np.inf. Use k=1 so the diagonal stays 0.",
+    "split_heads: d_k = d // heads, and head i is x[:, i * d_k:(i + 1) * d_k]. Columns, not rows. Raise ValueError when heads does not divide d.",
+    "multi_head_attention: project once with x @ Wq, x @ Wk, x @ Wv, split each into heads, run scaled_dot_product_attention on the i-th slices of all three with the same mask, np.concatenate the outputs along axis=-1, then multiply by Wo."
+  ]
+}

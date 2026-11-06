@@ -192,7 +192,7 @@ is_best = check <= tol * np.abs(X.T @ y).max()
 
 Expand $X^\top(y-Xw)=0$ into $X^\top y - X^\top X w=0$. Move the second term across and you get $X^\top X w = X^\top y$, which is the normal equations from the previous chapter. The two are one fact in two outfits. The slope outfit says "the ground is flat". The geometry outfit says "the residual stands at a right angle to the sheet". Having both lets you check an answer you did not compute yourself.
 
-One condition keeps this honest. If one column repeats another, the sheet has fewer dimensions than the table has columns. Many weight vectors then reach the same foot point, and all of them pass the check. The check says "this is a best fit", not "this is the only one". The chapter Stable fits with QR and the SVD takes that case on.
+One condition keeps this honest. If one column repeats another, the sheet has fewer dimensions than the table has columns. Many weight vectors then reach the same foot point, and all of them pass the check. The check says "this is a best fit", not "this is the only one". The chapter Lost digits, and how QR and the SVD keep them takes that case on.
 
 > [!RECAP]
 > - The residual is $r=y-Xw$, the true values minus the fitted values.

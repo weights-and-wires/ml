@@ -1,0 +1,14 @@
+{
+  "id": "030-widest-road-hinge-loss",
+  "title": "Train a linear SVM with the hinge loss",
+  "brief": "Compute the margins, the hinge objective and its subgradient, then follow the subgradient to the widest road.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "z = y * (X @ w + b) has one entry per point. Multiplying by the label makes 'correct side' positive for both classes.",
+    "Only points with z < 1 push on the road. Build a boolean mask `active = z < 1` and use it for both gradients. A point at exactly z = 1 is inactive.",
+    "The hinge is a sum over points. The 0.5 * w @ w term is added once, so the gradient in w is w minus C times the sum of y_i x_i over the active points.",
+    "fit_subgradient calls hinge_loss_and_subgradient in a loop. Use the step size lr / (1 + lr * t) at step t, subtract the two gradients, and return (w, b)."
+  ]
+}

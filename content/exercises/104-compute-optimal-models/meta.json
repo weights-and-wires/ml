@@ -1,0 +1,15 @@
+{
+  "id": "104-compute-optimal-models",
+  "title": "Price a training run, then split its budget",
+  "brief": "Count the weights that multiply, turn the count and a token budget into flops and days, then find the best split of a budget between model size and data and add serving cost.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "Per block, attention holds 4 * d_model**2 weights (Q, K, V, and the output matrix) and the feed-forward holds 2 * d_model * d_ff. Multiply both by layers. The embeddings are vocab * d_model + seq_len * d_model, counted once.",
+    "training_flops should convert to float before multiplying: 6.0 * float(params) * float(tokens). With numpy int64 inputs a plain 6 * params * tokens wraps around at about 9.2e18. training_days divides by flops_per_second, then by 86400.",
+    "With a = beta / (alpha + beta) and G = (alpha * A / (beta * B)) ** (1 / (alpha + beta)), the best size is N* = G * 6**(-a) * compute**a. Then D* = compute / (6 * N*), so that 6 * N* * D* equals the budget exactly.",
+    "grid_optimal builds a log-spaced array of N values, sets D = compute / (6 * N) for each, evaluates predict_loss on the arrays, and takes the N with the smallest loss. np.argmin does the last step.",
+    "lifetime_flops adds two bills: 6 * N * D_train for training and 2 * N * served_tokens for answering. Convert to float first so numpy integers cannot wrap around."
+  ]
+}

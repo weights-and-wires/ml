@@ -1,0 +1,13 @@
+{
+  "id": "067-dropout",
+  "title": "Switch units off, then scale the rest",
+  "brief": "Draw a keep-mask, apply inverted dropout in the forward pass, and send the gradient back through the same mask.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "A unit is kept when its random draw is below 1 - p, so the mask is (rng.random(shape) < 1 - p). Convert the booleans to floats so you can multiply with them.",
+    "dropout_forward should call dropout_mask(x.shape, p, rng) and then compute x * mask / (1 - p). At training=False return x and np.ones_like(x) without touching rng.",
+    "The backward pass is the same elementwise multiply applied to dout: dout * mask / (1 - p), with the mask the forward pass returned."
+  ]
+}
