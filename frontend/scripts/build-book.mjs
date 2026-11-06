@@ -233,6 +233,9 @@ async function main() {
     executablePath: findChrome(),
     headless: true,
     args: ["--no-sandbox", "--font-render-hinting=none"],
+    // Printing the whole book takes longer than Puppeteer's default
+    // three-minute protocol timeout on a CI runner.
+    protocolTimeout: 20 * 60_000,
   });
 
   const started = Date.now();
