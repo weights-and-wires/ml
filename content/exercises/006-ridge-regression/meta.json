@@ -1,0 +1,16 @@
+{
+  "id": "006-ridge-regression",
+  "title": "Score, solve, and read the whole ridge path",
+  "brief": "Write the ridge score and its gradient, solve for the bottom with one linear system, then compute the ridge weights for every lambda from one SVD and count the degrees of freedom each lambda leaves.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "ridge_objective is 0.5 * np.sum((X @ w - y) ** 2) + 0.5 * lam * np.dot(w, w). On X = I, y = (3, 1), w = (1.5, 0.5), lam = 1 it returns 2.5.",
+    "ridge_gradient is X.T @ (X @ w - y) + lam * w. The half in front of the fee is what makes the fee's gradient lam * w with no stray factor of two.",
+    "ridge_closed_form solves (X^T X + lam I) w = X^T y. Use np.linalg.solve(X.T @ X + lam * np.eye(d), X.T @ y), and do not call np.linalg.inv.",
+    "shrink_factors: build the denominator s[None, :] ** 2 + lambdas[:, None], shape (m, r). Where it is exactly 0 (a zero singular value at lambda 0) return 0 instead of dividing, for example with np.divide(num, den, out=np.zeros_like(den), where=den > 0).",
+    "ridge_svd_path: compute U.T @ y once, multiply it by the (m, r) shrink factors, then multiply by Vt on the right. The result has shape (m, d).",
+    "effective_degrees_of_freedom: each direction contributes s ** 2 / (s ** 2 + lam). Sum over the direction axis (the last one) so an array of lambdas gives one number per lambda, and skip 0 / 0 the same way as in shrink_factors."
+  ]
+}

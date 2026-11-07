@@ -1,0 +1,17 @@
+{
+  "id": "015-support-vector-machines",
+  "title": "Train a support vector machine two ways",
+  "brief": "Follow the hinge subgradient to the widest road, then describe the same road by pushes, test them with the KKT checklist, and find them two at a time.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy", "scipy"],
+  "hints": [
+    "z = y * (X @ w + b) has one entry per house. Only houses with z < 1 push on the road, so build a boolean mask `active = z < 1`; a house at exactly z = 1 is inactive. The hinge is a sum, not a mean.",
+    "fit_subgradient calls hinge_loss_and_subgradient in a loop, steps by lr / (1 + lr * t), and subtracts both slopes. Compute both slopes before you update either parameter.",
+    "dual_scores is (alpha * y) @ K + b, and dual_objective is alpha.sum() - 0.5 * v @ K @ v with v = alpha * y. Dropping the labels is the usual mistake.",
+    "Compare alpha with tol (alpha <= tol, alpha >= C - tol), never with ==. In kkt_violation, group 0 needs max(0, -g), group 1 needs abs(g), and group 2 needs max(0, g), with g = y * f - 1.",
+    "clip_bounds: with different labels alpha_i - alpha_j stays constant, and with the same labels alpha_i + alpha_j stays constant. Intersect that line with the square [0, C] x [0, C] and read off the ends of alpha_j.",
+    "In smo_step, read both scores before you change either alpha. The top of the parabola is alpha_j + y_j * (E_i - E_j) / eta with eta = K_ii + K_jj - 2 K_ij. Clip it to [L, H], then recover alpha_i. Return the inputs unchanged when i == j, eta <= 1e-12, or L >= H.",
+    "In fit_smo, the test for house i is y_i * E_i: update i only when it is below -tol with alpha_i < C, or above tol with alpha_i > 0. Stop after a pass that changed nothing."
+  ]
+}

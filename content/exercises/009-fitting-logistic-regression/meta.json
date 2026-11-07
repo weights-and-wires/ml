@@ -1,0 +1,18 @@
+{
+  "id": "009-fitting-logistic-regression",
+  "title": "Fit a logistic regression with gradient descent and Newton's method",
+  "brief": "Build the gradient X^T(p - y), the Hessian X^T D X + lambda I, a descent loop, a Newton loop, and an accuracy function, then compare how many passes each loop needs.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "The gradient is X.T @ (sigmoid(X @ w) - y) + ridge * w. No loop over examples is needed.",
+    "Let s = p * (1 - p) with p = sigmoid(X @ w). Then (X * s[:, None]).T @ X + ridge * np.eye(d) scales the rows of X without building a diagonal matrix.",
+    "In fit_gradient_descent, append the loss first, then compute the gradient, then break if np.linalg.norm(g) < tol, then update w = w - lr * g. That order makes history[0] the loss at zero weights.",
+    "newton_step returns delta = np.linalg.solve(hessian(...), gradient(...)). The caller subtracts it: w = w - delta. fit_newton follows the descent loop with that step.",
+    "Keep the small default ridge of 1e-8 in fit_newton. It keeps np.linalg.solve from failing when two columns are copies of each other.",
+    "train_accuracy compares the labels (predict_proba(w, X) >= 0.5) with y, and takes the mean."
+  ]
+}

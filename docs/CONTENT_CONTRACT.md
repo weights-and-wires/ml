@@ -22,9 +22,10 @@ able to say *why* each step happens before they see *how* to compute it.
 
 ## Build intuition first
 
-- One chapter, one idea. A chapter teaches a single idea well enough that the
-  reader could explain it to a friend without notes. When a draft needs a
-  second big idea, that idea is the next chapter.
+- One chapter, one topic. A chapter teaches two or three closely related ideas
+  in one arc, each well enough that the reader could explain it to a friend
+  without notes. When a draft needs an idea that the topic doesn't need, that
+  idea belongs in another chapter.
 - Start from a question the reader already cares about, with a concrete
   situation: a handful of houses and prices, a spam folder, a blurry photo.
   Say what goes wrong without the idea before you introduce it.
@@ -133,7 +134,7 @@ The file starts with YAML front matter:
 ```yaml
 ---
 title: From a score to a probability
-slug: 015-sigmoid-and-probability
+slug: 008-sigmoid-and-log-loss
 part: "Part 1 — Foundations"
 summary: One sentence, under 140 characters, that says what the lesson delivers.
 minutes: 35
@@ -143,8 +144,8 @@ objectives:
   - Turn a score into a probability with the sigmoid, and compute it without overflow.
   - Read a probability back as odds and log-odds.
 prereqs:
-  - 010-momentum
-exercise: 015-sigmoid-and-probability
+  - 005-gradient-descent-and-momentum
+exercise: 008-sigmoid-and-log-loss
 ---
 ```
 
@@ -211,10 +212,11 @@ Every lesson body includes, in this order:
 7. `## The exercise` — one or two paragraphs that say what the reader builds
    and what the checks verify. Name the functions by their exact identifiers.
 
-Aim for 1000 to 1800 words of body, plus math and figures. A chapter is
-a sitting of about 30 to 45 minutes, reading and building together. When a
-draft runs past 2000 words, it holds two ideas: split it. `scripts/check_content.py`
-rejects a chapter under 800 or over 2600 words, and one with no figure.
+Aim for 2400 to 3400 words of body, plus math and figures. A chapter is
+a sitting of about 50 to 80 minutes, reading and building together. When a
+draft runs past 3400 words, cut repetition before you cut an idea.
+`scripts/check_content.py` rejects a chapter under 800 or over 3800 words, and
+one with no figure.
 
 ## Exercise directory
 
@@ -225,7 +227,7 @@ field. It holds exactly four files.
 
 ```json
 {
-  "id": "015-sigmoid-and-probability",
+  "id": "008-sigmoid-and-log-loss",
   "title": "Fit a logistic regression two ways",
   "brief": "Implement the gradient and the Newton step, and watch them disagree on iteration count.",
   "needs_gpu": false,
@@ -319,7 +321,7 @@ Rules for checks:
 - Each check receives `sub`, the reader's module, as its only argument.
 - Seed every random number generator. `np.random.default_rng(0)` for numpy,
   `torch.manual_seed(0)` for torch. A check that passes intermittently is a bug.
-- Write four to eight checks per exercise, ordered from the smallest piece to the
+- Write four to ten checks per exercise, ordered from the smallest piece to the
   whole. The first check must pass as soon as the reader gets one function right,
   so the pane shows progress early.
 - Check the mathematics, not the implementation. Verify a gradient against a
@@ -333,7 +335,7 @@ Rules for checks:
 ## Projects
 
 The course has a set of projects, listed in their own section after the
-chapters. A chapter teaches one idea; a project asks the
+chapters. A chapter teaches one topic; a project asks the
 reader to combine the ideas of a whole part to answer a realistic question, the
 way they would on the job. A project is a lesson file and an exercise directory,
 like a chapter, and everything above applies unless this section says
@@ -344,11 +346,11 @@ otherwise.
 Path: `content/lessons/NNNp-project-slug.md`, where `NNN` is the prefix of the
 last chapter the project needs, usually the last chapter of its part. The app
 lists every project on its own Projects page, linked from the header, and the
-PDF book prints them as a last part after the chapters, both in that order, and tell the reader "After chapter 21" for
-`021p-project-price-houses`. The exercise directory has the same name.
+PDF book prints them as a last part after the chapters, both in that order, and tell the reader "After chapter 10" for
+`010p-project-price-houses`. The exercise directory has the same name.
 
-One project needs only the first four chapters:
-`004p-project-explore-before-you-model`, because looking at the data comes
+One project needs only the first two chapters:
+`002p-project-explore-before-you-model`, because looking at the data comes
 before every model in the rest of the course. It teaches its own skills, loading, cleaning, plotting, and
 summarising data, so unlike the other projects it explains each one rather
 than only linking a chapter.
@@ -358,13 +360,13 @@ The front matter adds one field, and lists the chapters the project draws on:
 ```yaml
 kind: project
 prereqs:
-  - 007-stable-least-squares
-  - 012-ridge-svd-path-and-degrees-of-freedom
-  - 017-gradient-descent-for-logistic
+  - 004-stable-least-squares
+  - 006-ridge-regression
+  - 009-fitting-logistic-regression
 ```
 
 `part` is the part whose chapters the project draws on most; the reader shows
-it beside the project's title. List at least three chapters in `prereqs`, every
+it beside the project's title. List at least two chapters in `prereqs`, every
 one a real slug from that part or an earlier one. Set
 `minutes` honestly; a project is two to four hours of work.
 
@@ -380,7 +382,7 @@ teaching them again. The body includes, in this order:
    judged. Say what a good answer looks like in numbers.
 3. `## What you will use` — one bullet per idea the project draws on, each a
    plain sentence that links the chapter, such as
-   `[ridge for every lambda](/lessons/012-ridge-svd-path-and-degrees-of-freedom)`.
+   `[ridge for every lambda](/lessons/006-ridge-regression)`.
 4. `## Meet the data` — what each column or input means, how it was made,
    and a figure that shows it. The data is synthetic and generated by a seeded
    function in the starter, so no file is downloaded. Say plainly which

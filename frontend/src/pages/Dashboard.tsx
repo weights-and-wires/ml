@@ -38,7 +38,7 @@ export default function Dashboard({ parts, progress }: Props) {
             Machine learning, one build at a time
           </h1>
           <p className="mt-3 max-w-[38rem] font-serif text-[1.08rem] leading-relaxed text-ink-3">
-            Each lesson explains one idea in plain words, works a small example
+            Each lesson explains one topic in plain words, works small examples
             by hand, and then walks you through building it. Your code runs
             against checks that say exactly what is right and what is not.
           </p>

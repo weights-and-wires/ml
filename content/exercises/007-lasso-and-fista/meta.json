@@ -1,0 +1,16 @@
+{
+  "id": "007-lasso-and-fista",
+  "title": "Soft thresholding, ISTA, and FISTA for the lasso",
+  "brief": "Build the shrink-and-kill map for one number, solve the lasso on the identity, then fit any design with ISTA and FISTA and test the finish with the KKT rules.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "soft_threshold(x, t) is np.sign(x) * np.maximum(np.abs(x) - t, 0.0). Use np.maximum, not np.max: np.maximum compares element by element, np.max collapses the array to one number.",
+    "lasso_objective is 0.5 * np.sum((X @ w - y) ** 2) + lam * np.sum(np.abs(w)). There is no half in front of the fee. On X = I, y = (3, 1), w = (2, 0), lam = 1 it returns 3.",
+    "lasso_identity needs no loop: when X is the identity the problem splits into one number per weight, so the answer is soft_threshold(y, lam).",
+    "ista: grad = X.T @ (X @ w - y); w = soft_threshold(w - step * grad, step * lam). The threshold is step * lam, not lam. history[0] is the score at the start, history[k] after k steps.",
+    "kkt_violation: let g = X.T @ (X @ w - y). Where w is not 0 the breach is |g + lam * sign(w)|. Where w is 0 the breach is max(|g| - lam, 0). Return the largest breach.",
+    "fista: start with t = 1 and z = w. Take the ISTA step from z, not from w. Then t_new = (1 + sqrt(1 + 4 t**2)) / 2 and z = w_new + ((t - 1) / t_new) * (w_new - w). Form z before you overwrite w and t."
+  ]
+}

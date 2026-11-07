@@ -1,0 +1,17 @@
+{
+  "id": "011-cross-validation-and-leave-one-out",
+  "title": "Cross-validation and the leave-one-out shortcut",
+  "brief": "Cut the data into folds and choose a ridge penalty with k-fold cross-validation, then build the hat matrix and get the leave-one-out error from a single fit.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "k_fold_indices needs three calls: rng.permutation(n), np.array_split(order, k), and np.sort on each piece.",
+    "In cross_val_score, create rng = np.random.default_rng(0) inside the function, so every penalty is scored on the same folds. np.setdiff1d(np.arange(n), test) gives the training rows.",
+    "best_lambda_by_cv calls cross_val_score once per penalty, takes .mean() of the k fold scores, and returns lambdas[np.argmin(cv_means)] together with the array of means.",
+    "hat_matrix: X @ np.linalg.inv(X.T @ X + lam * np.eye(d)) @ X.T. Keep the lam * np.eye(d) term. leverages is its diagonal.",
+    "loo_linear_smoother: r = y - H @ y, then divide by 1 - leverages, square, and average."
+  ]
+}

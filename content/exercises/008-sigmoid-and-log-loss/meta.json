@@ -1,0 +1,17 @@
+{
+  "id": "008-sigmoid-and-log-loss",
+  "title": "Turn scores into probabilities and score them with the log loss",
+  "brief": "Build a sigmoid that stays finite at a score of 800, its inverse the logit, a stable softplus, and the log loss softplus(z) - y z with a ridge fee.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "Build a mask pos = z >= 0. On the positive part use 1 / (1 + np.exp(-z)). On the rest use np.exp(z) / (1 + np.exp(z)). Neither exponent is ever positive. np.where evaluates both branches on every entry, so it overflows.",
+    "logit(p) is np.log(p / (1 - p)). It must undo sigmoid: logit(sigmoid(z)) returns z. predict_proba is sigmoid applied to X @ w, with shape (n,).",
+    "For softplus, use np.maximum(z, 0) + np.log1p(np.exp(-np.abs(z))). The value inside np.exp is never positive, so it cannot overflow.",
+    "naive_log_loss is -np.sum(y * np.log(p) + (1 - y) * np.log(1 - p)). The loss of a row in log_loss is softplus(z) - y * z with z = X @ w. Sum the rows, then add 0.5 * ridge * np.dot(w, w).",
+    "At w = 0 every row costs log 2, so the loss is n * log 2 whatever the labels are."
+  ]
+}

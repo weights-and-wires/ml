@@ -1,8 +1,8 @@
 # Machine learning
 
 A hands-on course that teaches machine learning to undergraduates by having them
-build it. A hundred and seventeen short chapters run from scoring a guess to
-mixtures of experts. Each one teaches a single idea: it starts from a concrete
+build it. Fifty-five chapters run from scoring a guess to mixtures of experts. Each one
+teaches a single topic, two or three closely related ideas in one arc: it starts from a concrete
 question, shows a picture, works a small example by hand, and only then gives
 the formula and walks you through implementing it, in an editor beside the
 text, against checks that verify the results rather than the shape of your
@@ -32,7 +32,7 @@ computes it. Each lesson ends with a step-by-step guide to its exercise.
 
 | Path | Contents |
 |---|---|
-| `content/lessons/` | A hundred and seventeen chapters and eight projects, in Markdown with YAML front matter and inline SVG figures. |
+| `content/lessons/` | Fifty-five chapters and eight projects, in Markdown with YAML front matter and inline SVG figures. |
 | `content/renames.json` | Each slug from earlier editions and the chapters that replaced it, so progress carries over. |
 | `content/exercises/` | One directory per exercise: a starter file, checks, and a worked solution. |
 | `backend/` | FastAPI: auth, content, progress, drafts, and the run stream. |
@@ -112,11 +112,11 @@ checks are written against.
 Validate what you write:
 
 ```bash
-.venv/bin/python scripts/check_content.py 015-sigmoid-and-probability
+.venv/bin/python scripts/check_content.py 008-sigmoid-and-log-loss
 ```
 
 ```bash
-node scripts/check_math.mjs content/lessons/015-sigmoid-and-probability.md
+node scripts/check_math.mjs content/lessons/008-sigmoid-and-log-loss.md
 ```
 
 That checks the front matter, the required sections, the word count, and the
@@ -128,7 +128,7 @@ everything. The same script runs in CI on every push.
 To look at a chapter's figures without starting the site, render them to PNG:
 
 ```bash
-node scripts/render_figures.mjs /tmp/figs content/lessons/005-least-squares-line.md
+node scripts/render_figures.mjs /tmp/figs content/lessons/003-least-squares-and-projection.md
 ```
 
 `check_math.mjs` compiles every math segment with the frontend's own KaTeX, so
@@ -166,7 +166,7 @@ existing progress identities, for example `ifkash:enderboi,ananya:michu`.
 
 ## The GPU backend
 
-One chapter, `097-the-training-loop`, is marked `gpu: true`. Their checks run on the CPU like every other exercise, and
+One chapter, `048-training-loop-and-cost`, is marked `gpu: true`. Its checks run on the CPU like every other exercise, and
 the GPU is there for the larger run in the starter file's `__main__` block.
 
 `backend/app/runner/runpod.py` sends a submission to a RunPod serverless

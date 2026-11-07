@@ -1,0 +1,18 @@
+{
+  "id": "005-gradient-descent-and-momentum",
+  "title": "Walk down a long valley, with and without momentum",
+  "brief": "Build the loss and gradient of a bowl and gradient descent, read the curvatures to predict the safe step and the step count, then add heavy-ball and Nesterov momentum and measure the speedup.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "The loss is 0.5 * (w @ A @ w) - b @ w and the gradient is A @ w - b. At (0, 0) the gradient is -b.",
+    "gradient_descent returns np.empty((iters + 1, d)) with row 0 equal to w0. Row k + 1 is row k minus step * grad(row k).",
+    "np.linalg.eigvalsh(A) returns the eigenvalues of a symmetric matrix in ascending order, so the first is mu and the last is L. The condition number is L / mu.",
+    "axis_factors is np.abs(1 - step * eigenvalues). At step 0.3 on the bowl with curvatures 1 and 10 it is [0.7, 2.0].",
+    "steps_to_tolerance: errors = np.linalg.norm(path - w_star, axis=1), then np.nonzero(errors < tol * errors[0])[0]. Return the first index, or -1 when the array is empty.",
+    "heavy_ball: keep w and w_prev, both copies of w0. Compute w_next = w - step * grad(w) + momentum * (w - w_prev), and only then set w_prev, w = w, w_next.",
+    "nesterov: compute the look-ahead y = w + momentum * (w - w_prev), take the gradient at y, and step from y: w_next = y - step * grad(y).",
+    "best_heavy_ball_params: step = 4 / (sqrt(L) + sqrt(mu)) ** 2 and momentum = ((sqrt(L) - sqrt(mu)) / (sqrt(L) + sqrt(mu))) ** 2. The momentum is squared."
+  ]
+}

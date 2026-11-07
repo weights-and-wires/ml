@@ -1,0 +1,19 @@
+{
+  "id": "036-residual-networks",
+  "title": "Build a residual block, measure its gradient, and count its cost",
+  "brief": "Write a block that outputs the input plus a correction and send the gradient back through its plus sign. Then measure the gradient that survives fifty layers with and without a shortcut, and count the cost of a bottleneck.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "Each example is a row, so the layers are x @ W1.T + b1 and a1 @ W2.T + b2. The block's output is x + h2, with no ReLU after the sum.",
+    "The cache is the tuple (x, W1, W2, h1, a1), in that order.",
+    "A plain block's output is F(x), which equals y - x for the y your residual block returns. Its gap from x is the largest absolute value of F(x) - x.",
+    "The shortcut hands dY straight to dx, so dx = dY + dh1 @ W1, where dh1 = (dY @ W2) * (h1 > 0). Add the branch term on top of dY, not instead of it.",
+    "Each weight gradient is the upstream gradient, transposed, times that layer's input: dW2 = dY.T @ a1 and dW1 = dh1.T @ x. Each bias gradient sums over axis 0.",
+    "A matrix Q is orthogonal when Q.T @ Q is the identity. Take q, r = np.linalg.qr(rng.normal(size=(d, d))) and multiply the columns of q by np.sign(np.diag(r)).",
+    "Build the layers first with a single rng, in order, then walk them in reverse. Use g = g @ W for a plain layer and g = g + g @ W for a residual layer. A plain length that is not 0.1 ** depth means the matrices are not orthogonal.",
+    "A convolution has h * w * c_out output numbers, and each one needs c_in * k * k products. A 1x1 convolution has k = 1, and the middle step of a bottleneck has k = 3.",
+    "bottleneck_savings divides the cost of two 3x3 convolutions at c channels by the bottleneck's cost, so the answer is above 1, near 16.9 when c is divisible by 4."
+  ]
+}

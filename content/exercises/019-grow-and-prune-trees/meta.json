@@ -1,0 +1,18 @@
+{
+  "id": "019-grow-and-prune-trees",
+  "title": "Grow a tree, then price each leaf and prune",
+  "brief": "Walk rows down a tree, grow one by splitting each box again until a stopping rule fires, then charge a fee per leaf and prune bottom-up.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "predict_tree: start at the root, and while the node is not a leaf go left when row[node.feature] <= node.threshold, otherwise right. Return the leaf's value.",
+    "tree_depth is 0 for a leaf, and 1 + max(depth of left, depth of right) for a split.",
+    "grow_tree builds a leaf first (n_samples, impurity, value). Return it when the box is pure, the depth limit is reached, best_split returns None, or the gain is at most 1e-12. Otherwise split with X[:, feature] <= threshold and recurse on both halves with depth + 1.",
+    "tree_cost: add node.n_samples * node.impurity over the leaves, then add alpha times the number of leaves. At alpha 0 on a mean-leaf tree this is the sum of squared misses.",
+    "break_even_alpha: collapsing costs n * I + alpha. Keeping costs R + alpha * L, where R = tree_cost(node, 0.0) and L = count_leaves(node). Setting them equal gives (n * I - R) / (L - 1). For the four-house split that is (53 - 4) / (2 - 1) = 49.",
+    "cost_complexity_prune: prune both children first and get back (node, cost). Collapse when n * I + alpha <= left_cost + right_cost. Build new Node objects rather than editing the input."
+  ]
+}

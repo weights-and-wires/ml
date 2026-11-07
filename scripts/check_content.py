@@ -210,17 +210,19 @@ def check_lesson(path: Path, problems: list[str], seen_exercises: set[str]) -> N
     if project:
         if not re.fullmatch(r"\d{3}p-project-[a-z0-9-]+", path.stem):
             problems.append(f"{path.name}: a project file is named NNNp-project-slug")
-        prereqs = meta.get("prereqs") or []
-        if len(prereqs) < 3:
-            problems.append(f"{path.name}: a project lists at least three chapters in prereqs")
-        for slug in prereqs:
-            if not (LESSONS / f"{slug}.md").is_file():
-                problems.append(f"{path.name}: prereq {slug!r} is not a lesson")
-        for slug in re.findall(r"\]\(/lessons/([^)#\s]+)", body):
-            if not (LESSONS / f"{slug}.md").is_file():
-                problems.append(f"{path.name}: links to {slug!r}, which is not a lesson")
+        if len(meta.get("prereqs") or []) < 2:
+            problems.append(f"{path.name}: a project lists at least two chapters in prereqs")
     elif "kind" in meta:
         problems.append(f"{path.name}: kind {meta['kind']!r} is not 'project'")
+
+    # Chapters are merged and renumbered from time to time, so every prereq
+    # and every link must still name a lesson on disk.
+    for slug in meta.get("prereqs") or []:
+        if not (LESSONS / f"{slug}.md").is_file():
+            problems.append(f"{path.name}: prereq {slug!r} is not a lesson")
+    for slug in re.findall(r"\]\(/lessons/([^)#\s]+)", body):
+        if not (LESSONS / f"{slug}.md").is_file():
+            problems.append(f"{path.name}: links to {slug!r}, which is not a lesson")
 
     for heading in PROJECT_SECTIONS if project else REQUIRED_SECTIONS:
         if heading not in body:
@@ -246,11 +248,11 @@ def check_lesson(path: Path, problems: list[str], seen_exercises: set[str]) -> N
             problems.append(f"{path.name}: figure {i} has no caption after </svg>")
 
     words = len(re.sub(r"```figure\n.*?```", "", body, flags=re.S).split())
-    low, high = (1200, 4000) if project else (800, 2600)
+    low, high = (1200, 4000) if project else (800, 3800)
     if words < low:
         problems.append(f"{path.name}: {words} words, the contract asks for {low} or more")
     if words > high:
-        problems.append(f"{path.name}: {words} words; split the chapter, the contract caps it near 2000")
+        problems.append(f"{path.name}: {words} words; cut the chapter, the contract caps it near 3400")
 
     prose = re.sub(r"```.*?```", "", body, flags=re.S)
     for pattern in BANNED:

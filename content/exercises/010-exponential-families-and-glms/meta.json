@@ -1,0 +1,16 @@
+{
+  "id": "010-exponential-families-and-glms",
+  "title": "Fit a Poisson, Gaussian, or Bernoulli model with one loop",
+  "brief": "Write A(eta), its slope and bend for three families, then the loss A(eta) - y eta, its gradient X^T(mu - y), the bend table X^T D X, and a Fisher scoring loop that fits all three.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "A(eta) is 0.5 * eta**2 for gaussian, np.maximum(eta, 0) + np.log1p(np.exp(-np.abs(eta))) for bernoulli, and np.exp(eta) for poisson. Raise ValueError for any other family name.",
+    "The mean is the slope of A: eta itself for gaussian, a stable sigmoid for bernoulli, and np.exp(eta) for poisson. The expression np.exp(-np.logaddexp(0, -eta)) is a sigmoid that does not overflow.",
+    "The variance is the bend of A: ones for gaussian, p * (1 - p) for bernoulli, and np.exp(eta) for poisson, because a Poisson's variance equals its mean.",
+    "The loss is np.sum(log_partition(family, eta) - y * eta) with eta = X @ w, and the gradient is X.T @ (mu - y). On the three-row shop data at zero weights the loss is 3 and the gradient is [-1, -2].",
+    "The information is (X * var[:, None]).T @ X, where var = variance_from_natural(family, X @ w). On the shop data at zero weights it is [[3, 3], [3, 5]].",
+    "newton_step returns the step delta = np.linalg.solve(info, grad), not the new weights. The update is w = w - delta. In fit_fisher_scoring, append the loss before each step and stop, without stepping, when the gradient norm is below tol."
+  ]
+}

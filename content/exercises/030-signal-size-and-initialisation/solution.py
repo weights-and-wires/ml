@@ -1,0 +1,67 @@
+"""Predict a signal's size through a stack of layers, then set the weight scale."""
+
+from __future__ import annotations
+
+import numpy as np
+
+
+def layer_gain(n_in: int, scale: float) -> float:
+    return float(n_in * scale**2)
+
+
+def depth_gain(gain: float, depth: int) -> float:
+    return float(gain**depth)
+
+
+def forward_variance(
+    depth: int,
+    widths: list[int],
+    scale: float,
+    activation: str,
+    num_trials: int = 300,
+    seed: int = 0,
+) -> np.ndarray:
+    if activation not in ("linear", "relu"):
+        raise ValueError(f"unknown activation {activation!r}")
+    rng = np.random.default_rng(seed)
+    h = rng.normal(size=(num_trials, widths[0]))
+    sizes = [float(np.mean(h**2))]
+    for l in range(depth):
+        w = rng.normal(scale=scale, size=(widths[l], widths[l + 1]))
+        h = h @ w
+        if activation == "relu":
+            h = np.maximum(h, 0.0)
+        sizes.append(float(np.mean(h**2)))
+    return np.array(sizes)
+
+
+def xavier_scale(n_in: int, n_out: int) -> float:
+    return float(np.sqrt(2.0 / (n_in + n_out)))
+
+
+def relu_mean_square_ratio(preact: np.ndarray) -> float:
+    after = np.maximum(preact, 0.0)
+    return float(np.mean(after**2) / np.mean(preact**2))
+
+
+def he_scale(n_in: int) -> float:
+    return float(np.sqrt(2.0 / n_in))
+
+
+if __name__ == "__main__":
+    width, depth = 128, 50
+    for scale in (0.07, 1 / np.sqrt(width), 0.1):
+        gain = layer_gain(width, scale)
+        predicted = depth_gain(gain, depth)
+        measured = forward_variance(depth, [width] * (depth + 1), scale, "linear")
+        print(
+            f"scale {scale:.4f}: gain {gain:.3f}, predicted size after {depth} layers "
+            f"{predicted:.2e}, measured {measured[-1]:.2e}"
+        )
+
+    print(f"Xavier for 256 in, 64 out: {xavier_scale(256, 64):.4f}")
+    rng = np.random.default_rng(0)
+    print(f"ReLU keeps {relu_mean_square_ratio(rng.normal(size=100_000)):.3f} of the mean square")
+    for name, scale in (("He", he_scale(width)), ("Xavier", xavier_scale(width, width))):
+        sizes = forward_variance(depth, [width] * (depth + 1), scale, "relu")
+        print(f"{name:6s}: mean square after {depth} ReLU layers = {sizes[-1]:.2e}")

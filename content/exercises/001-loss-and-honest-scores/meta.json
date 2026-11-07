@@ -1,0 +1,16 @@
+{
+  "id": "001-loss-and-honest-scores",
+  "title": "Score a rule, pick its slope, and catch a memoriser",
+  "brief": "Write the squared loss, the empirical risk, and a slope search, then a seeded train/test split and a memorising rule, and measure the gap between training and test risk.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "squared_loss returns one score per example, so it keeps the shape (n,). Subtract, then square, with no sum.",
+    "empirical_risk is the mean of loss(predictions, targets). Wrap the result in float() so it is a Python float, not a numpy scalar.",
+    "best_slope loops over the candidate slopes. For each one, the guesses are slope * sizes. Compute the risk, collect the risks in a list, and index slopes with np.argmin.",
+    "Shuffle positions, not the arrays: order = np.random.default_rng(seed).permutation(n). Then use order[:n_test] and order[n_test:] to index both x and y. Add 1e-9 before you convert the test count to int, because int(0.29 * 100) is 28.",
+    "memoriser_predict builds a distance table of shape (m, n) with np.abs(x_new[:, None] - x_train[None, :]), takes np.argmin(..., axis=1), and indexes y_train with the result.",
+    "generalisation_gap scores the memoriser twice: on the training flats (x_train, y_train) and on the test flats. The gap is test minus train."
+  ]
+}
