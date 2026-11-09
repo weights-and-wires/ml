@@ -3,12 +3,13 @@ title: "Kernel ridge regression and random Fourier features"
 slug: 019-kernel-ridge-and-random-features
 part: "Part 2 — Classical models"
 summary: Predict with a weighted sum of similarities found from one linear system, then cut its n-squared cost with random cosine features.
-minutes: 80
+minutes: 85
 gpu: false
 objectives:
   - Derive the system (K + lambda I) alpha = y from squared error with a size penalty, and say what lambda and gamma each do.
   - Show that a linear kernel reproduces ordinary ridge regression through w = X^T alpha.
   - Explain why a kernel model needs bumps only at the training points, and check the objective gap lambda t^2 d^T K d numerically.
+  - State that the kernel-ridge prediction equals the Gaussian-process posterior mean when lambda equals the noise variance.
   - Build random Fourier features and explain why a cosine of a random projection averages to an RBF bump.
   - Fit ridge regression on random features and say what it costs compared with exact kernel ridge regression.
 prereqs:
@@ -111,6 +112,44 @@ y_hat = K_test @ alpha                                # K_test is (n_test, n_tra
 > [!KEY]
 > Kernel ridge regression predicts with a weighted sum of similarities to the training points, and finds the weights from one linear system, $(K + \lambda I)\alpha = y$. The weights fix the over-counting that raw targets would cause, and $\lambda$ keeps the curve from chasing noise.
 
+## The same prediction is a posterior mean
+
+A Gaussian process treats the curve as random and each target as that curve plus noise of variance $\sigma^2$, then assigns a query a distribution. With the kernel held fixed, the average of that distribution is the kernel-ridge prediction when $\sigma^2 = \lambda$.
+
+Write $k(x)$ for the similarities from a query $x$ to the training points. The posterior mean and the kernel-ridge prediction are
+
+$$
+\begin{aligned}
+\mu(x) &= k(x)^{\top}(K + \sigma^2 I)^{-1} y \\
+\hat{y}(x) &= k(x)^{\top}(K + \lambda I)^{-1} y .
+\end{aligned}
+$$
+
+Read them aloud: "similarities to the training points, times weights from the Gram matrix with a fee on the diagonal." The fee is $\sigma^2$ on the first line and $\lambda$ on the second. When the two fees are equal, the predictions match at every query.
+
+On the two-point example, $\gamma = 0.5$, $y = (1, 2)$, and $\sigma^2 = \lambda = 1$. Then $\alpha \approx (0.2167,\ 0.9343)$, the means at the training points are $\approx (0.7833,\ 1.0657)$, and at $x = 0.5$ each similarity is $\exp(-0.125) \approx 0.8825$, so the mean is $0.8825 \cdot (0.2167 + 0.9343) \approx 1.016$. Kernel ridge with $\lambda = 1$ returns the same $1.016$.
+
+The variance of another noisy target at $x$ is
+
+$$
+v(x) = k(x, x) + \sigma^2 - k(x)^{\top}(K + \sigma^2 I)^{-1} k(x) .
+$$
+
+For a positive semidefinite $K$ and $\sigma^2 > 0$, $v(x)$ is at least 0. For the RBF kernel, $k(x, x) = 1$. At either training point the quadratic term is $0.551$, so $v = 1 + 1 - 0.551 = 1.449$, near the noise variance $1$. Far from both points, $v = 2$.
+
+The following code computes that mean, and the variance at one query with similarity vector `k` and prior variance `prior`:
+
+```python
+L = np.linalg.cholesky(K + noise * np.eye(n))
+alpha = np.linalg.solve(L.T, np.linalg.solve(L, y))
+mu = K_test @ alpha
+z = np.linalg.solve(L.T, np.linalg.solve(L, k))
+v = prior + noise - k @ z
+```
+
+> [!KEY]
+> With a fixed kernel, the kernel-ridge prediction equals the Gaussian-process posterior mean when $\lambda$ equals the noise variance $\sigma^2$.
+
 ## Why bumps at the training points are enough
 
 Take three training points at $x = -1, 0, 1$ and fit them with kernel ridge regression. Build a second function by adding bumps at four *other* centres, $-2, -0.5, 0.5, 2$, with weights chosen so that the extra part is exactly zero at the three training points (Figure 3). The two curves agree at the training points, so squared error cannot tell them apart. The size fee can. The wiggle does nothing for the fit and still counts toward the size, so the penalty only goes up, and an optimiser sets the wiggle to zero.
@@ -181,12 +220,13 @@ Z = np.sqrt(2.0 / D) * np.cos(X @ omega.T + phase)
 > [!RECAP]
 > - The model is $\hat{y}(x) = \sum_i \alpha_i k(x, x_i)$. Setting the gradient of $\lVert y - K\alpha\rVert^2 + \lambda\alpha^{\top}K\alpha$ to zero gives $(K + \lambda I)\alpha = y$, and the training miss at point $i$ is $\lambda\alpha_i$.
 > - $\lambda$ trades fit for smoothness and $\gamma$ sets bump width. A linear kernel gives $w = X^{\top}\alpha$, the ordinary ridge weights.
+> - When the noise variance $\sigma^2$ equals $\lambda$, that prediction is the Gaussian-process posterior mean. At a training point the variance of another noisy target is about $\sigma^2$.
 > - An extra component that vanishes at every training point adds $\lambda t^2 d^{\top}K_{aa}d$ to the objective, so the best function uses training-point bumps only.
 > - $Z = \sqrt{2/D}\cos(X\Omega^{\top} + \phi)$ gives $ZZ^{\top} \approx K$ with error shrinking like $1/\sqrt{D}$, and test points must reuse the same $\Omega$ and $\phi$.
 
 ## Build it step by step
 
-The starter provides `rbf_kernel` from the [kernels chapter](/lessons/018-kernels-and-validity). You build six functions, in the order the checks test them.
+The starter provides `rbf_kernel` from the [kernels chapter](/lessons/018-kernels-and-validity). You build seven functions, in the order the checks test them.
 
 1. **`kernel_ridge_fit(K, y, lam)`**. `K` is `(n, n)` and `y` is `(n,)`. Returns `alpha` of shape `(n,)`. Factor `K + lam * np.eye(n)` with `np.linalg.cholesky`, then solve twice. The usual mistake is adding `lam` to every entry of `K` instead of the diagonal.
 2. **`kernel_ridge_predict(K_test, alpha)`**. `K_test` is `(n_test, n_train)`. Returns `(n_test,)` from one matrix-vector product. The usual mistake is passing the transpose.
@@ -194,6 +234,7 @@ The starter provides `rbf_kernel` from the [kernels chapter](/lessons/018-kernel
 4. **`representer_check(K, y, lam, coeffs)`**. `K` is `(N, N)` and `N` is at least `len(y)`. Returns the summed squared error on the first `len(y)` entries of `K @ coeffs`, plus `lam * coeffs @ K @ coeffs`. The usual mistake is a mean in place of a sum, or slicing `coeffs` instead of the predictions.
 5. **`random_fourier_features(X, D, gamma, rng)`**. `X` is `(n, d)` and the return is `(n, D)`. Draw `omega` with shape `(D, d)` and standard deviation `np.sqrt(2 * gamma)`, then `phase` with shape `(D,)` from 0 to $2\pi$. The usual mistake is scaling `omega` by `2 * gamma` instead of its square root.
 6. **`ridge_on_features(Z, y, lam)`**. Solves `(Z.T @ Z + lam * np.eye(D)) w = Z.T @ y` and returns `w` with shape `(D,)`. The usual mistake is solving the $n \times n$ system `Z @ Z.T`, which is the kernel route.
+7. **`gp_posterior_mean(K, K_test, y, noise, prior_var)`**. `K` is `(n, n)`, `K_test` is `(n_test, n)`, `y` is `(n,)`, and `prior_var` is `(n_test,)`. Returns `(mean, variance)`. Call `kernel_ridge_fit(K, y, noise)` and then `kernel_ridge_predict`. The variance at a query row `k` is `prior_var + noise - k @ z`, with `z` from that same Cholesky factor. The usual mistake is forgetting `noise` on the diagonal, which solves `K alpha = y`.
 
 ## Cost and scaling
 
@@ -209,4 +250,10 @@ With $n$ training points, $d$ inputs, and $D$ random features, exact kernel ridg
 
 ## The exercise
 
-You build `kernel_ridge_fit`, `kernel_ridge_predict`, `implied_weights`, `representer_check`, `random_fourier_features`, and `ridge_on_features`. The checks confirm that the weights solve $(K + \lambda I)\alpha = y$ on a random positive semidefinite matrix and on the two-point example, that they are a stationary point of the objective checked with finite differences, that the training predictions equal $y - \lambda\alpha$, and that a linear kernel reproduces primal ridge regression. They confirm that $J$ is 2 and 3 on the hand example and that an extra component that vanishes at the training points raises the objective by exactly $\lambda t^2 d^{\top}K_{aa}d$. They check the random features for shape, a shared draw, and the $1/\sqrt{D}$ rate. Last, `ridge_on_features` must have zero gradient at its answer, and its predictions must approach exact kernel ridge predictions as $D$ grows.
+You build `kernel_ridge_fit`, `kernel_ridge_predict`, `implied_weights`, `representer_check`, `random_fourier_features`, `ridge_on_features`, and `gp_posterior_mean`. The checks confirm that the weights solve $(K + \lambda I)\alpha = y$ on a random positive semidefinite matrix and on the two-point example, that they are a stationary point of the objective checked with finite differences, that the training predictions equal $y - \lambda\alpha$, and that a linear kernel reproduces primal ridge regression. They confirm that $J$ is 2 and 3 on the hand example and that an extra component that vanishes at the training points raises the objective by exactly $\lambda t^2 d^{\top}K_{aa}d$. They check the random features for shape, a shared draw, and the $1/\sqrt{D}$ rate. `ridge_on_features` must have zero gradient at its answer, and its predictions must approach exact kernel ridge predictions as $D$ grows. `gp_posterior_mean` must match `kernel_ridge_predict` when `lam` equals the noise variance, and the variance it returns must be non-negative and near that noise variance at a training point.
+
+## Further reading
+
+For kernels and Mercer's theorem, see [Lecture 8 - Kernels](https://see.stanford.edu/Course/CS229/39) (Andrew Ng, CS229). The page titles that session "Lecture 8 - Kernels".
+
+For the posterior mean, see section 4 of [Gaussian processes](https://cs229.stanford.edu/section/cs229-gaussian_processes.pdf) (Chuong B. Do, updated by Honglak Lee). The [CS229 course page](https://see.stanford.edu/Course/CS229) lists that handout with the review notes, under the title Gaussian processes, and does not give it a lecture number.

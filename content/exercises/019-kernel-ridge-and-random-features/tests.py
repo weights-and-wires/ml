@@ -227,3 +227,79 @@ def test_ridge_on_features(sub):
         fail(f"the gap to exact kernel ridge should shrink as D grows, got {gaps[0]:.4f} at D=50 and {gaps[1]:.4f} at D=3000")
     if gaps[1] > 0.03:
         fail(f"at D=3000 predictions should be within 0.03 of exact kernel ridge, but the largest gap is {gaps[1]:.4f}")
+
+
+def _show(value):
+    return np.array2string(np.asarray(value, dtype=float), precision=6, suppress_small=True)
+
+
+def _expect_close(got, want, label, atol=1e-8, rtol=1e-6):
+    got_a = np.asarray(got, dtype=float)
+    want_a = np.asarray(want, dtype=float)
+    if got_a.shape != want_a.shape or not np.allclose(got_a, want_a, atol=atol, rtol=rtol):
+        fail(f"{label}: expected {_show(want_a)}, actual {_show(got_a)}")
+
+
+@check("gp_posterior_mean matches kernel ridge when lambda equals the noise, and the training variance is about that noise")
+def test_gp_posterior_mean(sub):
+    # Forgetting to add the noise variance on the diagonal solves K alpha = y.
+    # That matches kernel ridge only when lam is 0, not when lam equals the noise.
+    k = np.exp(-0.5)
+    K = np.array([[1.0, k], [k, 1.0]])
+    y = np.array([1.0, 2.0])
+    noise = 1.0
+    ks = np.exp(-0.125)
+    K_test = np.array([[1.0, k], [k, 1.0], [ks, ks]])
+    prior = np.ones(3)
+    got = sub.gp_posterior_mean(K, K_test, y, noise, prior)
+    if not (isinstance(got, tuple) and len(got) == 2):
+        fail(f"expected a pair (mean, variance), actual {type(got).__name__}")
+    mean, var = got
+    _expect_close(mean, np.array([0.78333905, 1.06570575, 1.01571439]), "posterior mean on the two-point example", atol=1e-6)
+    ridge = sub.kernel_ridge_predict(K_test, sub.kernel_ridge_fit(K, y, noise))
+    _expect_close(mean, ridge, "posterior mean against kernel ridge with lam = noise")
+    oracle = K_test @ np.linalg.solve(K + noise * np.eye(2), y)
+    _expect_close(mean, oracle, "posterior mean against (K + noise I)^{-1} y")
+
+    solved = np.linalg.solve(K + noise * np.eye(2), K_test.T)
+    want_var = prior + noise - np.sum(K_test * solved.T, axis=1)
+    _expect_close(var, want_var, "posterior variance", atol=1e-6)
+    _expect_close(np.asarray(var)[:2], np.array([1.44935748, 1.44935748]), "variance at the two training points", atol=1e-6)
+    if np.any(np.asarray(var, dtype=float) < -1e-8):
+        fail(f"posterior variance must be non-negative. expected >= 0, actual {_show(var)}")
+    lo, hi = 0.5 * noise, 2.0 * noise
+    train_var = np.asarray(var, dtype=float)[:2]
+    if np.any(train_var < lo) or np.any(train_var > hi):
+        fail(
+            "at a training point the posterior variance should be about the noise variance. "
+            f"expected between {lo:.4f} and {hi:.4f}, actual {_show(train_var)}"
+        )
+
+    rng = np.random.default_rng(17)
+    X = rng.normal(size=(8, 2))
+    queries = rng.normal(size=(5, 2))
+    ys = rng.normal(size=8)
+    gamma, noise_r = 0.7, 0.2
+    Kr = sub.rbf_kernel(X, X, gamma)
+    Kq = sub.rbf_kernel(queries, X, gamma)
+    # Queries include the training points, where the variance should sit near the noise.
+    K_both = np.vstack([Kr, Kq])
+    prior_both = np.concatenate([np.diag(Kr), np.ones(5)])
+    got_r = sub.gp_posterior_mean(Kr, K_both, ys, noise_r, prior_both)
+    if not (isinstance(got_r, tuple) and len(got_r) == 2):
+        fail(f"expected a pair (mean, variance) on the random sample, actual {type(got_r).__name__}")
+    mean_r, var_r = got_r
+    ridge_r = sub.kernel_ridge_predict(K_both, sub.kernel_ridge_fit(Kr, ys, noise_r))
+    _expect_close(mean_r, ridge_r, "posterior mean against kernel ridge on a random RBF sample")
+    solved_r = np.linalg.solve(Kr + noise_r * np.eye(8), K_both.T)
+    want_var_r = prior_both + noise_r - np.sum(K_both * solved_r.T, axis=1)
+    _expect_close(var_r, want_var_r, "posterior variance on a random RBF sample")
+    if np.any(np.asarray(var_r, dtype=float) < -1e-8):
+        fail(f"posterior variance must be non-negative. expected >= 0, actual {_show(var_r)}")
+    lo_r, hi_r = 0.5 * noise_r, 2.5 * noise_r
+    train_var_r = np.asarray(var_r, dtype=float)[:8]
+    if np.any(train_var_r < lo_r) or np.any(train_var_r > hi_r):
+        fail(
+            "at a training point the posterior variance should be about the noise variance. "
+            f"expected between {lo_r:.4f} and {hi_r:.4f} for noise {noise_r:.4f}, actual {_show(train_var_r)}"
+        )
