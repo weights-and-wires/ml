@@ -166,14 +166,26 @@ class InsertLessonTest(unittest.TestCase):
         self.assertNotIn("002-hold", projects)
         self.assertIn("`003p-project-gamma`", projects)
 
-    def test_same_number_project_stays(self) -> None:
+    def test_same_number_project_moves_and_draft_sorts_before_it(self) -> None:
         tool.insert_lesson(self.root, after="002-beta", slug="hold")
         lessons = self.root / "content" / "lessons"
         self.assertTrue((lessons / "002-beta.md").is_file())
-        self.assertTrue((lessons / "002p-project-gamma.md").is_file())
+        self.assertFalse((lessons / "002p-project-gamma.md").is_file())
+        self.assertTrue((lessons / "003p-project-gamma.md").is_file())
         self.assertTrue((lessons / "003-hold.md").is_file())
         self.assertTrue((lessons / "004-gamma.md").is_file())
         self.assertFalse((lessons / "003-gamma.md").is_file())
+        names = sorted(path.name for path in lessons.glob("*.md"))
+        self.assertLess(names.index("003-hold.md"), names.index("003p-project-gamma.md"))
+        moved = (lessons / "003p-project-gamma.md").read_text(encoding="utf-8")
+        self.assertIn("slug: 003p-project-gamma", moved)
+        curriculum = (self.root / "docs" / "CURRICULUM.md").read_text(encoding="utf-8")
+        self.assertIn("`003p-project-gamma`", curriculum)
+        self.assertNotIn("`002p-project-gamma`", curriculum)
+        self.assertLess(
+            curriculum.index("| `003-hold` |"),
+            curriculum.index("| `004-gamma` |"),
+        )
 
     def test_count_opens_distinct_stubs(self) -> None:
         tool.insert_lesson(self.root, after="001-alpha", slug="hold", count=2)

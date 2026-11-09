@@ -9,11 +9,14 @@
         --slug my-lesson --dry-run
 
 The lesson named by ``--after`` stays put. Every lesson file and exercise
-directory with a higher number moves up by ``--count`` (the default is 1). A
-project keeps the ``p`` after its number. The opened numbers receive draft
-lessons copied from a template. ``content/renames.json`` records each move, and
-existing entries that still name a shifted slug are updated, so a progress row
-stored under an older slug still resolves.
+directory whose sort key ``(number, project, name)`` is greater than the
+anchor's moves up by ``--count`` (the default is 1). A project keeps the ``p``
+after its number, so a project that shares the anchor's number is later than
+that anchor and moves with the later lessons. The new draft is not a project,
+so it sorts before a project that lands on the same number. The opened numbers
+receive draft lessons copied from a template. ``content/renames.json`` records
+each move, and existing entries that still name a shifted slug are updated, so
+a progress row stored under an older slug still resolves.
 """
 
 from __future__ import annotations
@@ -107,10 +110,18 @@ def _exercise_ids(root: Path) -> list[LessonId]:
     return found
 
 
-def _shift_map(ids: list[LessonId], after_number: int, count: int) -> dict[str, str]:
+def _shift_map(ids: list[LessonId], anchor: LessonId, count: int) -> dict[str, str]:
+    """Map every id that sorts after `anchor` to the id `count` numbers later.
+
+    Sort order is ``(number, project, name)``. A project shares its number with
+    the chapter it follows and still sorts later, because ``project`` is true.
+    Comparing the number alone would leave that project in place and put the
+    new chapter after it.
+    """
     mapping: dict[str, str] = {}
+    anchor_key = _sort_key(anchor.slug)
     for item in ids:
-        if item.number > after_number:
+        if _sort_key(item.slug) > anchor_key:
             mapping[item.slug] = item.shifted(count).slug
     return mapping
 
@@ -513,8 +524,8 @@ def insert_lesson(root: Path, after: str, slug: str, count: int = 1, dry_run: bo
     if not isinstance(part, str) or not part.strip():
         raise InsertError(f"{anchor.slug} has no part string to copy onto the draft.")
 
-    lesson_shifts = _shift_map(lessons, anchor.number, count)
-    exercise_shifts = _shift_map(exercises, anchor.number, count)
+    lesson_shifts = _shift_map(lessons, anchor, count)
+    exercise_shifts = _shift_map(exercises, anchor, count)
     mapping = _merge_maps(lesson_shifts, exercise_shifts)
     stubs = [
         LessonId(anchor.number + offset, False, name)

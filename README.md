@@ -1,7 +1,7 @@
 # Machine learning
 
 A hands-on course that teaches machine learning to undergraduates by having them
-build it. Fifty-seven chapters run from scoring a guess to mixtures of experts. Each one
+build it. Fifty-eight chapters run from scoring a guess to mixtures of experts. Each one
 teaches a single topic, two or three closely related ideas in one arc: it starts from a concrete
 question, shows a picture, works a small example by hand, and only then gives
 the formula and walks you through implementing it, in an editor beside the
@@ -32,7 +32,7 @@ computes it. Each lesson ends with a step-by-step guide to its exercise.
 
 | Path | Contents |
 |---|---|
-| `content/lessons/` | Fifty-seven chapters and eight projects, in Markdown with YAML front matter and inline SVG figures. |
+| `content/lessons/` | Fifty-eight chapters and eight projects, in Markdown with YAML front matter and inline SVG figures. |
 | `content/renames.json` | Each slug from earlier editions and the chapters that replaced it, so progress carries over. |
 | `content/exercises/` | One directory per exercise: a starter file, checks, and a worked solution. |
 | `backend/` | FastAPI: auth, content, progress, drafts, and the run stream. |
@@ -56,7 +56,8 @@ classifiers, support vector machines, and kernels.
 bagging and boosting, PCA and the SVD, k-means, and EM for Gaussian mixtures.
 
 **Part 4 — Neural networks.** Why layers need a bend, backpropagation, SGD and
-Adam, initialisation and normalisation, and regularisation.
+Adam, initialisation and normalisation, regularisation, and debugging and tuning
+a network before the digit project.
 
 **Part 5 — Vision and sequences.** Convolutions, residual networks, recurrent
 networks, LSTMs and GRUs, and attention for sequence to sequence.
@@ -166,7 +167,7 @@ existing progress identities, for example `ifkash:enderboi,ananya:michu`.
 
 ## The GPU backend
 
-One chapter, `048-training-loop-and-cost`, is marked `gpu: true`. Its checks run on the CPU like every other exercise, and
+One chapter, `051-training-loop-and-cost`, is marked `gpu: true`. Its checks run on the CPU like every other exercise, and
 the GPU is there for the larger run in the starter file's `__main__` block.
 
 `backend/app/runner/runpod.py` sends a submission to a RunPod serverless
