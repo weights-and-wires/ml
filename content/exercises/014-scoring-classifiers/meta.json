@@ -1,0 +1,17 @@
+{
+  "id": "014-scoring-classifiers",
+  "title": "Score a classifier with counts, a curve, and a temperature",
+  "brief": "Count true and false positives, trace an ROC curve and its area, choose a cut from a cost, then measure calibration error and fit a temperature.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "confusion_counts returns [tp, fp, fn, tn]. A true positive is a row where both the label and the prediction equal 1.",
+    "When tp + fp is 0, precision is 0. When tp + fn is 0, recall is 0. When precision + recall is 0, F1 is 0. An unguarded division is NaN.",
+    "threshold_from_cost returns cost_fp / (cost_fp + cost_fn). Predict positive when the probability is above that value.",
+    "roc_curve sorts scores from high to low and writes one point after each distinct score, so tied scores share a single step. Start at (0, 0) and end at (1, 1).",
+    "auc adds 1 when the positive score is higher, 0.5 when the scores are equal, and 0 otherwise, then divides by the number of positive-negative pairs.",
+    "ece uses bin min(floor(p * bins), bins - 1). An empty bin adds 0. A probability of 1 stays in the last bin.",
+    "The slope of the sum of softplus(z / T) - y z / T is sum((sigmoid(z / T) - y) * (-z / T**2)). Newton divides that slope by a central difference of itself, starting at T = 1."
+  ]
+}

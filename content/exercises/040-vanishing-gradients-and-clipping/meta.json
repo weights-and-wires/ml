@@ -1,0 +1,17 @@
+{
+  "id": "040-vanishing-gradients-and-clipping",
+  "title": "Predict a gradient's reach, then chunk and clip it",
+  "brief": "Compute the spectral radius, predict how large a gradient is after many steps, and compare with your own backward pass. Then split a long sequence into chunks, backpropagate through each chunk alone, and clip a gradient by its global norm.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "np.linalg.eigvals returns complex numbers for many real matrices. Take np.abs of them before np.max.",
+    "steps_until_below: solve rate ** T < threshold. Taking logs flips the inequality because log(rate) is negative, so T > log(threshold) / log(rate), and the answer is the next whole number above that. Return None when the rate is 1 or more.",
+    "chunk_bounds is a list comprehension over range(0, T, k). The end of each chunk is min(start + k, T).",
+    "For clip_by_global_norm, add up the squared entries of every array, take one square root, and use the factor min(1, max_norm / G). Guard G == 0 so a zero gradient does not divide by zero.",
+    "truncated_bptt runs rnn_forward once. For a chunk that starts at step s, the state entering it is h_seq[s - 1], or h0 when s is 0. Pass that state to bptt along with the slices dH[s:e] and x[s:e], keep dx for the slice, add the weight gradients, and throw away dh0."
+  ]
+}

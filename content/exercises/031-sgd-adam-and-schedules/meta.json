@@ -1,0 +1,17 @@
+{
+  "id": "031-sgd-adam-and-schedules",
+  "title": "SGD, momentum, Adam, AdamW, and a cosine schedule",
+  "brief": "Compute mini-batch gradients, then build SGD, momentum, Adam, and AdamW steps and a warmup-plus-cosine schedule, and run them on noisy batches of a long valley.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "batch_gradient is X[idx].T @ (X[idx] @ w - y[idx]) / len(idx). Divide by the batch size, not by the number of rows in X.",
+    "momentum_step reads state.get('v', zeros), sets v = beta * v + grad with no (1 - beta) factor, and returns (w - lr * v, {'v': v}).",
+    "ema_update is beta * prev + (1 - beta) * x. bias_correct divides by 1 - beta**t and raises ValueError when t < 1.",
+    "adam_step reads t = state.get('t', 0) + 1, updates m with grad and v with grad**2 through ema_update, corrects both, and stores the raw m, the raw v, and t.",
+    "adamw_step calls adam_step on the raw grad, then subtracts lr * weight_decay * w, using the w that came into the function.",
+    "In cosine_schedule, p is measured from the end of warmup: (step - warmup) / (total - warmup). Handle warmup >= total before you compute it.",
+    "The four anchor points of the schedule are 0 at step 0, the peak at the end of warmup, half the peak halfway through the decay, and 0 at the last step."
+  ]
+}
