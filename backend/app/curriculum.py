@@ -4,6 +4,10 @@ A lesson is one Markdown file with YAML front matter. An exercise is a directory
 holding `meta.json`, `starter.py`, `tests.py`, and `solution.py`. Both are cached
 after the first read; `reload_content` clears the cache while you are writing.
 
+A lesson with `draft: true` is served on a local run and omitted from a deployed
+image. The deployed image is the one whose `GIT_SHA` is the commit it was built
+from. A local run leaves that setting at `unknown`.
+
 The format is specified in `docs/CONTENT_CONTRACT.md`.
 """
 
@@ -60,9 +64,14 @@ def renames() -> dict[str, list[str]]:
     return {str(k): [str(s) for s in v] for k, v in json.loads(path.read_text()).items()}
 
 
+def _is_draft(meta: dict[str, Any]) -> bool:
+    """True only when the front matter sets `draft` to a boolean true."""
+    return meta.get("draft") is True
+
+
 @lru_cache
-def load_lessons() -> list[dict[str, Any]]:
-    """Every lesson, ordered by the numeric prefix of its filename."""
+def _all_lessons() -> list[dict[str, Any]]:
+    """Every lesson file, drafts included, ordered by filename."""
     lessons: list[dict[str, Any]] = []
     directory = _lessons_dir()
     if not directory.is_dir():
@@ -84,10 +93,38 @@ def load_lessons() -> list[dict[str, Any]]:
                 "gpu": bool(meta.get("gpu", False)),
                 # A project closes a part; chapters and projects are numbered apart.
                 "kind": "project" if meta.get("kind") == "project" else "chapter",
+                "draft": _is_draft(meta),
                 "body": post.content,
             }
         )
     return lessons
+
+
+def read_lessons(*, include_drafts: bool) -> list[dict[str, Any]]:
+    """Lesson records. Pass `include_drafts=False` to drop unfinished lessons."""
+    lessons = _all_lessons()
+    if include_drafts:
+        return lessons
+    return [lesson for lesson in lessons if not lesson["draft"]]
+
+
+def draft_exercise_ids() -> set[str]:
+    """Exercise ids that belong to a lesson marked `draft: true`."""
+    return {
+        str(lesson["exercise"])
+        for lesson in _all_lessons()
+        if lesson["draft"] and lesson.get("exercise")
+    }
+
+
+@lru_cache
+def load_lessons() -> list[dict[str, Any]]:
+    """Lessons the running app serves.
+
+    A local run includes drafts. A deployed image omits them. The choice is
+    `Settings.production`, which reads the `GIT_SHA` value deploy already sets.
+    """
+    return read_lessons(include_drafts=not get_settings().production)
 
 
 def lesson_list() -> list[dict[str, Any]]:
@@ -168,6 +205,10 @@ def load_exercises() -> dict[str, dict[str, Any]]:
             "solution": read("solution.py"),
             "directory": str(path),
         }
+    if get_settings().production:
+        hidden = draft_exercise_ids()
+        if hidden:
+            return {key: value for key, value in exercises.items() if key not in hidden}
     return exercises
 
 
@@ -181,5 +222,6 @@ def public_exercise(exercise: dict[str, Any]) -> dict[str, Any]:
 
 
 def reload_content() -> None:
+    _all_lessons.cache_clear()
     load_lessons.cache_clear()
     load_exercises.cache_clear()

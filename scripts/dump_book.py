@@ -4,6 +4,7 @@
 
 The book renderer in `frontend/src/book/` reads this file instead of the API,
 so the PDF comes from the same loader the site serves, with no server running.
+Lessons marked `draft: true` stay out of the PDF, as they do on a deployed app.
 """
 
 from __future__ import annotations
@@ -33,13 +34,15 @@ def main() -> None:
         sys.exit("usage: dump_book.py OUTPUT.json")
     out = Path(sys.argv[1])
     out.parent.mkdir(parents=True, exist_ok=True)
+    hidden = curriculum.draft_exercise_ids()
     exercises = {
         exercise_id: {k: v for k, v in exercise.items() if k != "directory"}
         for exercise_id, exercise in curriculum.load_exercises().items()
+        if exercise_id not in hidden
     }
     body = {
         "commit": commit(),
-        "lessons": curriculum.load_lessons(),
+        "lessons": curriculum.read_lessons(include_drafts=False),
         "exercises": exercises,
     }
     out.write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")

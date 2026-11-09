@@ -51,6 +51,16 @@ class Settings(BaseSettings):
 
     git_sha: str = "unknown"
 
+    @property
+    def production(self) -> bool:
+        """True when this process is a deployed image.
+
+        The image build and `scripts/deploy.sh` set `GIT_SHA` to the commit
+        they ship. A local run leaves the default `unknown`. Draft lessons
+        follow this value, so a local run shows them and a deployed image
+        hides them. There is no separate environment flag.
+        """
+        return self.git_sha != "unknown"
 
     @property
     def db_path(self) -> Path:
