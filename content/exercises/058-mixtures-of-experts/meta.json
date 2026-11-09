@@ -1,0 +1,16 @@
+{
+  "id": "058-mixtures-of-experts",
+  "title": "Route, train, and balance a mixture of experts",
+  "brief": "Score and pick the top k experts, compute the router's gradient through the gate weights, build the load-balancing loss, and run a capacity-limited forward pass that drops overflow.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": ["numpy"],
+  "hints": [
+    "router: logits = x @ W_gate. Subtract each row's max before exponentiating, then divide by the row sum for the full probabilities. np.argsort(-logits, axis=-1)[:, :k] gives the top k, largest first. Renormalise the kept probabilities (np.take_along_axis) by their own row sum.",
+    "gate_logit_grad: c_bar = np.sum(g * c), the gate-weighted average. The answer is g * (c - c_bar). It always sums to zero.",
+    "router_backward: for each token, build c from expert_outputs[t, chosen] @ grad_output[t], call gate_logit_grad, and write the result into row t of dz at the chosen columns only. Finish with x.T @ dz.",
+    "expert_load: np.bincount(expert_indices.ravel(), minlength=n_experts) counts the slots per expert. Divide by expert_indices.size, which is n * k. The loss is n_experts * np.sum(f * P) with P = gate_probs.mean(axis=0), as a Python float.",
+    "expert_capacity: None means n_tokens * k. Otherwise take math.ceil(capacity_factor * n_tokens * k / n_experts) and keep it at least 1 with max(1, ...). The 'at least 1' is about the capacity, not about the factor.",
+    "moe_forward: call expert_capacity and router, keep a counts array with one entry per expert, and walk tokens in order and, inside each token, slots in order. If counts[expert] < capacity, add the gate-weighted output and increment the count. Otherwise add 1 to n_dropped. Do not rescale the surviving gate weight."
+  ]
+}
