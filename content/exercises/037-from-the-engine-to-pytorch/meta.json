@@ -1,0 +1,13 @@
+{
+  "id": "037-from-the-engine-to-pytorch",
+  "title": "Map your tensor onto PyTorch and train one epoch",
+  "brief": "Write Linear and MLP, a step that zeros the gradient, one training epoch, an eval pass, and an einsum attention blend.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["torch"],
+  "hints": [
+    "nn.Linear stores weight as (out_features, in_features). The forward pass is x @ weight.T + bias.",
+    "backward adds into .grad. sgd_step has to zero every gradient after reading it, or the next step doubles.",
+    "Shuffle with a torch.Generator seeded locally. Softmax the attention scores over the source axis, and subtract the max before exp."
+  ]
+}
