@@ -1,13 +1,13 @@
 # Curriculum
 
-61 chapters in 8 parts, and 8 projects in a section of their own. Each
+62 chapters in 8 parts, and 8 projects in a section of their own. Each
 project lists the chapter to finish before you start it. Each row is one Markdown file under
 `content/lessons/` and one directory under `content/exercises/`. The `Needs GPU`
 column marks the exercises that run on RunPod rather than in the app container.
 
 Each chapter teaches one topic: two or three closely related ideas in one arc,
 with one exercise. The 33 lessons of the first edition were split into 132
-one-idea chapters, merged into 117, and then merged again into 55. One added chapter brings the count to 56, scoring classifiers brings it to 57, and debugging and tuning a network brings it to 58. The map from your engine to PyTorch brings it to 59. A count model and word vectors bring it to 60. Autoencoders and variational autoencoders bring it to 61, in an eighth part.
+one-idea chapters, merged into 117, and then merged again into 55. One added chapter brings the count to 56, scoring classifiers brings it to 57, and debugging and tuning a network brings it to 58. The map from your engine to PyTorch brings it to 59. A count model and word vectors bring it to 60. Autoencoders and variational autoencoders bring it to 61, in an eighth part. Diffusion models bring it to 62.
 `content/renames.json` maps each old lesson and chapter to the chapter that
 replaced it, so readers keep their progress.
 
@@ -111,6 +111,7 @@ replaced it, so readers keep their progress.
 | Slug | Title | Exercise delivers | Needs GPU |
 |---|---|---|---|
 | `061-autoencoders-and-vaes` | Autoencoders and variational autoencoders | Write the diagonal-Gaussian KL and its gradient, reparameterise a sample, check the ELBO against a known log probability, recover a principal component with a linear autoencoder, and train a tiny VAE. | No |
+| `062-diffusion-models` | Diffusion models: add noise, then walk it back | Write the cumulative noise schedule and the closed-form noisy sample, the noise-prediction loss and its gradient, one ancestral step and one deterministic step, ancestral samples from an exact two-bell denoiser, and a classifier-free guidance step. | No |
 
 ## Projects
 
