@@ -1,8 +1,9 @@
 """Kernel ridge regression, the representer theorem, and random Fourier features.
 
-Fill in the six functions below. `rbf_kernel` is already written, from the chapter on
+Fill in the seven functions below. `rbf_kernel` is already written, from the chapter on
 kernels. A kernel model predicts sum_i alpha_i k(x, x_i), and the random features
-replace the kernel with explicit columns.
+replace the kernel with explicit columns. With the noise variance as the ridge
+fee, that same prediction is the Gaussian-process posterior mean.
 """
 
 import numpy as np
@@ -121,6 +122,41 @@ def ridge_on_features(Z: np.ndarray, y: np.ndarray, lam: float) -> np.ndarray:
     raise NotImplementedError("ridge_on_features")
 
 
+def gp_posterior_mean(
+    K: np.ndarray,
+    K_test: np.ndarray,
+    y: np.ndarray,
+    noise: float,
+    prior_var: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return the Gaussian-process posterior mean and predictive variance.
+
+    With a fixed kernel, the posterior mean equals kernel ridge regression
+    when the ridge strength equals the noise variance. The variance is the
+    uncertainty of another noisy target:
+
+        v = prior_var + noise - k^T (K + noise I)^{-1} k
+
+    for each query row k of K_test. prior_var holds k(x, x) at that query.
+
+    Args:
+        K: Gram matrix of the training points, shape (n, n).
+        K_test: Similarities from each query to each training point,
+            shape (n_test, n).
+        y: Training targets, shape (n,).
+        noise: Observation noise variance, noise > 0. This is lam in
+            kernel_ridge_fit.
+        prior_var: k(x, x) at each query, shape (n_test,). For the RBF
+            kernel every entry is 1.
+
+    Returns:
+        mean: Posterior mean, shape (n_test,).
+        variance: Posterior variance of a noisy target, shape (n_test,).
+            Each entry is at least 0 when K is positive semidefinite.
+    """
+    raise NotImplementedError("gp_posterior_mean")
+
+
 if __name__ == "__main__":
     x = np.array([0.51, 2.37, 3.21, 3.82, 5.93, 6.13])[:, None]
     y = np.array([0.36, 0.73, -0.39, -0.58, -0.30, 0.17])
@@ -157,3 +193,13 @@ if __name__ == "__main__":
     Z_test = random_fourier_features(x_test, 2000, 1.0, np.random.default_rng(7))
     w = ridge_on_features(Z, ys, 0.1)
     print(f"largest gap between random-feature ridge and exact kernel ridge: {np.abs(Z_test @ w - exact).max():.4f}")
+
+    k12 = np.exp(-0.5)
+    K12 = np.array([[1.0, k12], [k12, 1.0]])
+    y12 = np.array([1.0, 2.0])
+    ks = np.exp(-0.125)
+    Kq = np.array([[1.0, k12], [k12, 1.0], [ks, ks]])
+    mean, var = gp_posterior_mean(K12, Kq, y12, 1.0, np.ones(3))
+    ridge = kernel_ridge_predict(Kq, kernel_ridge_fit(K12, y12, 1.0))
+    print("posterior mean:", np.round(mean, 4), "kernel ridge:", np.round(ridge, 4))
+    print("variance at the training points:", np.round(var[:2], 4), "(noise variance is 1)")
