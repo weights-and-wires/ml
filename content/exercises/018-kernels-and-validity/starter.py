@@ -1,8 +1,9 @@
 """Kernels as similarity scores, and the test for a valid kernel.
 
-Fill in the six functions below. A kernel scores how alike two points are, a Gram
+Fill in the seven functions below. A kernel scores how alike two points are, a Gram
 matrix holds the score for every pair, and a valid kernel has a Gram matrix with no
-negative eigenvalue.
+negative eigenvalue. Centring that matrix makes kernel PCA on a linear kernel
+match ordinary PCA.
 """
 
 import numpy as np
@@ -99,6 +100,23 @@ def is_psd(K: np.ndarray, tol: float = 1e-8) -> bool:
     raise NotImplementedError("is_psd")
 
 
+def centre_gram(K: np.ndarray) -> np.ndarray:
+    """Centre a Gram matrix in feature space.
+
+    Returns H @ K @ H, where H = I - ones/n subtracts the mean. For a symmetric
+    K, entry (i, j) is K[i, j] minus the mean of row i, minus the mean of row j,
+    plus the mean of every entry. On a linear kernel this equals the Gram matrix
+    of the centred points.
+
+    Args:
+        K: A Gram matrix, shape (n, n).
+
+    Returns:
+        The centred Gram matrix, shape (n, n).
+    """
+    raise NotImplementedError("centre_gram")
+
+
 if __name__ == "__main__":
     x = np.array([[1.0, 2.0]])
     x_prime = np.array([[3.0, 1.0]])
@@ -119,3 +137,5 @@ if __name__ == "__main__":
         K = polynomial_kernel(X, X, 2, c)
         print(f"degree-2 polynomial, coef0={c:>4}: smallest eigenvalue {min_eigenvalue(K):.3g}, PSD: {is_psd(K)}")
     print("RBF Gram matrix is PSD:", is_psd(rbf_kernel(X, X, 1.0)))
+    hand = np.array([[1.0, 0.0, 1.0], [0.0, 1.0, 1.0], [1.0, 1.0, 2.0]])
+    print("centred linear Gram matrix:\n", centre_gram(hand))

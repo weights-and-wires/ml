@@ -1,7 +1,7 @@
 {
   "id": "018-kernels-and-validity",
   "title": "Build kernels and test whether a similarity is valid",
-  "brief": "Compute RBF and polynomial kernel matrices with one matrix product, confirm the kernel trick on a degree-2 polynomial, then test a Gram matrix with its smallest eigenvalue.",
+  "brief": "Compute RBF and polynomial kernel matrices with one matrix product, confirm the kernel trick on a degree-2 polynomial, test a Gram matrix with its smallest eigenvalue, and centre a Gram matrix so kernel PCA on a linear kernel matches PCA scores.",
   "needs_gpu": false,
   "timeout": 20,
   "packages": ["numpy"],
@@ -10,6 +10,7 @@
     "polynomial_kernel is one line: add coef0 to the matrix of dot products, then raise every entry to the degree. Do not power X1 itself.",
     "For poly_features_degree2, slice the two columns of X once, then stack six columns: 1, sqrt(2) x1, sqrt(2) x2, x1^2, sqrt(2) x1 x2, x2^2. Dropping a sqrt(2) is the usual reason the kernel-trick check fails.",
     "min_eigenvalue only needs np.linalg.eigvalsh(K)[0]. eigvalsh returns real eigenvalues in ascending order for a symmetric matrix. combination_squared_length is v @ K @ v.",
-    "is_psd has three steps: return False if K is not square, return False if np.allclose(K, K.T, atol=tol, rtol=0.0) fails, then compare the smallest eigenvalue with -tol. A zero eigenvalue is allowed."
+    "is_psd has three steps: return False if K is not square, return False if np.allclose(K, K.T, atol=tol, rtol=0.0) fails, then compare the smallest eigenvalue with -tol. A zero eigenvalue is allowed.",
+    "centre_gram subtracts the row mean and the column mean, then adds the mean of every entry. Subtracting the row mean only leaves the three-point top-left entry at 1/3 instead of 5/9."
   ]
 }

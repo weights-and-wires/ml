@@ -3,7 +3,7 @@ title: "Kernels: similarity scores and what makes one valid"
 slug: 018-kernels-and-validity
 part: "Part 2 — Classical models"
 summary: A kernel scores how alike two points are and equals a dot product in a bigger space, and it is valid when its Gram matrix has no negative eigenvalue.
-minutes: 70
+minutes: 80
 gpu: false
 objectives:
   - Show with a worked example that a polynomial kernel equals a dot product of explicit features.
@@ -11,6 +11,8 @@ objectives:
   - Compute RBF and polynomial kernel matrices between two sets of points with one matrix product.
   - Explain why a valid kernel must give every combination of points a non-negative squared length.
   - Test a Gram matrix with its smallest eigenvalue, using a tolerance, and name a polynomial setting that fails.
+  - Show why the weight that minimises a penalised loss lies in the span of the training features.
+  - Centre a Gram matrix, and check that kernel PCA on a linear kernel matches the scores of the centred points.
 prereqs:
   - 006-ridge-regression
   - 017-support-vector-machines
@@ -79,6 +81,56 @@ K_shortcut = (X @ X.T + 1.0) ** 2   # one dot product per pair
 
 The *linear kernel* is the plain dot product $x^{\top}x'$. The polynomial kernel $(x^{\top}x' + c)^p$ generalises it, and a positive $c$ mixes in all lower degrees, which is why $c = 1$ produced a constant, linear, and quadratic feature together.
 
+## The best weight lies in the span of the training points
+
+You can store the trained weight as one coefficient per training point. That holds when the loss sees $w$ only through the predictions $w^{\top}\varphi(x_i)$ and you add a penalty $\lambda\lVert w\rVert^2$ with $\lambda > 0$.
+
+Split $w = w_{\parallel} + w_{\perp}$. The piece $w_{\parallel}$ lies in the span of $\varphi(x_1),\ldots,\varphi(x_n)$, and $w_{\perp}$ is at right angles to every one of them. Perpendicular pieces add in squared length:
+
+$$
+\lVert w\rVert^2 = \lVert w_{\parallel}\rVert^2 + \lVert w_{\perp}\rVert^2 .
+$$
+
+The prediction $w^{\top}\varphi(x_i)$ drops $w_{\perp}$, because $w_{\perp}^{\top}\varphi(x_i) = 0$. The misses do not change, and the penalty grows whenever $w_{\perp}$ is not zero. Every minimizer therefore lies in the span, $w = \sum_i \alpha_i\,\varphi(x_i)$. This is the *representer theorem*. With $\lambda = 0$, a perpendicular piece costs nothing, so a minimizer need not lie in the span.
+
+### Work the split by hand
+
+Take $\varphi(x_1) = (1, 0, 0)$, $\varphi(x_2) = (0, 1, 0)$, labels $4$ and $6$, and $\lambda = 1$. For $w = (a, b, c)$ the objective is the sum of squared misses plus $\lambda$ times the squared length:
+
+$$
+J = (4 - a)^2 + (6 - b)^2 + \lambda(a^2 + b^2 + c^2).
+$$
+
+The derivative in $a$ is $-2(4 - a) + 2\lambda a$. Set it to zero and divide by 2, which leaves $4 - a = \lambda a$. The same step gives $6 - b = \lambda b$ and $\lambda c = 0$. With $\lambda = 1$ the solution is $(a, b, c) = (2, 3, 0)$, so $w = 2\varphi(x_1) + 3\varphi(x_2)$. The predictions are $2$ and $3$. The squared misses are $(4 - 2)^2 + (6 - 3)^2 = 13$, the squared length is $4 + 9 = 13$, and $J = 26$.
+
+The weight $(2, 3, 4)$ predicts $2$ and $3$ as well, so the misses stay $13$. Its squared length is $4 + 9 + 16 = 29$, and $J = 42$. The extra $16$ is the squared length of $(0, 0, 4)$. Figure 3 shows that piece at right angles to the span.
+
+```figure
+<svg viewBox="0 0 600 240" role="img" aria-label="The weight (2, 3, 4) split into a span piece (2, 3, 0) and a perpendicular piece (0, 0, 4).">
+  <defs>
+    <marker id="c018-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="fill-ink"/>
+    </marker>
+  </defs>
+  <line x1="40" y1="185" x2="560" y2="185" class="stroke-muted"/>
+  <line x1="150" y1="185" x2="251" y2="185" class="stroke-a" stroke-width="2.2" marker-end="url(#c018-arrow)"/>
+  <line x1="251" y1="185" x2="251" y2="73" class="stroke-c" stroke-width="2.2" marker-end="url(#c018-arrow)"/>
+  <line x1="150" y1="185" x2="251" y2="73" class="stroke-b" stroke-width="2.2" marker-end="url(#c018-arrow)"/>
+  <path d="M239,185 L239,173 L251,173" fill="none" class="stroke-ink"/>
+  <circle cx="150" cy="185" r="3.5" class="fill-ink"/>
+  <text x="188" y="208" text-anchor="middle" class="fig-small">in the span, (2, 3, 0)</text>
+  <text x="262" y="130" text-anchor="start" class="fig-small">(0, 0, 4)</text>
+  <text x="48" y="120" text-anchor="start" class="fig-small">w = (2, 3, 4)</text>
+  <text x="430" y="208" text-anchor="middle" class="fig-small">span of the training features</text>
+</svg>
+Figure 3. The span of the two training features, seen edge-on. The weight (2, 3, 4) and the shadow (2, 3, 0) both predict 2 and 3. Notice that the upright piece has squared length 16, so the objective rises from 26 to 42.
+```
+
+[Kernel ridge regression](/lessons/019-kernel-ridge-and-random-features) solves for $\alpha_i$. A new point then scores $\sum_i \alpha_i\, k(x, x_i)$.
+
+> [!KEY]
+> The weight that minimises a penalised training loss lies in the span of the training features.
+
 ## The RBF kernel: similarity that fades with distance
 
 The *radial basis function* kernel, written RBF and also called the Gaussian kernel, is the bump from Figure 1:
@@ -89,13 +141,13 @@ $$
 
 Read it aloud: "take the squared distance between the points, multiply by minus gamma, and exponentiate." A point compared with itself scores $e^0 = 1$, and the score falls toward 0 as the distance grows. For $x = (0, 0)$, $x' = (1, 0)$, and $\gamma = 0.5$, the squared distance is 1 and the score is $e^{-0.5} \approx 0.6065$.
 
-The number $\gamma$ is the inverse of a width: a large $\gamma$ gives a narrow bump, and a small $\gamma$ gives a wide one (Figure 3). At $\gamma = 10$, points 0.5 apart score near 0.08 and hardly count as neighbours, while at $\gamma = 0.1$ even points 3 apart score above 0.4.
+The number $\gamma$ is the inverse of a width: a large $\gamma$ gives a narrow bump, and a small $\gamma$ gives a wide one (Figure 4). At $\gamma = 10$, points 0.5 apart score near 0.08 and hardly count as neighbours, while at $\gamma = 0.1$ even points 3 apart score above 0.4.
 
 ```figure
 <svg viewBox="0 0 600 250" role="img" aria-label="Three RBF bumps for gamma 0.1, 1, and 10 plotted against distance.">
 <line x1="60.0" y1="200.0" x2="560.0" y2="200.0" class="stroke-muted"/><line x1="60.0" y1="20.0" x2="60.0" y2="200.0" class="stroke-muted"/><text x="60.0" y="216.0" text-anchor="middle" class="fig-small">-3</text><text x="143.3" y="216.0" text-anchor="middle" class="fig-small">-2</text><text x="226.7" y="216.0" text-anchor="middle" class="fig-small">-1</text><text x="310.0" y="216.0" text-anchor="middle" class="fig-small">0</text><text x="393.3" y="216.0" text-anchor="middle" class="fig-small">1</text><text x="476.7" y="216.0" text-anchor="middle" class="fig-small">2</text><text x="560.0" y="216.0" text-anchor="middle" class="fig-small">3</text><text x="54.0" y="204.0" text-anchor="end" class="fig-small">0</text><text x="54.0" y="118.3" text-anchor="end" class="fig-small">0.5</text><text x="54.0" y="32.6" text-anchor="end" class="fig-small">1</text><text x="310.0" y="236.0" text-anchor="middle" class="fig-small">distance d from the centre point</text><path d="M60.0,130.3 L61.7,129.5 L63.3,128.6 L65.0,127.8 L66.7,126.9 L68.4,126.1 L70.0,125.2 L71.7,124.3 L73.4,123.5 L75.1,122.6 L76.7,121.7 L78.4,120.8 L80.1,119.9 L81.7,119.0 L83.4,118.2 L85.1,117.3 L86.8,116.4 L88.4,115.5 L90.1,114.6 L91.8,113.7 L93.4,112.7 L95.1,111.8 L96.8,110.9 L98.5,110.0 L100.1,109.1 L101.8,108.2 L103.5,107.2 L105.2,106.3 L106.8,105.4 L108.5,104.5 L110.2,103.5 L111.8,102.6 L113.5,101.7 L115.2,100.8 L116.9,99.8 L118.5,98.9 L120.2,98.0 L121.9,97.0 L123.5,96.1 L125.2,95.2 L126.9,94.2 L128.6,93.3 L130.2,92.4 L131.9,91.4 L133.6,90.5 L135.3,89.6 L136.9,88.6 L138.6,87.7 L140.3,86.8 L141.9,85.9 L143.6,84.9 L145.3,84.0 L147.0,83.1 L148.6,82.2 L150.3,81.3 L152.0,80.4 L153.6,79.4 L155.3,78.5 L157.0,77.6 L158.7,76.7 L160.3,75.8 L162.0,74.9 L163.7,74.1 L165.4,73.2 L167.0,72.3 L168.7,71.4 L170.4,70.5 L172.0,69.7 L173.7,68.8 L175.4,67.9 L177.1,67.1 L178.7,66.2 L180.4,65.4 L182.1,64.6 L183.7,63.7 L185.4,62.9 L187.1,62.1 L188.8,61.3 L190.4,60.5 L192.1,59.7 L193.8,58.9 L195.5,58.1 L197.1,57.3 L198.8,56.5 L200.5,55.8 L202.1,55.0 L203.8,54.3 L205.5,53.5 L207.2,52.8 L208.8,52.1 L210.5,51.3 L212.2,50.6 L213.8,49.9 L215.5,49.3 L217.2,48.6 L218.9,47.9 L220.5,47.2 L222.2,46.6 L223.9,45.9 L225.6,45.3 L227.2,44.7 L228.9,44.1 L230.6,43.5 L232.2,42.9 L233.9,42.3 L235.6,41.7 L237.3,41.1 L238.9,40.6 L240.6,40.1 L242.3,39.5 L243.9,39.0 L245.6,38.5 L247.3,38.0 L249.0,37.5 L250.6,37.1 L252.3,36.6 L254.0,36.1 L255.7,35.7 L257.3,35.3 L259.0,34.9 L260.7,34.5 L262.3,34.1 L264.0,33.7 L265.7,33.4 L267.4,33.0 L269.0,32.7 L270.7,32.3 L272.4,32.0 L274.0,31.7 L275.7,31.4 L277.4,31.2 L279.1,30.9 L280.7,30.7 L282.4,30.4 L284.1,30.2 L285.8,30.0 L287.4,29.8 L289.1,29.6 L290.8,29.5 L292.4,29.3 L294.1,29.2 L295.8,29.1 L297.5,29.0 L299.1,28.9 L300.8,28.8 L302.5,28.7 L304.1,28.7 L305.8,28.6 L307.5,28.6 L309.2,28.6 L310.8,28.6 L312.5,28.6 L314.2,28.6 L315.9,28.7 L317.5,28.7 L319.2,28.8 L320.9,28.9 L322.5,29.0 L324.2,29.1 L325.9,29.2 L327.6,29.3 L329.2,29.5 L330.9,29.6 L332.6,29.8 L334.2,30.0 L335.9,30.2 L337.6,30.4 L339.3,30.7 L340.9,30.9 L342.6,31.2 L344.3,31.4 L346.0,31.7 L347.6,32.0 L349.3,32.3 L351.0,32.7 L352.6,33.0 L354.3,33.4 L356.0,33.7 L357.7,34.1 L359.3,34.5 L361.0,34.9 L362.7,35.3 L364.3,35.7 L366.0,36.1 L367.7,36.6 L369.4,37.1 L371.0,37.5 L372.7,38.0 L374.4,38.5 L376.1,39.0 L377.7,39.5 L379.4,40.1 L381.1,40.6 L382.7,41.1 L384.4,41.7 L386.1,42.3 L387.8,42.9 L389.4,43.5 L391.1,44.1 L392.8,44.7 L394.4,45.3 L396.1,45.9 L397.8,46.6 L399.5,47.2 L401.1,47.9 L402.8,48.6 L404.5,49.3 L406.2,49.9 L407.8,50.6 L409.5,51.3 L411.2,52.1 L412.8,52.8 L414.5,53.5 L416.2,54.3 L417.9,55.0 L419.5,55.8 L421.2,56.5 L422.9,57.3 L424.5,58.1 L426.2,58.9 L427.9,59.7 L429.6,60.5 L431.2,61.3 L432.9,62.1 L434.6,62.9 L436.3,63.7 L437.9,64.6 L439.6,65.4 L441.3,66.2 L442.9,67.1 L444.6,67.9 L446.3,68.8 L448.0,69.7 L449.6,70.5 L451.3,71.4 L453.0,72.3 L454.6,73.2 L456.3,74.1 L458.0,74.9 L459.7,75.8 L461.3,76.7 L463.0,77.6 L464.7,78.5 L466.4,79.4 L468.0,80.4 L469.7,81.3 L471.4,82.2 L473.0,83.1 L474.7,84.0 L476.4,84.9 L478.1,85.9 L479.7,86.8 L481.4,87.7 L483.1,88.6 L484.7,89.6 L486.4,90.5 L488.1,91.4 L489.8,92.4 L491.4,93.3 L493.1,94.2 L494.8,95.2 L496.5,96.1 L498.1,97.0 L499.8,98.0 L501.5,98.9 L503.1,99.8 L504.8,100.8 L506.5,101.7 L508.2,102.6 L509.8,103.5 L511.5,104.5 L513.2,105.4 L514.8,106.3 L516.5,107.2 L518.2,108.2 L519.9,109.1 L521.5,110.0 L523.2,110.9 L524.9,111.8 L526.6,112.7 L528.2,113.7 L529.9,114.6 L531.6,115.5 L533.2,116.4 L534.9,117.3 L536.6,118.2 L538.3,119.0 L539.9,119.9 L541.6,120.8 L543.3,121.7 L544.9,122.6 L546.6,123.5 L548.3,124.3 L550.0,125.2 L551.6,126.1 L553.3,126.9 L555.0,127.8 L556.7,128.6 L558.3,129.5 L560.0,130.3" fill="none" class="stroke-a" stroke-width="2.2"/><path d="M60.0,200.0 L61.7,200.0 L63.3,200.0 L65.0,200.0 L66.7,200.0 L68.4,200.0 L70.0,200.0 L71.7,200.0 L73.4,199.9 L75.1,199.9 L76.7,199.9 L78.4,199.9 L80.1,199.9 L81.7,199.9 L83.4,199.9 L85.1,199.9 L86.8,199.9 L88.4,199.9 L90.1,199.8 L91.8,199.8 L93.4,199.8 L95.1,199.8 L96.8,199.8 L98.5,199.7 L100.1,199.7 L101.8,199.7 L103.5,199.6 L105.2,199.6 L106.8,199.6 L108.5,199.5 L110.2,199.5 L111.8,199.4 L113.5,199.3 L115.2,199.3 L116.9,199.2 L118.5,199.1 L120.2,199.0 L121.9,199.0 L123.5,198.9 L125.2,198.7 L126.9,198.6 L128.6,198.5 L130.2,198.4 L131.9,198.2 L133.6,198.1 L135.3,197.9 L136.9,197.7 L138.6,197.5 L140.3,197.3 L141.9,197.1 L143.6,196.8 L145.3,196.6 L147.0,196.3 L148.6,196.0 L150.3,195.6 L152.0,195.3 L153.6,194.9 L155.3,194.5 L157.0,194.1 L158.7,193.7 L160.3,193.2 L162.0,192.7 L163.7,192.1 L165.4,191.6 L167.0,191.0 L168.7,190.3 L170.4,189.7 L172.0,188.9 L173.7,188.2 L175.4,187.4 L177.1,186.5 L178.7,185.7 L180.4,184.7 L182.1,183.8 L183.7,182.7 L185.4,181.7 L187.1,180.5 L188.8,179.4 L190.4,178.1 L192.1,176.8 L193.8,175.5 L195.5,174.1 L197.1,172.6 L198.8,171.1 L200.5,169.5 L202.1,167.9 L203.8,166.2 L205.5,164.4 L207.2,162.6 L208.8,160.7 L210.5,158.8 L212.2,156.8 L213.8,154.7 L215.5,152.6 L217.2,150.4 L218.9,148.2 L220.5,145.9 L222.2,143.5 L223.9,141.1 L225.6,138.6 L227.2,136.1 L228.9,133.5 L230.6,130.9 L232.2,128.2 L233.9,125.5 L235.6,122.8 L237.3,120.0 L238.9,117.2 L240.6,114.3 L242.3,111.4 L243.9,108.5 L245.6,105.6 L247.3,102.7 L249.0,99.7 L250.6,96.8 L252.3,93.8 L254.0,90.9 L255.7,88.0 L257.3,85.0 L259.0,82.1 L260.7,79.2 L262.3,76.4 L264.0,73.6 L265.7,70.8 L267.4,68.1 L269.0,65.4 L270.7,62.8 L272.4,60.2 L274.0,57.7 L275.7,55.3 L277.4,52.9 L279.1,50.6 L280.7,48.5 L282.4,46.4 L284.1,44.4 L285.8,42.5 L287.4,40.7 L289.1,39.0 L290.8,37.5 L292.4,36.0 L294.1,34.7 L295.8,33.5 L297.5,32.4 L299.1,31.5 L300.8,30.6 L302.5,30.0 L304.1,29.4 L305.8,29.0 L307.5,28.7 L309.2,28.6 L310.8,28.6 L312.5,28.7 L314.2,29.0 L315.9,29.4 L317.5,30.0 L319.2,30.6 L320.9,31.5 L322.5,32.4 L324.2,33.5 L325.9,34.7 L327.6,36.0 L329.2,37.5 L330.9,39.0 L332.6,40.7 L334.2,42.5 L335.9,44.4 L337.6,46.4 L339.3,48.5 L340.9,50.6 L342.6,52.9 L344.3,55.3 L346.0,57.7 L347.6,60.2 L349.3,62.8 L351.0,65.4 L352.6,68.1 L354.3,70.8 L356.0,73.6 L357.7,76.4 L359.3,79.2 L361.0,82.1 L362.7,85.0 L364.3,88.0 L366.0,90.9 L367.7,93.8 L369.4,96.8 L371.0,99.7 L372.7,102.7 L374.4,105.6 L376.1,108.5 L377.7,111.4 L379.4,114.3 L381.1,117.2 L382.7,120.0 L384.4,122.8 L386.1,125.5 L387.8,128.2 L389.4,130.9 L391.1,133.5 L392.8,136.1 L394.4,138.6 L396.1,141.1 L397.8,143.5 L399.5,145.9 L401.1,148.2 L402.8,150.4 L404.5,152.6 L406.2,154.7 L407.8,156.8 L409.5,158.8 L411.2,160.7 L412.8,162.6 L414.5,164.4 L416.2,166.2 L417.9,167.9 L419.5,169.5 L421.2,171.1 L422.9,172.6 L424.5,174.1 L426.2,175.5 L427.9,176.8 L429.6,178.1 L431.2,179.4 L432.9,180.5 L434.6,181.7 L436.3,182.7 L437.9,183.8 L439.6,184.7 L441.3,185.7 L442.9,186.5 L444.6,187.4 L446.3,188.2 L448.0,188.9 L449.6,189.7 L451.3,190.3 L453.0,191.0 L454.6,191.6 L456.3,192.1 L458.0,192.7 L459.7,193.2 L461.3,193.7 L463.0,194.1 L464.7,194.5 L466.4,194.9 L468.0,195.3 L469.7,195.6 L471.4,196.0 L473.0,196.3 L474.7,196.6 L476.4,196.8 L478.1,197.1 L479.7,197.3 L481.4,197.5 L483.1,197.7 L484.7,197.9 L486.4,198.1 L488.1,198.2 L489.8,198.4 L491.4,198.5 L493.1,198.6 L494.8,198.7 L496.5,198.9 L498.1,199.0 L499.8,199.0 L501.5,199.1 L503.1,199.2 L504.8,199.3 L506.5,199.3 L508.2,199.4 L509.8,199.5 L511.5,199.5 L513.2,199.6 L514.8,199.6 L516.5,199.6 L518.2,199.7 L519.9,199.7 L521.5,199.7 L523.2,199.8 L524.9,199.8 L526.6,199.8 L528.2,199.8 L529.9,199.8 L531.6,199.9 L533.2,199.9 L534.9,199.9 L536.6,199.9 L538.3,199.9 L539.9,199.9 L541.6,199.9 L543.3,199.9 L544.9,199.9 L546.6,199.9 L548.3,200.0 L550.0,200.0 L551.6,200.0 L553.3,200.0 L555.0,200.0 L556.7,200.0 L558.3,200.0 L560.0,200.0" fill="none" class="stroke-b" stroke-width="2.2"/><path d="M60.0,200.0 L61.7,200.0 L63.3,200.0 L65.0,200.0 L66.7,200.0 L68.4,200.0 L70.0,200.0 L71.7,200.0 L73.4,200.0 L75.1,200.0 L76.7,200.0 L78.4,200.0 L80.1,200.0 L81.7,200.0 L83.4,200.0 L85.1,200.0 L86.8,200.0 L88.4,200.0 L90.1,200.0 L91.8,200.0 L93.4,200.0 L95.1,200.0 L96.8,200.0 L98.5,200.0 L100.1,200.0 L101.8,200.0 L103.5,200.0 L105.2,200.0 L106.8,200.0 L108.5,200.0 L110.2,200.0 L111.8,200.0 L113.5,200.0 L115.2,200.0 L116.9,200.0 L118.5,200.0 L120.2,200.0 L121.9,200.0 L123.5,200.0 L125.2,200.0 L126.9,200.0 L128.6,200.0 L130.2,200.0 L131.9,200.0 L133.6,200.0 L135.3,200.0 L136.9,200.0 L138.6,200.0 L140.3,200.0 L141.9,200.0 L143.6,200.0 L145.3,200.0 L147.0,200.0 L148.6,200.0 L150.3,200.0 L152.0,200.0 L153.6,200.0 L155.3,200.0 L157.0,200.0 L158.7,200.0 L160.3,200.0 L162.0,200.0 L163.7,200.0 L165.4,200.0 L167.0,200.0 L168.7,200.0 L170.4,200.0 L172.0,200.0 L173.7,200.0 L175.4,200.0 L177.1,200.0 L178.7,200.0 L180.4,200.0 L182.1,200.0 L183.7,200.0 L185.4,200.0 L187.1,200.0 L188.8,200.0 L190.4,200.0 L192.1,200.0 L193.8,200.0 L195.5,200.0 L197.1,200.0 L198.8,200.0 L200.5,200.0 L202.1,200.0 L203.8,200.0 L205.5,200.0 L207.2,200.0 L208.8,200.0 L210.5,200.0 L212.2,200.0 L213.8,200.0 L215.5,200.0 L217.2,200.0 L218.9,200.0 L220.5,200.0 L222.2,200.0 L223.9,200.0 L225.6,200.0 L227.2,200.0 L228.9,200.0 L230.6,200.0 L232.2,200.0 L233.9,200.0 L235.6,199.9 L237.3,199.9 L238.9,199.9 L240.6,199.8 L242.3,199.8 L243.9,199.7 L245.6,199.6 L247.3,199.4 L249.0,199.2 L250.6,198.9 L252.3,198.6 L254.0,198.1 L255.7,197.6 L257.3,196.8 L259.0,196.0 L260.7,194.8 L262.3,193.5 L264.0,191.8 L265.7,189.9 L267.4,187.5 L269.0,184.7 L270.7,181.5 L272.4,177.7 L274.0,173.4 L275.7,168.4 L277.4,162.9 L279.1,156.8 L280.7,150.1 L282.4,142.7 L284.1,134.8 L285.8,126.5 L287.4,117.7 L289.1,108.6 L290.8,99.4 L292.4,90.0 L294.1,80.8 L295.8,71.8 L297.5,63.3 L299.1,55.4 L300.8,48.2 L302.5,42.0 L304.1,36.8 L305.8,32.8 L307.5,30.1 L309.2,28.7 L310.8,28.7 L312.5,30.1 L314.2,32.8 L315.9,36.8 L317.5,42.0 L319.2,48.2 L320.9,55.4 L322.5,63.3 L324.2,71.8 L325.9,80.8 L327.6,90.0 L329.2,99.4 L330.9,108.6 L332.6,117.7 L334.2,126.5 L335.9,134.8 L337.6,142.7 L339.3,150.1 L340.9,156.8 L342.6,162.9 L344.3,168.4 L346.0,173.4 L347.6,177.7 L349.3,181.5 L351.0,184.7 L352.6,187.5 L354.3,189.9 L356.0,191.8 L357.7,193.5 L359.3,194.8 L361.0,196.0 L362.7,196.8 L364.3,197.6 L366.0,198.1 L367.7,198.6 L369.4,198.9 L371.0,199.2 L372.7,199.4 L374.4,199.6 L376.1,199.7 L377.7,199.8 L379.4,199.8 L381.1,199.9 L382.7,199.9 L384.4,199.9 L386.1,200.0 L387.8,200.0 L389.4,200.0 L391.1,200.0 L392.8,200.0 L394.4,200.0 L396.1,200.0 L397.8,200.0 L399.5,200.0 L401.1,200.0 L402.8,200.0 L404.5,200.0 L406.2,200.0 L407.8,200.0 L409.5,200.0 L411.2,200.0 L412.8,200.0 L414.5,200.0 L416.2,200.0 L417.9,200.0 L419.5,200.0 L421.2,200.0 L422.9,200.0 L424.5,200.0 L426.2,200.0 L427.9,200.0 L429.6,200.0 L431.2,200.0 L432.9,200.0 L434.6,200.0 L436.3,200.0 L437.9,200.0 L439.6,200.0 L441.3,200.0 L442.9,200.0 L444.6,200.0 L446.3,200.0 L448.0,200.0 L449.6,200.0 L451.3,200.0 L453.0,200.0 L454.6,200.0 L456.3,200.0 L458.0,200.0 L459.7,200.0 L461.3,200.0 L463.0,200.0 L464.7,200.0 L466.4,200.0 L468.0,200.0 L469.7,200.0 L471.4,200.0 L473.0,200.0 L474.7,200.0 L476.4,200.0 L478.1,200.0 L479.7,200.0 L481.4,200.0 L483.1,200.0 L484.7,200.0 L486.4,200.0 L488.1,200.0 L489.8,200.0 L491.4,200.0 L493.1,200.0 L494.8,200.0 L496.5,200.0 L498.1,200.0 L499.8,200.0 L501.5,200.0 L503.1,200.0 L504.8,200.0 L506.5,200.0 L508.2,200.0 L509.8,200.0 L511.5,200.0 L513.2,200.0 L514.8,200.0 L516.5,200.0 L518.2,200.0 L519.9,200.0 L521.5,200.0 L523.2,200.0 L524.9,200.0 L526.6,200.0 L528.2,200.0 L529.9,200.0 L531.6,200.0 L533.2,200.0 L534.9,200.0 L536.6,200.0 L538.3,200.0 L539.9,200.0 L541.6,200.0 L543.3,200.0 L544.9,200.0 L546.6,200.0 L548.3,200.0 L550.0,200.0 L551.6,200.0 L553.3,200.0 L555.0,200.0 L556.7,200.0 L558.3,200.0 L560.0,200.0" fill="none" class="stroke-c" stroke-width="2.2"/><line x1="439.2" y1="30.3" x2="472.5" y2="30.3" class="stroke-a" stroke-width="2.2"/><text x="478.3" y="34.3" text-anchor="start" class="fig-small">γ = 0.1 (wide)</text><line x1="439.2" y1="43.1" x2="472.5" y2="43.1" class="stroke-b" stroke-width="2.2"/><text x="478.3" y="47.1" text-anchor="start" class="fig-small">γ = 1</text><line x1="439.2" y1="56.0" x2="472.5" y2="56.0" class="stroke-c" stroke-width="2.2"/><text x="478.3" y="60.0" text-anchor="start" class="fig-small">γ = 10 (narrow)</text>
 </svg>
-Figure 3. The same bump for three values of gamma. Notice that gamma = 10 is narrow: points a distance of 0.5 apart already score near 0.08, so they hardly count as neighbours. At gamma = 0.1 even points 3 apart score above 0.4.
+Figure 4. The same bump for three values of gamma. Notice that gamma = 10 is narrow: points a distance of 0.5 apart already score near 0.08, so they hardly count as neighbours. At gamma = 0.1 even points 3 apart score above 0.4.
 ```
 
 Is the RBF kernel also a dot product of features? Yes, with infinitely many. Expand the squared distance as $\lVert x\rVert^2 + \lVert x'\rVert^2 - 2x^{\top}x'$ and the kernel becomes $e^{-\gamma\lVert x\rVert^2}\, e^{-\gamma\lVert x'\rVert^2}\, e^{2\gamma x^{\top}x'}$. The last factor expands as $\sum_p (2\gamma)^p (x^{\top}x')^p / p!$, a weighted sum of polynomial kernels of every degree. That is the endless feature list no hand-built column set could match.
@@ -128,14 +180,14 @@ $$
 \lVert \varphi(x) - \varphi(x')\rVert^2 = k(x, x) + k(x', x') - 2\,k(x, x') .
 $$
 
-Read it aloud: "the squared distance is each point's score with itself, minus twice their score with each other." Check it with real features $(1, 0)$ and $(0, 1)$. Their Gram matrix is the identity, and $1 + 1 - 2\cdot 0 = 2$. Your colleague's table gives $1 + 1 - 2\cdot 2 = -2$. A squared length of $-2$ is impossible, because the square of a real number is never negative, so no real feature lists produce this table (Figure 4).
+Read it aloud: "the squared distance is each point's score with itself, minus twice their score with each other." Check it with real features $(1, 0)$ and $(0, 1)$. Their Gram matrix is the identity, and $1 + 1 - 2\cdot 0 = 2$. Your colleague's table gives $1 + 1 - 2\cdot 2 = -2$. A squared length of $-2$ is impossible, because the square of a real number is never negative, so no real feature lists produce this table (Figure 5).
 
 ```figure
 <svg viewBox="0 0 600 250" role="img" aria-label="Left: the arrow from x2 to x1 for K equal to the identity has squared length 2. Right: the invented matrix would need squared length minus 2.">
 <defs><marker id="c016-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="fill-ink"/></marker></defs>
 <line x1="70" y1="170" x2="200" y2="170" class="stroke-grid"/><line x1="70" y1="170" x2="70" y2="40" class="stroke-grid"/><line x1="70" y1="170" x2="160" y2="170" class="stroke-a" stroke-width="2.2" marker-end="url(#c016-arrow)"/><line x1="70" y1="170" x2="70" y2="80" class="stroke-a" stroke-width="2.2" marker-end="url(#c016-arrow)"/><line x1="70" y1="84" x2="157" y2="167" class="stroke-b dashed" stroke-width="2.2" marker-end="url(#c016-arrow)"/><text x="156.0" y="188.0" text-anchor="start" class="fig-bold">x1</text><text x="42.0" y="84.0" text-anchor="start" class="fig-bold">x2</text><text x="132.0" y="119.0" text-anchor="start" class="fig-small">x1 − x2</text><text x="40.0" y="24.0" text-anchor="start" class="fig-bold">Real features, K = I</text><text x="40.0" y="214.0" text-anchor="start" class="fig-mono">1 + 1 − 2·0 = 2</text><text x="40.0" y="234.0" text-anchor="start" class="fig-small">squared length 2: fine</text><text x="330.0" y="24.0" text-anchor="start" class="fig-bold">Invented K = [[1, 2], [2, 1]]</text><text x="330.0" y="70.0" text-anchor="start" class="fig-mono">k(x1,x1) = 1</text><text x="330.0" y="92.0" text-anchor="start" class="fig-mono">k(x2,x2) = 1</text><text x="330.0" y="114.0" text-anchor="start" class="fig-mono">k(x1,x2) = 2</text><text x="330.0" y="150.0" text-anchor="start" class="fig-mono fig-bold">1 + 1 − 2·2 = −2</text><rect x="322" y="162" width="250" height="34" rx="4" class="fill-soft-d"/><text x="330.0" y="184.0" text-anchor="start" class="fig-small">squared length −2: no such arrow</text><line x1="322" y1="134" x2="560" y2="134" class="stroke-bad"/>
 </svg>
-Figure 4. Left: real features give an arrow between the two points, and its squared length is a real, non-negative number. Right: the invented table would need a squared length of minus 2. Notice that the arithmetic runs without complaint and still describes a picture that cannot be drawn.
+Figure 5. Left: real features give an arrow between the two points, and its squared length is a real, non-negative number. Right: the invented table would need a squared length of minus 2. Notice that the arithmetic runs without complaint and still describes a picture that cannot be drawn.
 ```
 
 The arrow between two points is one case of a general idea. Pick any weights $v_1, \ldots, v_n$ and form the combination $\sum_i v_i\,\varphi(x_i)$. The weights $(1, -1)$ give the arrow above. Stack the feature lists as the rows of $\Phi$, so that $K = \Phi\Phi^{\top}$. The combination is $\Phi^{\top}v$, and its squared length is
@@ -147,6 +199,18 @@ $$
 Read it aloud: "the weighted sum of all pairwise scores, with weights $v$ on both sides, is the squared length of a real vector." So every Gram matrix of a real feature map passes. A symmetric matrix with $v^{\top}Kv \ge 0$ for every $v$ is *positive semidefinite*. For your colleague's table with $v = (1, -1)$, $v^{\top}Kv = 1 + 1 - 2\cdot 2 = -2$. One such vector, the *witness*, is enough to reject the table.
 
 You cannot try every $v$. A symmetric matrix has special directions, its eigenvectors, and along each one $v^{\top}Kv$ equals the eigenvalue times $\lVert v\rVert^2$. Every other $v$ is a mix of those directions, so $v^{\top}Kv$ cannot go negative unless one eigenvalue is negative. That turns "for every $v$" into one check: the smallest eigenvalue is at least 0. For the table above, $\lambda^2 - 2\lambda - 3 = (\lambda - 3)(\lambda + 1) = 0$ gives eigenvalues 3 and $-1$, and the eigenvector for $-1$ points along $(1, -1)$, the witness. The converse also holds, and it is the content of Mercer's condition: a similarity whose Gram matrices are positive semidefinite for every finite set of points is a kernel. This course uses the result and skips its proof.
+
+### Check one valid kernel and one matrix that fails
+
+The points $(1, 0)$ and $(1, 1)$, with the linear kernel, have Gram matrix
+
+$$
+\begin{bmatrix} 1 & 1 \\ 1 & 2 \end{bmatrix}.
+$$
+
+Its characteristic polynomial is $(1 - \lambda)(2 - \lambda) - 1 = \lambda^2 - 3\lambda + 1$. The roots are $(3 - \sqrt{5})/2 \approx 0.382$ and $(3 + \sqrt{5})/2 \approx 2.618$. Both are positive, so this kernel passes the check on these two points.
+
+The colleague's matrix has eigenvalues $3$ and $-1$. The negative one fails the check. A positive largest eigenvalue does not make a matrix valid.
 
 > [!KEY]
 > A similarity is a valid kernel when it behaves like dot products of real features: every combination $v$ of points has $v^{\top}Kv \ge 0$, which holds exactly when the Gram matrix has no negative eigenvalue. Your colleague's table fails because the combination $(1, -1)$ has squared length $-2$.
@@ -170,16 +234,52 @@ evals = np.linalg.eigvalsh(K)      # real, ascending
 ok = symmetric and evals[0] >= -tol
 ```
 
+## Centre a Gram matrix
+
+[Principal components](/lessons/024-principal-components) computes scores from the centred points. With only a Gram matrix, centre the table instead. Let $H$ be the identity with $1/n$ subtracted from every entry, let $r_i$ be the mean of row $i$ of a symmetric $K$, and let $\bar K$ be the mean of every entry.
+
+$$
+(HKH)_{ij} = K_{ij} - r_i - r_j + \bar K.
+$$
+
+Read it aloud: "subtract the mean of row $i$ and the mean of row $j$, then add back the mean of the whole table." On a linear kernel, $HKH$ equals the Gram matrix of the centred points. For a unit eigenvector $v$ with eigenvalue $\lambda$, the kernel PCA scores are $\sqrt{\lambda}\, v$.
+
+### Work the centring by hand
+
+The points $(1, 0)$, $(0, 1)$, and $(1, 1)$ have linear-kernel matrix
+
+$$
+K = \begin{bmatrix} 1 & 0 & 1 \\ 0 & 1 & 1 \\ 1 & 1 & 2 \end{bmatrix}.
+$$
+
+The row means are $2/3$, $2/3$, and $4/3$, and $\bar K = 8/9$. The top-left entry is $1 - 2/3 - 2/3 + 8/9 = 5/9$, and
+
+$$
+HKH = \begin{bmatrix}
+5/9 & -4/9 & -1/9 \\
+-4/9 & 5/9 & -1/9 \\
+-1/9 & -1/9 & 2/9
+\end{bmatrix}.
+$$
+
+The centred points $(1/3, -2/3)$, $(-2/3, 1/3)$, and $(1/3, 1/3)$ have these dot products. The eigenvalues are $1$, $1/3$, and $0$. The scores for eigenvalue $1$ are $-\sqrt{2}/2$, $\sqrt{2}/2$, and $0$: each centred point dotted with $(-1, 1)/\sqrt{2}$. The first dot product is $(1/3)(-1/\sqrt{2}) + (-2/3)(1/\sqrt{2}) = -1/\sqrt{2}$. On a linear kernel, kernel PCA matches those PCA scores. Subtracting only the row mean leaves the top-left entry at $1 - 2/3 = 1/3$, not $5/9$.
+
+```python
+row = K.mean(1)[:, None]
+col = K.mean(0)[None, :]
+Kc = K - row - col + K.mean()
+```
+
 > [!RECAP]
-> - A polynomial kernel $(x^{\top}x' + c)^p$ equals a dot product of explicit polynomial features. The worked pair gave 36 both ways.
-> - The RBF kernel $\exp(-\gamma\lVert x - x'\rVert^2)$ scores 1 for identical points and falls toward 0 with distance, and $\gamma$ is how fast.
-> - A kernel matrix between sets of sizes $n_1$ and $n_2$ has shape `(n1, n2)`. Squared distances come from row norms and one matrix product, and `np.maximum` clips rounding errors.
-> - A valid kernel gives every combination of points a squared length $v^{\top}Kv \ge 0$, which means no negative eigenvalue.
-> - The RBF kernel with $\gamma > 0$ and the polynomial kernel with $c \ge 0$ are valid. A zero eigenvalue is allowed, so test against `-tol`.
+> - A polynomial kernel equals a dot product of explicit features (the worked pair gave 36 both ways), and the RBF kernel falls toward 0 as $\gamma$ grows.
+> - A penalised minimizer lies in the span of the training features. The worked split has $J = 26$ for $(2, 3, 0)$ and $J = 42$ for $(2, 3, 4)$.
+> - Build an `(n1, n2)` kernel matrix from row norms and one product, and clip squared distances at zero.
+> - A valid kernel has no negative eigenvalue: $(3 \pm \sqrt{5})/2$ passes, and $3$ and $-1$ fail. A zero eigenvalue is allowed, so test against `-tol`.
+> - `centre_gram` returns $HKH$. Row-mean-only centring leaves the worked top-left entry at $1/3$ instead of $5/9$.
 
 ## Build it step by step
 
-You build six functions, in the order the checks test them.
+You build seven functions, in the order the checks test them.
 
 1. **`rbf_kernel(X1, X2, gamma)`**. Takes `(n1, d)` and `(n2, d)` points and returns `(n1, n2)`. Compute squared row norms as a column and a row, subtract twice `X1 @ X2.T`, clip at zero, and exponentiate. The usual mistake is adding two flat vectors, which gives a length-$n$ result and no error. Use `[:, None]` and `[None, :]`.
 2. **`polynomial_kernel(X1, X2, degree, coef0)`**. Returns `(n1, n2)`. One product, one addition, one power: `(X1 @ X2.T + coef0) ** degree`. The usual mistake is raising `X1` to a power before the product.
@@ -187,6 +287,7 @@ You build six functions, in the order the checks test them.
 4. **`min_eigenvalue(K)`**. Returns the smallest eigenvalue of a symmetric `(n, n)` matrix as a Python `float`: `np.linalg.eigvalsh(K)[0]`. The usual mistake is `np.linalg.eig`, whose eigenvalues are not sorted and may be complex.
 5. **`combination_squared_length(K, v)`**. Returns `v @ K @ v` as a `float`. The usual mistake is `(v * K).sum()`, which spreads `v` across the columns only.
 6. **`is_psd(K, tol)`**. Returns a Python `bool`. Return `False` for a non-square matrix, then `False` when `K` and `K.T` differ by more than `tol` in any entry, then compare `min_eigenvalue(K)` with `-tol`.
+7. **`centre_gram(K)`**. Takes a symmetric `(n, n)` Gram matrix and returns `(n, n)`. Subtract the row means and the column means, then add the mean of every entry. The usual mistake is subtracting the row mean only, which leaves the three-point top-left entry at $1/3$ instead of $5/9$.
 
 ## Where this breaks
 
@@ -198,4 +299,8 @@ You build six functions, in the order the checks test them.
 
 ## The exercise
 
-You build `rbf_kernel`, `polynomial_kernel`, `poly_features_degree2`, `min_eigenvalue`, `combination_squared_length`, and `is_psd`. The checks compare both kernels with hand-built numbers, confirm that the RBF Gram matrix is symmetric with a unit diagonal and never exceeds 1, and confirm that a larger `gamma` lowers the off-diagonal similarity. The kernel-trick check requires `poly_features_degree2(X1) @ poly_features_degree2(X2).T` to equal `polynomial_kernel(X1, X2, 2, 1.0)` to within $10^{-10}$. Then the checks confirm that $v = (1, -1)$ gives $-2$ on the colleague's table, and that `is_psd` accepts RBF and polynomial matrices, including one with a zero eigenvalue, and rejects the colleague's table, an asymmetric matrix, a non-square matrix, and a polynomial matrix with `coef0` of $-2$. The last check confirms that the eigenvector of a negative eigenvalue is a witness with negative squared length.
+You build `rbf_kernel`, `polynomial_kernel`, `poly_features_degree2`, `min_eigenvalue`, `combination_squared_length`, `is_psd`, and `centre_gram`. The checks compare both kernels with hand-built numbers, confirm that the RBF Gram matrix is symmetric with a unit diagonal and never exceeds 1, and confirm that a larger `gamma` lowers the off-diagonal similarity. The kernel-trick check requires `poly_features_degree2(X1) @ poly_features_degree2(X2).T` to equal `polynomial_kernel(X1, X2, 2, 1.0)` to within $10^{-10}$. Then the checks confirm that $v = (1, -1)$ gives $-2$ on the colleague's table, and that `is_psd` accepts RBF and polynomial matrices, including one with a zero eigenvalue, and rejects the colleague's table, an asymmetric matrix, a non-square matrix, and a polynomial matrix with `coef0` of $-2$. The witness check confirms that the eigenvector of a negative eigenvalue has negative squared length. The `centre_gram` check confirms the centred three-point matrix, with top-left entry $5/9$, and that kernel PCA on a centred linear kernel matches the PCA scores of the same points.
+
+## Further reading
+
+For kernels, the kernel trick, and Mercer's theorem, see [Lecture 8 - Kernels](https://see.stanford.edu/Course/CS229/39) in CS229 (Andrew Ng). Theorem (Mercer) in section 5.4 of the [CS229 lecture notes](https://cs229.stanford.edu/main_notes.pdf) (Tengyu Ma and Andrew Ng) states the same test: every finite Gram matrix is symmetric and positive semidefinite.
