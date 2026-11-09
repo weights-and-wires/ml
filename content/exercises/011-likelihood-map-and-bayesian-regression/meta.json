@@ -1,0 +1,16 @@
+{
+  "id": "011-likelihood-map-and-bayesian-regression",
+  "title": "Likelihood, MAP, and a predictive band",
+  "brief": "Turn Gaussian noise into a negative log likelihood, add a Gaussian prior, and recover ridge, the posterior, and a predictive variance that grows away from the data.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "neg_log_likelihood_gaussian is 0.5 * n * log(2 * pi * sigma2) + 0.5 * ||X @ w - y||^2 / sigma2. At w = (0, 1) on the two houses the misses are 0, so the value is log(2 * pi).",
+    "map_objective adds 0.5 * d * log(2 * pi * tau2) + 0.5 * ||w||^2 / tau2. The d in that log is the number of weights, not the number of rows. At (2/11, 8/11) with both variances 1 the score is 2 * log(2 * pi) + 44/121.",
+    "map_gradient is X.T @ (X @ w - y) / sigma2 + w / tau2. The ridge gradient X.T @ (X @ w - y) + lam * w is this gradient multiplied by sigma2, so a finite difference of map_objective will not match it.",
+    "ridge_weights solves (X.T @ X + lam * I) @ w = X.T @ y with lam = sigma2 / tau2. On the two houses and lam = 1 the weights are (2/11, 8/11).",
+    "posterior_linreg uses that same Gram matrix. The mean is the ridge solve. The covariance is sigma2 * solve(gram, I). Swapping sigma2 and tau2 changes both the diagonal fee and the scale in front.",
+    "predictive returns x @ mean and sigma2 + x @ cov @ x, as two Python floats. Dropping sigma2 leaves 5/11 at the studio instead of 16/11."
+  ]
+}
