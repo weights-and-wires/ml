@@ -166,3 +166,80 @@ def test_witness(sub):
         close(got, lo, atol=1e-9, label="v^T K v for a unit eigenvector equals its eigenvalue")
         if got >= 0:
             fail(f"expected a negative squared length, got {got}")
+
+
+def _pca_scores(X):
+    """PCA scores of the centred points, largest singular value first.
+
+    The reference lives in this file so the check does not import another lesson.
+    """
+    centred = X - X.mean(axis=0)
+    U, S, _Vt = np.linalg.svd(centred, full_matrices=False)
+    keep = S > 1e-8
+    return U[:, keep] * S[keep]
+
+
+def _kernel_pca_scores(Kc):
+    evals, evecs = np.linalg.eigh(Kc)
+    order = np.argsort(evals)[::-1]
+    evals = evals[order]
+    evecs = evecs[:, order]
+    keep = evals > 1e-8
+    return evecs[:, keep] * np.sqrt(evals[keep])
+
+
+def _align_signs(got, want):
+    out = np.array(got, dtype=float, copy=True)
+    for j in range(out.shape[1]):
+        if np.dot(out[:, j], want[:, j]) < 0:
+            out[:, j] *= -1
+    return out
+
+
+@check("centre_gram matches H K H, and kernel PCA on a linear kernel matches the PCA scores")
+def test_centre_gram(sub):
+    # Catches a centre_gram that subtracts the row mean only (K minus the row
+    # mean, which is K @ H rather than H @ K @ H). On the matrix below that
+    # leaves the top-left entry at 1/3 instead of 5/9, and the scores disagree.
+    K = np.array([
+        [1.0, 0.0, 1.0],
+        [0.0, 1.0, 1.0],
+        [1.0, 1.0, 2.0],
+    ])
+    want = np.array([
+        [5.0 / 9.0, -4.0 / 9.0, -1.0 / 9.0],
+        [-4.0 / 9.0, 5.0 / 9.0, -1.0 / 9.0],
+        [-1.0 / 9.0, -1.0 / 9.0, 2.0 / 9.0],
+    ])
+    got = sub.centre_gram(K)
+    shape(got, (3, 3), label="centred Gram matrix")
+    close(got, want, atol=1e-10, label="centred three-point Gram matrix")
+
+    X = np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 1.0]])
+    pca = _pca_scores(X)
+    kpca = _kernel_pca_scores(got)
+    if kpca.shape != pca.shape:
+        fail(
+            f"kernel PCA scores: expected shape {pca.shape}, actual shape {kpca.shape}. "
+            f"expected {pca}, actual {kpca}"
+        )
+    close(_align_signs(kpca, pca), pca, atol=1e-8, label="kernel PCA scores against PCA scores of the centred points")
+
+    rng = np.random.default_rng(0)
+    Xr = rng.normal(size=(8, 3))
+    centred = Xr - Xr.mean(axis=0)
+    got_r = sub.centre_gram(Xr @ Xr.T)
+    close(got_r, centred @ centred.T, atol=1e-8, label="centred linear kernel against the Gram matrix of the centred points")
+    pca_r = _pca_scores(Xr)
+    kpca_r = _kernel_pca_scores(got_r)
+    if kpca_r.shape != pca_r.shape:
+        fail(
+            f"random-point kernel PCA scores: expected shape {pca_r.shape}, actual shape {kpca_r.shape}. "
+            f"expected {pca_r}, actual {kpca_r}"
+        )
+    close(
+        _align_signs(kpca_r, pca_r),
+        pca_r,
+        atol=1e-7,
+        label="kernel PCA scores against PCA scores on eight random points",
+    )
