@@ -434,7 +434,7 @@ The starter file provides `absolute_loss` and `zero_one_loss` already, because t
 
 **The held-out flats are not like the flats you will meet.** A test score estimates future error only when the test flats resemble future flats. Statisticians call this condition *i.i.d.*, short for independent and identically distributed. *Identically distributed* means every flat comes from the same market: a folder of London flats says little about Leeds. *Independent* means one flat does not give away another. If the folder holds ten adverts for the same building, a shuffle can put one advert in the training set and its twin in the test set, and the memoriser scores brilliantly without learning anything about other buildings. Split by building, not by row.
 
-**You pick the best test score.** Choosing among many rules by their test score tunes the rule to the test flats. Keep a separate set of flats for choosing between rules, and use the test set once. The chapter on [cross-validation](/lessons/011-cross-validation-and-leave-one-out) shows how to use every flat for testing without cheating.
+**You pick the best test score.** Choosing among many rules by their test score tunes the rule to the test flats. Keep a separate set of flats for choosing between rules, and use the test set once. The chapter on [cross-validation](/lessons/012-cross-validation-and-leave-one-out) shows how to use every flat for testing without cheating.
 
 ## The exercise
 
