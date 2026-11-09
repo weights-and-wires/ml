@@ -36,6 +36,8 @@ services:
       - .env
     environment:
       DATA_DIR: /data
+      # Set here so this example overrides env_file.
+      LOCAL_WORKERS: "2"
     volumes:
       - ml-data:/data
       - ./book:/app/book:ro
@@ -44,7 +46,7 @@ services:
     # A reader's submission is a subprocess inside this container, so cap what
     # the container as a whole can take from the host.
     cpus: 2.0
-    mem_limit: 3g
+    mem_limit: 1536m
     pids_limit: 512
     healthcheck:
       test:
