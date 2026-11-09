@@ -124,4 +124,138 @@ def test_crossover(sub):
         fail("at T = 256 = 4d the score table should cost more than the projections")
     ratio = fn(8192, d, 1) / fn(4096, d, 1)
     if not 3.8 < ratio < 4.0:
-        fail(f"doubling a long sequence should nearly quadruple the cost, got a factor {ratio:.3f}")
+        fail(
+            f"doubling a long sequence should nearly quadruple the cost, "
+            f"got a factor {ratio:.3f}, expected a factor between 3.8 and 4"
+        )
+
+
+def _mha_forward(x, Wq, Wk, Wv, Wo, heads, mask):
+    """Multi-head forward used as the finite-difference loss. Not the submission."""
+    d_h = x.shape[-1] // heads
+    Q, K, V = x @ Wq, x @ Wk, x @ Wv
+    parts = []
+    for i in range(heads):
+        sl = slice(i * d_h, (i + 1) * d_h)
+        scale = 1.0 / np.sqrt(d_h)
+        scores = (Q[:, sl] @ K[:, sl].T) * scale
+        if mask is not None:
+            scores = scores + mask
+        parts.append(_softmax(scores) @ V[:, sl])
+    return np.concatenate(parts, axis=-1) @ Wo
+
+
+def _reference_mha_backward(dout, x, Wq, Wk, Wv, Wo, heads, mask):
+    """Head-by-head backward written out in the check.
+
+    torch is not a dependency of this exercise, so this reference stands in
+    for an autograd comparison. It does not call the submission.
+    """
+    d_h = x.shape[-1] // heads
+    Q, K, V = x @ Wq, x @ Wk, x @ Wv
+    outputs = []
+    saved = []
+    for i in range(heads):
+        sl = slice(i * d_h, (i + 1) * d_h)
+        scale = 1.0 / np.sqrt(d_h)
+        scores = (Q[:, sl] @ K[:, sl].T) * scale
+        if mask is not None:
+            scores = scores + mask
+        weights = _softmax(scores)
+        saved.append(weights)
+        outputs.append(weights @ V[:, sl])
+    concat = np.concatenate(outputs, axis=-1)
+    d_concat = dout @ Wo.T
+    dWo = concat.T @ dout
+    dQ = np.zeros_like(Q)
+    dK = np.zeros_like(K)
+    dV = np.zeros_like(V)
+    for i in range(heads):
+        sl = slice(i * d_h, (i + 1) * d_h)
+        weights = saved[i]
+        upstream = d_concat[:, sl]
+        dv = weights.T @ upstream
+        dweights = upstream @ V[:, sl].T
+        rowsum = np.sum(weights * dweights, axis=-1, keepdims=True)
+        dscores = weights * (dweights - rowsum)
+        scale = 1.0 / np.sqrt(d_h)
+        dQ[:, sl] = (dscores @ K[:, sl]) * scale
+        dK[:, sl] = (dscores.T @ Q[:, sl]) * scale
+        dV[:, sl] = dv
+    dx = dQ @ Wq.T + dK @ Wk.T + dV @ Wv.T
+    return dx, x.T @ dQ, x.T @ dK, x.T @ dV, dWo
+
+
+def _causal_mask(T):
+    mask = np.zeros((T, T))
+    mask[np.triu_indices(T, k=1)] = -np.inf
+    return mask
+
+
+# Catches a head concatenation that forgets to split the upstream gradient.
+# d_concat = dout @ Wo.T has shape (T, d), and each head must receive only its
+# own d_h columns. Passing the full d_concat into one unsplit attention on Q,
+# K, and V keeps every shape and still applies the causal mask, but on the
+# worked example the value gradient comes out
+# [[0.3302, -0.3302], [0.6698, -0.6698]] instead of
+# [[0.5, -0.2689], [0.5, -0.7311]].
+@check("mha_backward reproduces the two-head causal example")
+def test_mha_hand(sub):
+    fn = has(sub, "mha_backward")
+    eye = np.eye(2)
+    got = fn(
+        np.array([[0.0, 0.0], [1.0, -1.0]]),
+        eye, eye, eye, eye, eye, 2, _causal_mask(2),
+    )
+    if not isinstance(got, tuple) or len(got) != 5:
+        fail(
+            f"mha_backward returned {type(got).__name__} "
+            f"of length {len(got) if isinstance(got, tuple) else 'n/a'}, "
+            "expected a tuple of 5 arrays (dx, dWq, dWk, dWv, dWo)"
+        )
+    dx, dWq, dWk, dWv, dWo = got
+    shape(dx, (2, 2), label="dx")
+    shape(dWq, (2, 2), label="dWq")
+    shape(dWk, (2, 2), label="dWk")
+    shape(dWv, (2, 2), label="dWv")
+    shape(dWo, (2, 2), label="dWo")
+    close(dWv, np.array([[0.5, -0.2689], [0.5, -0.7311]]), atol=1e-4, label="dV")
+    close(dWo, np.array([[0.5, -0.5], [0.7311, -0.7311]]), atol=1e-4, label="dWo")
+    close(dx, np.array([[0.5, -0.0723], [0.75, -1.1243]]), atol=1e-4, label="dx")
+    close(dWq, np.array([[0.0, 0.0], [0.25, -0.1966]]), atol=1e-4, label="dWq")
+    close(dWk, np.array([[0.0, 0.1966], [0.0, -0.1966]]), atol=1e-4, label="dWk")
+
+
+@check("mha_backward matches a head-by-head reference and finite differences under a causal mask")
+def test_mha_reference_and_fd(sub):
+    fn = has(sub, "mha_backward")
+    rng = np.random.default_rng(1)
+    T, d, heads = 3, 4, 2
+    x = rng.normal(size=(T, d))
+    Wq, Wk, Wv, Wo = (rng.normal(size=(d, d)) for _ in range(4))
+    dout = rng.normal(size=(T, d))
+    mask = _causal_mask(T)
+    got = fn(dout, x, Wq, Wk, Wv, Wo, heads, mask)
+    if not isinstance(got, tuple) or len(got) != 5:
+        fail(
+            f"mha_backward returned {type(got).__name__} "
+            f"of length {len(got) if isinstance(got, tuple) else 'n/a'}, "
+            "expected a tuple of 5 arrays (dx, dWq, dWk, dWv, dWo)"
+        )
+    want = _reference_mha_backward(dout, x, Wq, Wk, Wv, Wo, heads, mask)
+    labels = ("dx", "dWq", "dWk", "dWv", "dWo")
+    shapes = ((T, d), (d, d), (d, d), (d, d), (d, d))
+    for label, expect_shape, pred, truth in zip(labels, shapes, got, want):
+        shape(pred, expect_shape, label=label)
+        close(pred, truth, atol=1e-5, rtol=1e-4, label=f"{label} against the head-by-head reference")
+
+    arrays = (x, Wq, Wk, Wv, Wo)
+
+    def loss_at(index, value):
+        args = [arr.copy() for arr in arrays]
+        args[index] = value
+        return float(np.sum(_mha_forward(args[0], *args[1:], heads, mask) * dout))
+
+    for index, label in enumerate(labels):
+        fd = finite_difference(lambda value, index=index: loss_at(index, value), arrays[index].copy())
+        close(got[index], fd, atol=1e-5, rtol=1e-4, label=f"{label} against finite differences")
