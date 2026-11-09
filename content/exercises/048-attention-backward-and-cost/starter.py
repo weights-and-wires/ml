@@ -1,6 +1,6 @@
 """The gradient of attention, and what one attention layer costs.
 
-Fill in the three functions below. `softmax` and `scaled_dot_product_attention`
+Fill in the four functions below. `softmax` and `scaled_dot_product_attention`
 are provided: you wrote them in earlier chapters. Every array is one sequence
 with no batch axis.
 """
@@ -82,6 +82,38 @@ def attention_flops(T: int, d: int, heads: int) -> int:
     raise NotImplementedError("attention_flops")
 
 
+def mha_backward(
+    dout: np.ndarray,
+    x: np.ndarray,
+    Wq: np.ndarray,
+    Wk: np.ndarray,
+    Wv: np.ndarray,
+    Wo: np.ndarray,
+    heads: int,
+    mask: np.ndarray | None = None,
+):
+    """Gradients of multi-head attention, including the output projection.
+
+    Project `x` with `Wq`, `Wk`, and `Wv`, split the width into `heads` equal
+    parts, run scaled dot-product attention on each part (adding `mask` to the
+    scores), concatenate, and multiply by `Wo`. Then send `dout` back through
+    that chain. The same mask is used for every head.
+
+    Args:
+        dout: Gradient with respect to the output, shape `(T, d)`.
+        x: Input sequence, shape `(T, d)`.
+        Wq, Wk, Wv, Wo: Projection matrices, each of shape `(d, d)`.
+        heads: Number of heads. Must divide `d`.
+        mask: Optional additive mask of shape `(T, T)`, shared by every head.
+            A causal mask is 0 on and below the diagonal and `-inf` above it.
+
+    Returns:
+        A tuple `(dx, dWq, dWk, dWv, dWo)` with the same shapes as `x`, `Wq`,
+        `Wk`, `Wv`, and `Wo`.
+    """
+    raise NotImplementedError("mha_backward")
+
+
 if __name__ == "__main__":
     # The worked example: one query, two keys, identity values.
     q = np.ones((1, 4))
@@ -100,3 +132,13 @@ if __name__ == "__main__":
     print("flops for T=16, d=4:", attention_flops(16, 4, 1))
     for T in (64, 128, 256):
         print(f"T={T:4d}: projections {8 * T * 64**2:>10,d}  score table {4 * T**2 * 64:>10,d}")
+
+    # Two heads, identity projections, causal mask: the worked multi-head example.
+    eye = np.eye(2)
+    mask = np.zeros((2, 2))
+    mask[np.triu_indices(2, k=1)] = -np.inf
+    dx, dWq, dWk, dWv, dWo = mha_backward(
+        np.array([[0.0, 0.0], [1.0, -1.0]]), eye, eye, eye, eye, eye, 2, mask
+    )
+    print("mha dV:\n", dWv.round(4))
+    print("mha dWo:\n", dWo.round(4))

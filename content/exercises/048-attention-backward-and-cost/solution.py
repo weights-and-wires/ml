@@ -51,6 +51,47 @@ def attention_flops(T: int, d: int, heads: int) -> int:
     return int(projections + table)
 
 
+def mha_backward(
+    dout: np.ndarray,
+    x: np.ndarray,
+    Wq: np.ndarray,
+    Wk: np.ndarray,
+    Wv: np.ndarray,
+    Wo: np.ndarray,
+    heads: int,
+    mask: np.ndarray | None = None,
+):
+    d = x.shape[-1]
+    if d % heads != 0:
+        raise ValueError(f"heads={heads} must divide d={d} evenly")
+    d_h = d // heads
+    Q = x @ Wq
+    K = x @ Wk
+    V = x @ Wv
+
+    parts = []
+    for i in range(heads):
+        sl = slice(i * d_h, (i + 1) * d_h)
+        head_out, _ = scaled_dot_product_attention(Q[:, sl], K[:, sl], V[:, sl], mask)
+        parts.append(head_out)
+    concat = np.concatenate(parts, axis=-1)    # (T, d)
+
+    d_concat = dout @ Wo.T                     # (T, d), then split across heads
+    dWo = concat.T @ dout                      # (d, d)
+    dQ = np.zeros_like(Q)
+    dK = np.zeros_like(K)
+    dV = np.zeros_like(V)
+    for i in range(heads):
+        sl = slice(i * d_h, (i + 1) * d_h)
+        dq, dk, dv = attention_backward(d_concat[:, sl], Q[:, sl], K[:, sl], V[:, sl], mask)
+        dQ[:, sl] = dq
+        dK[:, sl] = dk
+        dV[:, sl] = dv
+
+    dx = dQ @ Wq.T + dK @ Wk.T + dV @ Wv.T
+    return dx, x.T @ dQ, x.T @ dK, x.T @ dV, dWo
+
+
 if __name__ == "__main__":
     q = np.ones((1, 4))
     k = np.array([[1.0] * 4, [0.5] * 4])
@@ -68,3 +109,13 @@ if __name__ == "__main__":
     print("flops for T=16, d=4:", attention_flops(16, 4, 1))
     for T in (64, 128, 256):
         print(f"T={T:4d}: projections {8 * T * 64**2:>10,d}  score table {4 * T**2 * 64:>10,d}")
+
+    # Two heads, identity projections, causal mask: the worked multi-head example.
+    eye = np.eye(2)
+    mask = np.zeros((2, 2))
+    mask[np.triu_indices(2, k=1)] = -np.inf
+    dx, dWq, dWk, dWv, dWo = mha_backward(
+        np.array([[0.0, 0.0], [1.0, -1.0]]), eye, eye, eye, eye, eye, 2, mask
+    )
+    print("mha dV:\n", dWv.round(4))
+    print("mha dWo:\n", dWo.round(4))

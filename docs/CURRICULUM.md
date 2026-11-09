@@ -87,7 +87,7 @@ replaced it, so readers keep their progress.
 | Slug | Title | Exercise delivers | Needs GPU |
 |---|---|---|---|
 | `047-scaled-attention-and-heads` | Scaled attention, many heads, and the causal mask | Write the pieces of a soft lookup, measure how the spread of dot products grows with the key width, and build scaled dot-product attention. Then add the causal mask and multi-head attention. | No |
-| `048-attention-backward-and-cost` | The gradient and the cost of attention | Write the softmax backward rule, chain it into the gradient of scaled dot-product attention, and count the flops of one layer. | No |
+| `048-attention-backward-and-cost` | The gradient and the cost of attention | Write the softmax backward rule, chain it into scaled dot-product attention and into multi-head attention with a causal mask and an output projection, and count the flops of one layer. | No |
 | `049-position-encodings` | Position encodings: sinusoidal clocks and rotary embeddings | Write the sinusoidal clock encoding, the matrix that moves it k positions, and the rotary tables that make a score depend only on the offset. | No |
 | `050-the-transformer-block` | The transformer block: SwiGLU, residuals, and layer norm | Write a stable SiLU, the gated feed-forward network and its weight budget, layer norm, and the residual block that wires them to rotary attention. | No |
 | `051-counts-to-a-language-model` | From counts to a language model, and word vectors | Smooth a bigram table, match it with a softmax, scatter-add an embedding gradient, and train a window model and a skip-gram so a planted neighbour is nearer. | No |
