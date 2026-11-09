@@ -247,9 +247,13 @@ def check_lesson(path: Path, problems: list[str], seen_exercises: set[str]) -> N
         if not caption:
             problems.append(f"{path.name}: figure {i} has no caption after </svg>")
 
+    # A draft keeps the structure of a lesson while the chapter is unfinished.
+    # The published-lesson word minimum does not apply. The cap and the other
+    # checks stay in force for drafts and for published lessons.
+    draft = meta.get("draft") is True
     words = len(re.sub(r"```figure\n.*?```", "", body, flags=re.S).split())
     low, high = (1200, 4000) if project else (800, 3800)
-    if words < low:
+    if words < low and not draft:
         problems.append(f"{path.name}: {words} words, the contract asks for {low} or more")
     if words > high:
         problems.append(f"{path.name}: {words} words; cut the chapter, the contract caps it near 3400")

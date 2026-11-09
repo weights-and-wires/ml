@@ -153,9 +153,9 @@ Every value that holds a colon must be wrapped in double quotes, or YAML reads
 the item as a mapping rather than a string. A mapping that reaches the client
 renders as nothing at all, so `scripts/check_content.py` rejects one.
 
-Every field is required except `prereqs`, which can be omitted. `gpu` is `true`
-only when the exercise genuinely needs a GPU. `minutes` is an honest reading and
-working estimate.
+Every field is required except `prereqs`, which can be omitted, and `draft`,
+which is false when omitted. `gpu` is `true` only when the exercise genuinely
+needs a GPU. `minutes` is an honest reading and working estimate.
 
 The body is Markdown with these conventions:
 
@@ -217,6 +217,14 @@ a sitting of about 50 to 80 minutes, reading and building together. When a
 draft runs past 3400 words, cut repetition before you cut an idea.
 `scripts/check_content.py` rejects a chapter under 800 or over 3800 words, and
 one with no figure.
+
+Set `draft: true` in the front matter while a lesson is unfinished. The loader
+hides that lesson when the app is deployed, and shows it on a local run. The
+image build sets `GIT_SHA` to the commit it ships, and a local run leaves
+`GIT_SHA` at `unknown`. That is the switch the loader reads.
+`scripts/check_content.py` checks a draft lesson's structure and does not apply
+the published-lesson word minimum. The word cap and the other checks stay in
+force.
 
 ## Exercise directory
 
