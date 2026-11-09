@@ -1,0 +1,16 @@
+{
+  "id": "025-power-iteration-and-probabilistic-pca",
+  "title": "Find the top direction by products, then fit probabilistic PCA",
+  "brief": "Read an eigenvalue with the Rayleigh quotient, find eigenvectors by multiplying and deflating, then write the E-step, the M-step, and the log-likelihood of probabilistic PCA.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "rayleigh_quotient is one line: v @ A @ v / (v @ v).",
+    "power_iteration: start from np.ones(d) / np.sqrt(d), then loop `v = A @ v; v = v / np.linalg.norm(v)`. Rescale inside the loop, every step.",
+    "deflate: A - eigenvalue * np.outer(v, v). np.outer builds a (d, d) matrix; v @ v is only a number.",
+    "ppca_e_step: M_inv = np.linalg.inv(W.T @ W + sigma2 * np.eye(k)); Ez = Xc @ W @ M_inv; Ezz_sum = n * sigma2 * M_inv + Ez.T @ Ez.",
+    "ppca_m_step: W_new = (Xc.T @ Ez) @ np.linalg.inv(Ezz_sum). Then sigma2 = (sum(Xc**2) - 2 * sum(Ez * (Xc @ W_new)) + trace(Ezz_sum @ W_new.T @ W_new)) / (n * d), using W_new in every term.",
+    "ppca_loglik: C = W @ W.T + sigma2 * I, S = Xc.T @ Xc / n, then -0.5 * n * (d * log(2 pi) + slogdet(C)[1] + trace(solve(C, S)))."
+  ]
+}
