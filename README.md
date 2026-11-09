@@ -1,7 +1,7 @@
 # Machine learning
 
 A hands-on course that teaches machine learning to undergraduates by having them
-build it. Sixty chapters run from scoring a guess to mixtures of experts. Each one
+build it. Sixty-one chapters run from scoring a guess to a variational autoencoder. Each one
 teaches a single topic, two or three closely related ideas in one arc: it starts from a concrete
 question, shows a picture, works a small example by hand, and only then gives
 the formula and walks you through implementing it, in an editor beside the
@@ -32,7 +32,7 @@ computes it. Each lesson ends with a step-by-step guide to its exercise.
 
 | Path | Contents |
 |---|---|
-| `content/lessons/` | Sixty chapters and eight projects, in Markdown with YAML front matter and inline SVG figures. |
+| `content/lessons/` | Sixty-one chapters and eight projects, in Markdown with YAML front matter and inline SVG figures. |
 | `content/renames.json` | Each slug from earlier editions and the chapters that replaced it, so progress carries over. |
 | `content/exercises/` | One directory per exercise: a starter file, checks, and a worked solution. |
 | `backend/` | FastAPI: auth, content, progress, drafts, and the run stream. |
@@ -68,6 +68,9 @@ block, a count model and word vectors, and training one.
 
 **Part 7 — Large language models.** Tokenisation, scaling laws, inference and
 decoding, LoRA, alignment, and mixtures of experts.
+
+**Part 8 — Generative models.** A linear autoencoder keeps the first principal
+component, and a variational autoencoder draws a row from a standard normal code.
 
 [The full list, with what each exercise delivers](docs/CURRICULUM.md).
 
