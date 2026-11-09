@@ -1,13 +1,13 @@
 # Curriculum
 
-59 chapters in 7 parts, and 8 projects in a section of their own. Each
+60 chapters in 7 parts, and 8 projects in a section of their own. Each
 project lists the chapter to finish before you start it. Each row is one Markdown file under
 `content/lessons/` and one directory under `content/exercises/`. The `Needs GPU`
 column marks the exercises that run on RunPod rather than in the app container.
 
 Each chapter teaches one topic: two or three closely related ideas in one arc,
 with one exercise. The 33 lessons of the first edition were split into 132
-one-idea chapters, merged into 117, and then merged again into 55. One added chapter brings the count to 56, scoring classifiers brings it to 57, and debugging and tuning a network brings it to 58. The map from your engine to PyTorch brings it to 59.
+one-idea chapters, merged into 117, and then merged again into 55. One added chapter brings the count to 56, scoring classifiers brings it to 57, and debugging and tuning a network brings it to 58. The map from your engine to PyTorch brings it to 59. A count model and word vectors bring it to 60.
 `content/renames.json` maps each old lesson and chapter to the chapter that
 replaced it, so readers keep their progress.
 
@@ -90,20 +90,21 @@ replaced it, so readers keep their progress.
 | `048-attention-backward-and-cost` | The gradient and the cost of attention | Write the softmax backward rule, chain it into the gradient of scaled dot-product attention, and count the flops of one layer. | No |
 | `049-position-encodings` | Position encodings: sinusoidal clocks and rotary embeddings | Write the sinusoidal clock encoding, the matrix that moves it k positions, and the rotary tables that make a score depend only on the offset. | No |
 | `050-the-transformer-block` | The transformer block: SwiGLU, residuals, and layer norm | Write a stable SiLU, the gated feed-forward network and its weight budget, layer norm, and the residual block that wires them to rotary attention. | No |
-| `051-next-token-loss-and-safe-steps` | Training a language model: next-token loss, schedules, and clipping | Write the per-token loss without overflow, cut shifted windows, read the loss as perplexity, then build the warmup-cosine schedule and the global-norm clip. | No |
-| `052-training-loop-and-cost` | The training step, and what a run costs | Write one AdamW update, wire loss, backward, clip, schedule, and update into train_step, then estimate a run's flops and memory and simulate loss scaling through float16. | No |
+| `051-counts-to-a-language-model` | From counts to a language model, and word vectors | Smooth a bigram table, match it with a softmax, scatter-add an embedding gradient, and train a window model and a skip-gram so a planted neighbour is nearer. | No |
+| `052-next-token-loss-and-safe-steps` | Training a language model: next-token loss, schedules, and clipping | Write the per-token loss without overflow, cut shifted windows, read the loss as perplexity, then build the warmup-cosine schedule and the global-norm clip. | No |
+| `053-training-loop-and-cost` | The training step, and what a run costs | Write one AdamW update, wire loss, backward, clip, schedule, and update into train_step, then estimate a run's flops and memory and simulate loss scaling through float16. | No |
 
 ## Part 7 — Large language models
 
 | Slug | Title | Exercise delivers | Needs GPU |
 |---|---|---|---|
-| `053-tokenisation` | Tokenisation: bytes, byte-pair encoding, and what a tokeniser charges | Turn text into bytes, train a byte-pair encoder and replay it to encode and decode, then measure fertility, tokens per character, and digit cuts. | No |
-| `054-scaling-laws` | Scaling laws and the compute budget | Fit and extrapolate a power law on log axes, split a loss into a floor and two penalties, count the weights that multiply, price training in flops and days, then find the best split of a budget between model size and data. | No |
-| `055-decoding-and-sampling` | Decoding and sampling: cache, temperature, speculation | Count flops against bytes for decoding, size and build a KV cache, turn scores into a token with temperature, top-k, and top-p, and write the accept-or-replace rule of speculative decoding. | No |
-| `056-fine-tuning-and-lora` | Fine-tuning on a budget with LoRA | Add up the memory bill with and without frozen weights, write the LoRA forward pass and merge, then truncate an update with the SVD and write the gradients of A and B. | No |
-| `057-reward-models-and-the-kl-leash` | Reward models and the KL leash | Build the Bradley-Terry loss and gradient for a reward model, then compute KL divergence, the best policy for a reward on a KL leash, and the penalised objective that proves nothing beats it. | No |
-| `058-ppo-and-dpo` | PPO and DPO: two ways to reach the leashed optimum | Compute PPO's probability ratio, advantage, and clipped objective, then build the DPO implicit reward, loss, and gradient on top of the Bradley-Terry functions. | No |
-| `059-mixtures-of-experts` | Mixtures of experts: routing, the router's gradient, and balance | Score and pick the top k experts, compute the router's gradient through the gate weights, build the load-balancing loss, and run a capacity-limited forward pass that drops overflow. | No |
+| `054-tokenisation` | Tokenisation: bytes, byte-pair encoding, and what a tokeniser charges | Turn text into bytes, train a byte-pair encoder and replay it to encode and decode, then measure fertility, tokens per character, and digit cuts. | No |
+| `055-scaling-laws` | Scaling laws and the compute budget | Fit and extrapolate a power law on log axes, split a loss into a floor and two penalties, count the weights that multiply, price training in flops and days, then find the best split of a budget between model size and data. | No |
+| `056-decoding-and-sampling` | Decoding and sampling: cache, temperature, speculation | Count flops against bytes for decoding, size and build a KV cache, turn scores into a token with temperature, top-k, and top-p, and write the accept-or-replace rule of speculative decoding. | No |
+| `057-fine-tuning-and-lora` | Fine-tuning on a budget with LoRA | Add up the memory bill with and without frozen weights, write the LoRA forward pass and merge, then truncate an update with the SVD and write the gradients of A and B. | No |
+| `058-reward-models-and-the-kl-leash` | Reward models and the KL leash | Build the Bradley-Terry loss and gradient for a reward model, then compute KL divergence, the best policy for a reward on a KL leash, and the penalised objective that proves nothing beats it. | No |
+| `059-ppo-and-dpo` | PPO and DPO: two ways to reach the leashed optimum | Compute PPO's probability ratio, advantage, and clipped objective, then build the DPO implicit reward, loss, and gradient on top of the Bradley-Terry functions. | No |
+| `060-mixtures-of-experts` | Mixtures of experts: routing, the router's gradient, and balance | Score and pick the top k experts, compute the router's gradient through the gate weights, build the load-balancing loss, and run a capacity-limited forward pass that drops overflow. | No |
 
 ## Projects
 
@@ -119,5 +120,5 @@ start once you have finished chapter 10.
 | `027p-project-segment-customers` | Find customer segments and predict who leaves | Standardise, compress with PCA, cluster with k-means and a Gaussian mixture, then predict churn with a bagged ensemble of shallow trees. | No |
 | `036p-project-read-digits` | Train a digit reader from scratch | Build a regularised, gradient-checked, early-stopped network in numpy that reads noisy 10 by 10 digits and clearly beats a linear baseline. | No |
 | `046p-project-spot-defects` | Spot defects on a production line | Write im2col convolution and its backward pass, a residual block, global average pooling, and Adam. Train the network on noisy part photos and check that it beats a flat MLP. | No |
-| `052p-project-train-a-tiny-transformer` | Train a tiny transformer to reverse digits | Build masked attention, positions, pre-norm blocks, an answer-only loss, and a training loop from torch tensors, then check the model on strings it has never seen. | No |
-| `059p-project-serve-a-tiny-model` | Serve a small language model | Build a tokeniser, a KV-cached generator, a sampler, speculative decoding, and LoRA merging around a given tiny transformer, and prove each stage matches the slow, obvious version. | No |
+| `053p-project-train-a-tiny-transformer` | Train a tiny transformer to reverse digits | Build masked attention, positions, pre-norm blocks, an answer-only loss, and a training loop from torch tensors, then check the model on strings it has never seen. | No |
+| `060p-project-serve-a-tiny-model` | Serve a small language model | Build a tokeniser, a KV-cached generator, a sampler, speculative decoding, and LoRA merging around a given tiny transformer, and prove each stage matches the slow, obvious version. | No |
