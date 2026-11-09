@@ -3,7 +3,7 @@ title: "Convolution: slide a filter, count the weights, count the view"
 slug: 038-convolution-and-receptive-field
 part: "Part 5 — Vision and sequences"
 summary: Reuse one small filter at every position, then count a layer's weights, its output size, and how many input pixels each unit can see.
-minutes: 75
+minutes: 80
 gpu: false
 objectives:
   - Slide a small filter over an image by hand, and say why one filter finds the same pattern at every position.
@@ -11,6 +11,7 @@ objectives:
   - Write a convolution with plain loops, for one channel and for a batch of multi-channel images.
   - Count the output length of a convolution with padding, stride, and dilation, and choose the padding that keeps the size.
   - Compute the receptive field of every layer in a stack, and apply max pooling to a grid.
+  - Send a max-pool gradient to the first maximum, and split an average-pool gradient evenly across the window.
 prereqs:
   - 028-multilayer-perceptrons
   - 030-softmax-and-whole-network-gradients
@@ -24,7 +25,7 @@ A colour photo, 224 pixels on a side with three colour channels, holds 224 × 22
 
 The larger problem is that a dense layer has no idea that the top-left corner and the bottom-right corner of a photo are the same kind of place. A cat ear at the top left is detected by some weights. A cat ear at the bottom right is detected by different weights, which start out random and must learn the same thing again from scratch. Shrinking the photo cuts the weights, but it throws away the detail that tells an ear from a whisker. A better question: can one tiny detector slide over the whole photo and report where it matches, using a few thousand weights in total?
 
-It can, and the answer is a **convolution**. Two practical questions follow, and this chapter answers both. How large is the map after each layer, so that you know the shapes your code must handle? And does a unit in the last layer see enough of the picture to recognise a whole object? Both answers come from counting.
+It can, and the answer is a **convolution**. Two practical questions follow, and this chapter answers both. How large is the map after each layer, so that you know the shapes your code must handle? And does a unit in the last layer see enough of the picture to recognise a whole object? Both answers come from counting. You also send a pooling gradient back to the pixels that produced each pooled value.
 
 ## What you already know
 
@@ -151,7 +152,7 @@ A **filter** (also called a **kernel**) is a small grid of weights that acts as 
 Figure 1. One filter, two positions. In window 1 each row reads 0, 0, 1, so the filter sums (1 − 0) three times and outputs 3. In window 2 every pixel is bright, each row gives 1 − 1 = 0, and the output is 0. Notice that the same nine weights produced both numbers.
 ```
 
-Take the image in Figure 1. Its left two columns are dark (0) and its right three are bright (1). The filter has −1 in its left column, 0 in its middle column, and 1 in its right column, so it computes "right side minus left side". On window 1, every row of the patch reads 0, 0, 1. Each row contributes (−1)(0) + (0)(0) + (1)(1) = 1, and the three rows add up to 3. On window 2, all nine pixels are 1. Each row contributes −1 + 0 + 1 = 0, so the total is 0. The filter reports a big number where the picture goes from dark to bright and zero where it is flat, so it is a vertical-edge detector. Sliding it over all nine positions gives [3, 3, 0] in every row.
+Take the image in Figure 1. The left two columns are 0, the right three are 1, and the filter computes right minus left. On window 1 each row is 0, 0, 1, so (−1)(0) + (0)(0) + (1)(1) = 1, and the three rows sum to 3. On window 2 every pixel is 1, each row is −1 + 0 + 1 = 0, and the window sums to 0. The filter is large where the picture goes from dark to bright and zero where it is flat. All nine positions give [3, 3, 0] in every row.
 
 In symbols, for a filter with weights $w$ of size $k$ by $k$, a bias $b$, and an image $x$, the output at row $i$ and column $j$ is
 
@@ -166,15 +167,15 @@ y[i, j] = b + np.sum(w * x[i:i + k, j:j + k])
 ```
 
 > [!WARNING]
-> Textbook convolution flips the filter before sliding it. The operation above does not flip it, and it is what libraries such as PyTorch compute under the name convolution. Signal-processing texts call it cross-correlation. The flip does not matter for learning, because a network learns whichever weights it needs. Your code must not flip the filter, so that your answers match the libraries.
+> Some textbooks flip the filter before sliding it. PyTorch does not, and a network can learn either arrangement of weights. Your code must not flip the filter, so the answers match the libraries.
 
 ## Give the filter depth, and give the layer many filters
 
-A colour image has three channels, so a window is a 3 by 3 patch in each of them, a block of 27 pixels, and a filter needs a weight for each of the 27. One filter therefore has shape `(C_in, k, k)`, like a small stack of three stamps. You add the 27 products into one number and add the bias, so one filter still produces one output grid.
+A colour image has three channels, so a 3 by 3 window is 27 pixels and the filter has shape `(C_in, k, k)`. You add those products and the bias into one number, so one filter still produces one output grid.
 
-One filter finds one pattern. A layer holds many filters, `C_out` of them, and each produces its own output grid, called a **channel** or **feature map**. One channel might light up on vertical edges, another on horizontal edges. The layer's weights have shape `(C_out, C_in, k, k)`, its biases have shape `(C_out,)`, and a batch of images has shape `(N, C_in, H, W)`.
+One filter finds one pattern. A layer holds `C_out` filters, and each produces its own output grid, called a **channel** or **feature map**. The weights have shape `(C_out, C_in, k, k)`, the biases have shape `(C_out,)`, and a batch of images has shape `(N, C_in, H, W)`.
 
-Count the weights for the photo. A layer of 64 filters, each 3 by 3 and reading 3 channels, has 3 × 3 × 3 × 64 = 1,728 weights plus 64 biases, which is 1,792 numbers. The dense layer needed 150,529,000, so the convolution layer is about 84,000 times smaller, and the count does not grow if the photo gets bigger. Each filter is reused at 222 × 222 positions on this photo.
+Count the weights for the photo. A layer of 64 filters, each 3 by 3 and reading 3 channels, has 3 × 3 × 3 × 64 = 1,728 weights plus 64 biases, which is 1,792 numbers, about 84,000 times fewer than the dense layer. The count does not grow when the photo gets bigger. Each filter is reused at 222 × 222 positions.
 
 ```figure
 <svg viewBox="0 0 600 330" role="img" aria-label="A dense layer with 24 separate wires beside a convolution that reuses three weights">
@@ -248,9 +249,9 @@ Count the weights for the photo. A layer of 64 filters, each 3 by 3 and reading 
 Figure 2. The same six pixels and four outputs, wired two ways. Dense: 24 wires, 24 weights. Convolution: 12 wires, but only 3 weights, because the blue, orange, and green wires repeat at every position. Notice that adding more pixels adds wires but no weights.
 ```
 
-Figure 2 shows why the count falls so far. In the dense layer, every wire is a separate weight. In the convolution, the wires still exist, but the left wire of every window shares one weight, the middle wire shares another, and the right wire shares a third. Sharing is the assumption "a pattern means the same thing everywhere", written as a wiring diagram.
+Figure 2 draws that sharing. Every window reuses the same left, middle, and right weights: a pattern means the same thing everywhere.
 
-Sharing has a visible consequence. Moving the object in the image moves the response, and nothing else changes. This property is called **translation equivariance**: shift the input, and the output shifts by the same amount. It holds away from the border, because shifting brings zeros in on one side and the output cells that read them have no partner. It is not invariance: an equivariant layer says "the edge is here", and if the edge moves, the answer moves. Pooling, covered below, is the first step that throws position away.
+Shift the input and the output shifts by the same amount, except at the border, where the shift brings in zeros. This is **translation equivariance**, not invariance. The layer reports where the edge is, so a moved edge moves the answer.
 
 A cheaper filter bank exists when channels are many. A 3 by 3 layer with 64 channels in and 64 out costs 64 × 64 × 9 = 36,864 weights, plus 64 biases. The **depthwise separable** layer splits each filter's two jobs. It looks in space with one 3 by 3 filter per input channel, which costs 64 × 9 = 576 weights. Then it mixes channels at each pixel with a **1 by 1 convolution**, which costs 64 × 64 = 4,096 weights. The total is 4,672 weights plus 64 biases, about eight times fewer, at the price that every output channel builds on the same 64 spatial patterns.
 
@@ -259,7 +260,7 @@ A cheaper filter bank exists when channels are many. A 3 by 3 layer with 64 chan
 
 ## Count where the window fits
 
-So far the window moved one pixel at a time and never left the image. Stacking layers needs exact shapes, so count the positions. Start in one dimension, with a strip of 7 cells and a window of width 3. The window's left edge can start at cell 0, 1, 2, 3, and 4. At cell 5 it would hang off the end, because it would need cells 5, 6, and 7, and the strip stops at 6. So there are 5 positions, and the output has length 5. The last legal start is `size - k`, the starts run from 0 to that value, and counting them gives `size - k + 1`. Panel A of Figure 3 draws the five windows as bars.
+Stacking layers needs exact shapes, so count where a window fits. On a strip of 7 cells with a window of width 3, the left edge can start at cell 0, 1, 2, 3, or 4. A start at 5 needs cell 7, and the strip stops at 6, so the output length is `size - k + 1` = 5. Panel A of Figure 3 draws those five windows.
 
 ```figure
 <svg viewBox="0 0 600 452" role="img" aria-label="Window positions along a strip of 7 cells for four settings of padding and stride">
@@ -364,11 +365,11 @@ So far the window moved one pixel at a time and never left the image. Stacking l
 Figure 3. A strip of 7 cells and a window of width 3. Each coloured bar is one window position. Padding adds zero cells (dashed) and gives more positions; a larger stride skips positions. In panel D the red cell is never read, because the leftover cells do not fit a whole window.
 ```
 
-Two things go wrong with this count. The strip shrinks: after one layer 7 becomes 5, after the next 3, and after the next 1, so a deep stack runs out of picture. And the cells are not treated equally: in panel A, cell 0 sits under one window and cell 3 sits under three, so the border is seen poorly.
+The strip shrinks, from 7 to 5 to 3 to 1, and the border is seen poorly: in panel A, cell 0 sits under one window and cell 3 sits under three.
 
 **Padding** fixes both. You add $p$ zero cells to each end of the strip before sliding. The strip becomes $7 + 2p$ cells long, so the count becomes $7 + 2p - 3 + 1$. With $p = 1$ that is 7 windows (panel B). To keep the size unchanged for an odd kernel at stride 1, you need $\text{size} + 2p - k + 1 = \text{size}$, which gives $p = (k-1)/2$. For $k = 3$ that is $p = 1$, and for $k = 5$ it is $p = 2$.
 
-**Stride** is the number of cells the window moves between positions. Stride 2 evaluates every second position, which shrinks the output and cuts the work of every later layer. With stride $s$ the starts are $0, s, 2s, \dots$, so you divide the travel by $s$ and round down. Panel C uses padding 1 and stride 2 on the 7-cell strip, which is 9 cells once padded: the starts are 0, 2, 4, and 6, so the output has 4 cells. Rounding down matters. In panel D the stride is 3, the starts are 0 and 3, and cell 6 is never read, because the next window would hang off the end. Leftover cells that no whole window reaches are dropped.
+**Stride** is how many cells the window moves between positions. Stride 2 keeps every second position, which shrinks the output and cuts the work of every later layer. With stride $s$ the starts are $0, s, 2s, \dots$, so you divide the travel by $s$ and round down. Rounding down matters. In panel D the stride is 3, the starts are 0 and 3, and cell 6 is never read, because the next window would hang off the end. Cells that no whole window reaches are dropped.
 
 One more knob is **dilation**: spacing the taps of the kernel $d$ cells apart. A width-3 kernel with $d = 2$ reads cells $i$, $i + 2$, and $i + 4$, so it reaches 5 cells while still using 3 weights. Call the distance the kernel spans its **reach**, which is $d(k-1) + 1$. Putting all four knobs together,
 
@@ -376,7 +377,7 @@ $$
 \text{out} = \left\lfloor \frac{\text{size} + 2p - \big(d\,(k - 1) + 1\big)}{s} \right\rfloor + 1
 $$
 
-Read it aloud: pad both ends, subtract the kernel's reach to get the distance the window can travel, divide by the stride and round down to count the jumps, and add one for the starting position. In Python, the same sentence is two lines:
+Read it aloud: pad both ends, subtract the reach, divide by the stride and round down, and add one for the start. In Python, the count is two lines:
 
 ```python
 reach = dilation * (kernel_size - 1) + 1
@@ -393,7 +394,7 @@ The following table lists the cases from Figure 3, plus the dilated one. Each ro
 | 7 | 3 | 3 | 0 | 1 | 2 |
 | 7 | 3 | 1 | 0 | 2 | 3 |
 
-The formula applies to the height and the width separately. Try a stack of three layers on a 32 by 32 image, each with a 3 by 3 filter and padding 1. The first two have stride 2 and the last has stride 1. The first layer gives $\lfloor (32 + 2 - 3)/2 \rfloor + 1 = 16$, the second gives $\lfloor (16 + 2 - 3)/2 \rfloor + 1 = 8$, and the third gives $8 + 2 - 3 + 1 = 8$. The maps are 16 by 16, 8 by 8, and 8 by 8.
+The formula applies to the height and the width separately. Try a stack of three layers on a 32 by 32 image, each with a 3 by 3 filter and padding 1. The first two have stride 2 and the last has stride 1. The first layer gives $\lfloor (32 + 2 - 3)/2 \rfloor + 1 = 16$, the second gives $\lfloor (16 + 2 - 3)/2 \rfloor + 1 = 8$, and the third gives $8 + 2 - 3 + 1 = 8$.
 
 > [!KEY]
 > Counting window positions gives the output size: pad, subtract the reach, divide by the stride, round down, add one. Padding of $(k-1)/2$ keeps the size at stride 1, and a stride larger than 1 can drop leftover cells.
@@ -518,6 +519,34 @@ Padding does not appear in the recursion, because zeros are not input pixels. Wi
 > [!KEY]
 > A convolution slides one small filter over the picture, so the weights stay few and the output size comes from counting window positions. A unit's receptive field grows by $(k-1)$ times the spacing of the units it reads, and that spacing is the product of the strides before it. The formula gives a ceiling: pixels near the centre of the field reach the unit through many paths and pixels near the edge through few, so the region that matters in practice is smaller than 15.
 
+## Send the pooling gradient back
+
+Pooling stores no weights. The loss sends one number, the upstream gradient, back to each pooled value.
+
+A max-pool output moves only when the winning pixel moves. Every other pixel in the window gets zero, and the winner receives the whole upstream gradient. On the 4 by 4 grid from the receptive-field count, the pooled values are 9, 5, 6, and 7, at row 1 column 1, row 0 column 3, row 2 column 0, and row 2 column 2. Upstream values 1, 2, 3, and 4 land on the input as follows:
+
+$$
+\begin{bmatrix}
+0 & 0 & 0 & 2 \\
+0 & 1 & 0 & 0 \\
+3 & 0 & 4 & 0 \\
+0 & 0 & 0 & 0
+\end{bmatrix}
+$$
+
+On a tie the maximum has more than one correct slope. Send the whole upstream gradient to the first tied pixel in row-major order, left to right and then the next row, and send zero to the later ties. `np.argmax` on the flattened window returns that index. In the window whose first row is 1, 4 and whose second row is 4, 2, both 4s tie and the top-right 4 is first, so an upstream gradient of 6 becomes 0, 6 on the first row and 0, 0 on the second. A finite difference nudges a pixel, which breaks a tie, so use that check only when one pixel is strictly largest. Overlapping windows can select the same pixel twice, and those upstream gradients add.
+
+Average pooling keeps the mean of the window. For a window of side $k$, each pixel's share of the pooled value is
+
+$$
+\frac{\partial y}{\partial x_{a,c}} = \frac{1}{k^2}
+$$
+
+The same grid has means 4.25, 2, 2.5, and 3.25, from window sums 17, 8, 10, and 13. Upstream values 1, 2, 3, and 4 put 0.25, 0.5, 0.75, and 1 on every pixel of those windows. Overlapping windows add the shares, and a cell that no window covers stays at zero.
+
+> [!KEY]
+> A max-pool gradient goes to the first maximum in row-major order. An average-pool gradient splits the upstream value into $k^2$ equal shares. Overlapping windows add.
+
 > [!RECAP]
 > Hold these points before you write code:
 >
@@ -526,7 +555,7 @@ Padding does not appear in the recursion, because zeros are not input pixels. Wi
 > - A shifted input gives a shifted output away from the border.
 > - Output length is $\lfloor(\text{size}+2p-(d(k-1)+1))/s\rfloor+1$ for each spatial axis. Padding $(k-1)/2$ keeps the size for odd $k$ at stride 1.
 > - The receptive field starts at 1 and grows by $(k-1)\cdot\text{jump}$ before the jump is multiplied by the stride.
-> - Max pooling keeps the largest value of each window and has the same size arithmetic as a convolution.
+> - Max pooling keeps the largest value of each window. Its gradient goes to the first maximum in row-major order. Average pooling keeps the mean, and each pixel receives the upstream gradient divided by the number of cells.
 
 ## Build it step by step
 
@@ -538,13 +567,21 @@ The checks call the functions in this order.
 4. **`conv_output_shape(size, kernel_size, stride, padding, dilation)`.** Return an integer. Compute the reach `dilation * (kernel_size - 1) + 1`, subtract it from `size + 2 * padding`, and use `//` by the stride. The most common mistake is using `kernel_size` where the reach belongs, which drops the dilation.
 5. **`receptive_field_per_layer(layers)`.** `layers` is a list of `(kernel_size, stride)` pairs. Return a list with the field after each layer. Keep `r` and `jump`, grow `r` first, append it, then multiply `jump`. The most common mistake is the reverse order, which gives 21 instead of 15.
 6. **`max_pool_forward(x, pool_size, stride)`.** `x` has shape `(N, C, H, W)`. Return `(N, C, H_out, W_out)`, with sizes from `conv_output_shape`. For each output position, take `window.max(axis=(2, 3))` so that every channel keeps its own maximum. The most common mistake is a maximum that mixes channels or images.
+7. **`max_pool_backward(dout, x, pool_size, stride)`.** `dout` matches the pooled shape, and the result matches `x`. Flatten each window, take `np.argmax`, and add `dout` at that cell. Add when windows overlap. The most common mistake is writing the whole gradient onto the top-left cell.
+8. **`average_pool_forward(x, pool_size, stride)`.** Same shapes as `max_pool_forward`. Each output is `window.mean(axis=(2, 3))`. The most common mistake is returning the sum.
+9. **`average_pool_backward(dout, x, pool_size, stride)`.** Add `dout / (pool_size * pool_size)` onto every cell of the window. The most common mistake is dividing by `pool_size` instead of by the number of cells.
 
 ## Cost and scaling
 
-Parameters do not grow with the image, but work does. Each output value of a 3 by 3 layer with 64 input channels costs 576 multiplies, and a 224 by 224 image has about 50,000 positions per channel. The loop version is far too slow for real networks. [Turning a convolution into one matrix multiply](/lessons/039-im2col-and-convolution-backward) replaces it, and you keep the loop version as the reference answer.
+Parameters do not grow with the image, but the work does. Each output of a 3 by 3 layer with 64 input channels costs 576 multiplies, and a 224 by 224 image has about 50,000 positions per channel. [Turning a convolution into one matrix multiply](/lessons/039-im2col-and-convolution-backward) replaces the loop, which you keep as the reference answer.
 
 ## The exercise
 
-You implement `conv2d_single`, `conv2d_naive`, `param_counts`, `conv_output_shape`, `receptive_field_per_layer`, and `max_pool_forward`.
+You implement `conv2d_single`, `conv2d_naive`, `param_counts`, `conv_output_shape`, `receptive_field_per_layer`, `max_pool_forward`, `max_pool_backward`, `average_pool_forward`, and `average_pool_backward`.
 
-The checks run your single-channel slide on the edge image from Figure 1 and on an asymmetric filter, which catches a flipped kernel. They compare `conv2d_naive` with an independent reference for several strides and paddings, confirm that a shifted input gives a shifted output in the interior, and confirm the weight counts. Then they compare `conv_output_shape` with the table and the drop-the-leftover case, confirm the fields 3, 7, 15 for the chapter's stack, and run max pooling against the 4 by 4 grid and against a direct windowed maximum.
+The checks run your single-channel slide on the edge image from Figure 1 and on an asymmetric filter, which catches a flipped kernel. They compare `conv2d_naive` with an independent reference for several strides and paddings, confirm that a shifted input gives a shifted output in the interior, and confirm the weight counts. Then they compare `conv_output_shape` with the table, confirm the fields 3, 7, and 15, and run max pooling on the 4 by 4 grid. They place a max-pool gradient on the first maximum, including a tie, and compare it with a finite difference where one pixel is strictly largest. They check the means 4.25, 2, 2.5, and 3.25, and the average-pool gradient against those shares and against a finite difference.
+
+## Further reading
+
+- For routing a max-pool gradient to the input that held the maximum, and for average pooling as the other common pooling function, see the pooling section of the [CS231n convolutional networks notes](https://cs231n.github.io/convolutional-networks/). The notes do not choose a pixel when several tie. This chapter keeps the first maximum in row-major order.
+- The [CS231n Spring 2026 schedule](https://cs231n.stanford.edu/2026/schedule.html) prints "Lecture 5: Image Classification with CNNs" and lists convolution and pooling. The [lecture 5 slides](https://cs231n.stanford.edu/slides/2026/lecture_5.pdf) draw a pooling layer with a kernel size and a stride.
