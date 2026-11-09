@@ -8,7 +8,7 @@ gpu: false
 objectives:
   - Compute the margin z = y(w·x + b), and say why the road's half-width is 1/‖w‖ and what C trades off.
   - Write the hinge objective and its subgradient, check the slope with finite differences, and train a linear SVM with it.
-  - Rebuild the weights from the pushes, w = Σ α·y·x, score points and the dual objective from a Gram matrix, and sort houses into three groups.
+  - Derive w = Σ α·y·x, the balance rule, and the dual objective from the Lagrangian, then score points from a Gram matrix and sort houses into three groups.
   - Compute the violation of the KKT checklist, and say what a violation of zero does and does not tell you.
   - Find the best pushes with the two-at-a-time solver, using the bounds L and H, a parabola jump, and a clip.
 prereqs:
@@ -165,23 +165,37 @@ Start at $w = 0$, $b = 0$, where $J = 12$ for the twelve houses with $C = 1$, an
 
 ## The same road, described by pushes
 
-Next, ask a different question. Instead of "what is $w$?", ask "how much does each house hold the road in place?" Picture the road as a stiff plank clamped between pegs, and each house as a peg. A peg pushes on the plank with a force $\alpha_i \ge 0$, called its *multiplier*, away from its own side. A peg that touches nothing pushes with force 0. At rest the plank does not slide, so the pushes balance, and the road's direction is built from the pushes themselves:
+Next, ask a different question. Instead of "what is $w$?", ask "how much does each house hold the road in place?" Picture the road as a stiff plank clamped between pegs, and each house as a peg. A peg pushes on the plank with a force $\alpha_i \ge 0$, called its *multiplier*, away from its own side. A peg that touches nothing pushes with force 0. Take a square at $x = +1$ with $y = +1$ and a circle at $x = -1$ with $y = -1$, in that order. The road between them has $w = 1$, and equal pushes $\alpha = [0.5, 0.5]$ rebuild it, because each house adds $\alpha\cdot y\cdot x = 0.5$.
+
+## From road to pushes: the Lagrangian
+
+The plank solves a constrained problem. House $i$ may fall short of its edge by a slack $\xi_i \ge 0$, as long as $z_i \ge 1 - \xi_i$. The hinge fills in the smallest such slack, $\xi_i = \max(0,\, 1 - z_i)$, so you minimise $\tfrac{1}{2}\lVert w \rVert^2 + C\sum_i \xi_i$.
+
+Give the margin a multiplier $\alpha_i \ge 0$ and give $\xi_i \ge 0$ a multiplier $\mu_i \ge 0$. The Lagrangian charges for each broken constraint:
 
 $$
-\sum_i \alpha_i y_i = 0, \qquad w = \sum_i \alpha_i y_i x_i .
+L = \frac{1}{2}\lVert w \rVert^2 + C\sum_i \xi_i - \sum_i \alpha_i(z_i - 1 + \xi_i) - \sum_i \mu_i \xi_i .
 $$
 
-The first equation is the *balance rule*. Read the second aloud: $w$ is every house's position, weighted by how hard it pushes and signed by its side. Take a square at $x = +1$ with $y = +1$ and a circle at $x = -1$ with $y = -1$, in that order. The road between them has $w = 1$, and equal pushes $\alpha = [0.5, 0.5]$ rebuild it, because each house adds $\alpha\cdot y\cdot x = 0.5$.
-
-Which pushes are the best? Put $w = \sum_i \alpha_i y_i x_i$ back into the cost. The $w$ disappears, and what remains depends only on $\alpha$:
+Because $z_i = y_i(w^{\top}x_i + b)$, the slope in $w$ is $w - \sum_i \alpha_i y_i x_i$ and the slope in $b$ is $-\sum_i \alpha_i y_i$. Set both to zero:
 
 $$
-D(\alpha) = \sum_i \alpha_i - \frac{1}{2}\sum_{i}\sum_{j}\alpha_i\alpha_j y_i y_j\, x_i^{\top}x_j .
+w = \sum_i \alpha_i y_i x_i, \qquad \sum_i \alpha_i y_i = 0 .
 $$
 
-Read it aloud: the first term rewards total push, and the second charges half the squared length of the $w$ the pushes build. The best pushes maximise $D$ under the balance rule and a *box rule*, $0 \le \alpha_i \le C$, so no house pushes harder than the price of its slack. On the two-house example, equal pushes $[a, a]$ give $D = 2a - 2a^2$, which peaks at $a = 0.5$ with value $0.5 = \tfrac12\lVert w \rVert^2$.
+Read it aloud: $w$ is every house's position, weighted by its push and signed by its side, and the second equation is the *balance rule*. The slope in $\xi_i$ is $C - \alpha_i - \mu_i$. Set it to zero and the *box rule* is $0 \le \alpha_i \le C$, because $\mu_i \ge 0$.
 
-Write $K_{ij} = x_i^{\top}x_j$, the *Gram matrix*: entry $(i, j)$ says how alike houses $i$ and $j$ are. With $v = \alpha y$ the double sum and the score of a house are one line each:
+Substitute the three slopes. The slack and $b$ cancel, and you maximise what remains:
+
+$$
+D(\alpha) = \sum_i \alpha_i - \frac{1}{2}\sum_i\sum_j \alpha_i \alpha_j y_i y_j\, x_i^{\top}x_j .
+$$
+
+Read it aloud: reward every push, then charge half the squared length of the $w$ the pushes build. Equal pushes $[a, a]$ on the two-house road give $D = 2a - 2a^2$, which peaks at $a = 0.5$ with value $0.5$. The hinge objective is $0.5$ too, because the slack is zero, so the gap is zero.
+
+*Complementary slackness* says a constraint and its multiplier are not both loose, $\alpha_i(z_i - 1 + \xi_i) = 0$ and $\mu_i \xi_i = 0$. A house with no push can sit outside the edge, a free push sits on the edge, and a push of $C$ can fall short. The KKT checklist turns that into a number.
+
+Write $K_{ij} = x_i^{\top}x_j$, the *Gram matrix*: entry $(i, j)$ says how alike houses $i$ and $j$ are. With $v = \alpha y$, the double sum in $D$ and the score of a house are one line each:
 
 ```python
 D = alpha.sum() - 0.5 * v @ K @ v         # v = alpha * y
@@ -226,14 +240,14 @@ Figure 3 shows nine houses fitted with $C = 0.3$. Only four push at all, and the
 Figure 3. Nine houses fitted with C = 0.3. Purple arrows show the pushes, and a longer arrow means a bigger α. Only four houses push at all. The two houses on the dashed edges push gently. The two capped houses push at the maximum, and one of them is across the centre line.
 ```
 
-A house outside the road, with $z > 1$, has room to spare, so its push is 0. A house that pushes by some amount below the cap must be touching the plank, so it rests exactly on its edge, $z = 1$. A house short of the edge, with $z < 1$, pays the most it can cost, so its push is the largest allowed, $\alpha_i = C$, and a house across the centre line is in this group.
+A house outside the road ($z > 1$) pushes with 0. A free push sits on the edge ($z = 1$). A house short of the edge ($z < 1$), including one across the centre line, pushes at the cap $\alpha_i = C$.
 
-A *support vector* is a house with $\alpha_i > 0$. The road is built only from $w = \sum_i \alpha_i y_i x_i$, and a house with $\alpha_i = 0$ adds nothing to that sum. Delete the five zero-push houses of Figure 3 and refit, and you get the same $w$.
+A *support vector* is a house with $\alpha_i > 0$. The road is $w = \sum_i \alpha_i y_i x_i$, so a house with $\alpha_i = 0$ adds nothing. Delete the five zero-push houses of Figure 3 and refit, and you get the same $w$.
 
 > [!KEY]
 > At the best pushes, every house is in exactly one of three groups: far away and ignored, resting on an edge and holding the road up, or short of the edge and pushing as hard as allowed. Most pushes are zero, so the support vectors decide the road.
 
-Nothing in $D$ or in the scores needs $K$ to be a table of dot products. On forty houses arranged as a village centre inside a ring, a dot-product table leaves 11 on the wrong side, and the RBF table of [the next chapter](/lessons/018-kernels-and-validity) gets all 40 right with no other change.
+Nothing in $D$ or the scores needs $K$ to be dot products. On forty houses in a ring, dot products leave 11 on the wrong side, and the RBF table in [the next chapter](/lessons/018-kernels-and-validity) gets all 40 right.
 
 ## The KKT checklist
 
@@ -267,7 +281,7 @@ $$
 
 Read the first line aloud: if $\alpha_j$ gains an amount, $\alpha_i$ gains the same, so $\alpha_j$ stops when either push reaches 0 or $C$. With $C = 10$, $\alpha = [0, 0]$, and different labels, $L = 0$ and $H = 10$. With matching labels and $\alpha_i + \alpha_j = 12$, $L = 2$.
 
-Along that line $D$ depends on $\alpha_j$ alone, because $\alpha_i$ follows it, and the quadratic part of $D$ is negative, so $D$ is an upside-down parabola with a peak you can jump to. Let $E_i = f_i - y_i$ be the error of the score, zero when house $i$ sits on its edge. The slope of $D$ along the line is $y_j(E_i - E_j)$, and the curvature is $-\eta$ with $\eta = K_{ii} + K_{jj} - 2K_{ij}$, which for dot products is the squared distance between the two houses. A pair that nearly coincides has $\eta$ near 0 and a huge step, so skip the pair when $\eta \le 10^{-12}$. The peak is the Newton step, followed by a clip and the partner's move:
+Along that line $D$ depends on $\alpha_j$ alone, and the quadratic part of $D$ is negative, so $D$ is an upside-down parabola. Let $E_i = f_i - y_i$ be the error of the score, zero when house $i$ sits on its edge. The slope along the line is $y_j(E_i - E_j)$, and the curvature is $-\eta$ with $\eta = K_{ii} + K_{jj} - 2K_{ij}$. Skip the pair when $\eta \le 10^{-12}$, because the houses nearly coincide and the step is huge. The peak is the Newton step, then a clip, then the partner's move:
 
 $$
 \alpha_j^{\text{new}} = \operatorname{clip}\!\left(\alpha_j + \frac{y_j(E_i - E_j)}{\eta},\; L,\; H\right), \qquad
@@ -306,7 +320,7 @@ Read it aloud: jump to the top of the parabola, stop at the wall if the peak is 
 Figure 4. Along the allowed line, D is a parabola in α_j. The step jumps straight to its peak at 0.5 when the box allows it. When a wall at 0.3 stands in the way, the step stops at the wall, where D is 0.42 instead of 0.5. Clipping means stopping at the wall.
 ```
 
-Work the two-house example with house $i$ the square, $C = 10$, $\alpha = [0, 0]$, and $b = 0$. Every score is 0, so $E_i = -1$ and $E_j = 1$. Then $\eta = 1 + 1 - 2(-1) = 4$, the slope is $y_j(E_i - E_j) = 2$, and the step is $2/4 = 0.5$. So $\alpha_j^{\text{new}} = 0.5$, the partner is also 0.5, and $D$ rose from 0 to 0.5 in one step. With $C = 0.3$ the peak at 0.5 is past the wall, both pushes end at 0.3, and $D$ is 0.42 (Figure 4).
+Work the two-house example with house $i$ the square, $C = 10$, $\alpha = [0, 0]$, and $b = 0$. Every score is 0, so $E_i = -1$ and $E_j = 1$. Then $\eta = 1 + 1 - 2(-1) = 4$, the slope is $y_j(E_i - E_j) = 2$, and the step is $2/4 = 0.5$. So $\alpha_j^{\text{new}} = 0.5$, the partner is also 0.5, and $D$ rose from 0 to 0.5 in one step. With $C = 0.3$ the peak at 0.5 is past the wall and both pushes end at 0.3 (Figure 4). Then $w = 0.3 + 0.3 = 0.6$, both margins are $0.6$, and the hinge objective is $\tfrac12(0.6)^2 + 0.3 \times 2 \times 0.4 = 0.42$, the same as $D = 2\times 0.3 - \tfrac12(0.6)^2$. The slope in $w$ is $0.6 - 0.3\times 2 = 0$.
 
 > [!WARNING]
 > Read both errors, $E_i$ and $E_j$, before you write either push. If you change $\alpha_i$ first and then compute $E_j$, the score $f_j$ already includes the updated $\alpha_i$, and the step is wrong.
@@ -320,14 +334,14 @@ $$
 
 Use $b_1$ if the updated $\alpha_i$ is strictly inside $(0, C)$, else $b_2$ if the updated $\alpha_j$ is, else the average of the two. In the example $\Delta_i = \Delta_j = 0.5$, so $b_1 = 0 + 1 - 0.5 - 0.5 = 0$. The step returns its inputs unchanged when $i = j$, when $\eta \le 10^{-12}$, and when $L \ge H$.
 
-To choose $i$, use the checklist. Because $y_i^2 = 1$, $y_i E_i = g_i$. House $i$ needs attention when $y_i E_i < -\text{tol}$ and $\alpha_i < C$ (short of the edge, able to push harder), or when $y_i E_i > \text{tol}$ and $\alpha_i > 0$ (beyond the edge, still pushing). For such an $i$, scan $j$ from 0 and keep the first step that moves $\alpha_j$ by more than $10^{-7}$. Stop after a pass whose largest violation is below `tol`, after a pass that changed nothing, or after `max_iter` passes. $D$ rises at every step, because each step goes to the best point of its own parabola, while the largest violation wanders down to 0.
+To choose $i$, use the checklist. Because $y_i^2 = 1$, $y_i E_i = g_i$. Update house $i$ when $y_i E_i < -\text{tol}$ and $\alpha_i < C$, or when $y_i E_i > \text{tol}$ and $\alpha_i > 0$. Scan $j$ from 0 and keep the first step that moves $\alpha_j$ by more than $10^{-7}$. Stop when a pass has violation under `tol`, changes nothing, or reaches `max_iter`. Each step raises $D$, because it jumps to that pair's peak.
 
 > [!KEY]
 > You find the best pushes by changing two at a time. The balance rule leaves one free direction, along a line. On that line $D$ is a parabola, so you jump to its peak, stop at the wall of the box if you overshoot, and repeat on any house that breaks the checklist.
 
 > [!RECAP]
 > - The half-width is $1/\lVert w \rVert$, and the hinge is a sum with $C$ pricing slack. Only houses with $z < 1$ enter the subgradient.
-> - A push $\alpha_i \ge 0$ is how hard house $i$ holds the road, with $D(\alpha) = \sum_i \alpha_i - \tfrac12 v^{\top}Kv$ and scores $f = (\alpha y)K + b$.
+> - The Lagrangian's slopes give $w = \sum_i \alpha_i y_i x_i$ and $\sum_i \alpha_i y_i = 0$. Then $D(\alpha) = \sum_i \alpha_i - \tfrac12 v^{\top}Kv$, and the scores are $f = (\alpha y)K + b$.
 > - $\alpha = 0$, $0 < \alpha < C$, and $\alpha = C$ mean $z \ge 1$, $z = 1$, and $z \le 1$. A violation is the distance outside that band.
 > - A pair of pushes slides between $L$ and $H$, and $D$ is a parabola on that line.
 
@@ -343,7 +357,7 @@ You write ten functions, in the order the checks test them: three train the weig
 
 4. **`dual_scores(alpha, y, K, b)`**. Returns `(alpha * y) @ K + b`, shape `(n,)`. The common mistake is `alpha @ K`, which forgets the sides.
 
-5. **`dual_objective(alpha, y, K)`**. Returns one float. Build `v = alpha * y` once.
+5. **`dual_objective(alpha, y, K)`**. Returns one float. Build `v = alpha * y` once. The common mistake is to drop `0.5 * v @ K @ v`, which the duality-gap check rejects.
 
 6. **`margin_groups(alpha, C, tol)`**. Returns integers 0, 1, or 2, shape `(n,)`. Start from `np.ones` and overwrite the two ends with `alpha <= tol` and `alpha >= C - tol`. The common mistake is `alpha == 0`.
 
@@ -363,4 +377,8 @@ You write ten functions, in the order the checks test them: three train the weig
 
 ## The exercise
 
-You build all ten functions. The checks confirm margins of 2, 0.5, and 1, a loss of exactly 1 and a slope of `[0.5, 0]` and $-1$ (which catches a mean and a `<=`), and the slope against finite differences. Training on the twelve houses of Figure 1 must put every house on its correct side within 5 percent of the best objective. They confirm $D = 0.5$, the groups, and the violations on the six-house example and at an independent optimum. Last, `smo_step` is checked on the two-house example, at the wall, and over random pairs, and `fit_smo` must find the road of an independent solver.
+You build all ten functions. The checks confirm margins of 2, 0.5, and 1, a loss of exactly 1 and a slope of `[0.5, 0]` and $-1$ (which catches a mean and a `<=`), and the slope against finite differences. Training on the twelve houses of Figure 1 must put every house on its correct side within 5 percent of the best objective. They confirm $D = 0.5$, the groups, and the violations on the six-house example and at an independent optimum. Last, `smo_step` is checked on the two-house example, at the wall, and over random pairs, and `fit_smo` must find the road of an independent solver. At those pushes the hinge objective and `dual_objective` differ by less than $10^{-6}$, and $w = \sum_i \alpha_i y_i x_i$ matches the weights from `fit_subgradient`.
+
+## Further reading
+
+For the Lagrangian, the stationarity conditions, and the SVM dual, see [CS229 lecture 7, Optimal margin classifier](https://see.stanford.edu/Course/CS229/37) (Andrew Ng).

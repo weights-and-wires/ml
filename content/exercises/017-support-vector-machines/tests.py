@@ -327,3 +327,65 @@ def test_fit_smo(sub):
         fail(f"expected some, but not all, houses to push; found {int(keep.sum())} of {len(y9)}")
     a2, _ = got(X9[keep] @ X9[keep].T, y9[keep], 0.3, 500, 1e-6)
     close((a2 * y9[keep]) @ X9[keep], (a9 * y9) @ X9, atol=2e-3, label="w after deleting the zero-push houses")
+
+
+@check("At the SMO solution the duality gap is under 1e-6 and w from the pushes matches the subgradient weights")
+def test_strong_duality(sub):
+    # Catches a dual_objective that drops the quadratic term: on this road
+    # that returns sum(alpha) = 0.6, so the gap against J = 0.42 is 0.18.
+    # Also catches a w built as alpha @ X, which forgets to multiply by y_i
+    # and is 0 here, not the subgradient weight 0.6.
+    objective = has(sub, "dual_objective")
+    hinge = has(sub, "hinge_loss_and_subgradient")
+    smo = has(sub, "fit_smo")
+    descent = has(sub, "fit_subgradient")
+
+    # Two houses, C = 0.3. One SMO step clips both pushes to the cap.
+    # w = 0.3*1*1 + 0.3*(-1)*(-1) = 0.6, both margins are 0.6, slack is 0.4.
+    # J = 0.5*(0.6)**2 + 0.3*2*0.4 = 0.42
+    # D = 2*0.3 - 0.5*(0.6)**2 = 0.42
+    # gap = 0 in exact arithmetic.
+    # fit_subgradient with lr = 1 takes one step from w = 0: both houses are
+    # active, grad_w = -0.3*(1 + 1) = -0.6, so w lands on 0.6 and the slope
+    # is then 0. Agreement past 1e-8 is rounding, not a tuned tolerance.
+    X = np.array([[1.0], [-1.0]])
+    y = np.array([1.0, -1.0])
+    C = 0.3
+    alpha, b = smo(X @ X.T, y, C, 20, 1e-8)
+    w = (alpha * y) @ X
+    loss = hinge(w, float(b), X, y, C)[0]
+    dual = objective(alpha, y, X @ X.T)
+    gap = abs(float(loss) - float(dual))
+    if gap >= 1e-6:
+        fail(
+            f"two-house duality gap is {gap:.3e}, expected below 1e-6 "
+            f"(J = {float(loss):.6f}, D = {float(dual):.6f})"
+        )
+    almost(loss, 0.42, 1e-9, label="hinge objective at the C = 0.3 SMO solution")
+    almost(dual, 0.42, 1e-9, label="dual objective at the C = 0.3 SMO solution")
+
+    w_sg, _ = descent(X, y, C, 1.0, 5)
+    close(w, w_sg, atol=1e-8, label="w = (alpha * y) @ X against the subgradient weights")
+    forgot = float(np.linalg.norm((alpha @ X) - w_sg))
+    if forgot < 0.1:
+        fail(
+            f"a w that forgets y_i still matches: ||alpha @ X - w_sg|| = {forgot:.3e}, "
+            "expected about 0.6"
+        )
+
+    # The 1e-6 line is the twelve-house floor of this solver, not a looser guess.
+    # fit_smo keeps a pair step only when alpha_j moves by more than 1e-7.
+    # There the largest leftover step is (1 - z) / eta ≈ 9.93e-7 / 12.58 ≈ 7.9e-8,
+    # under that cutoff, and the gap is (C - alpha)*(1 - z) ≈ 8.34e-7.
+    X12, y12 = _houses()
+    K12 = X12 @ X12.T
+    alpha12, b12 = smo(K12, y12, 1.0, 500, 1e-8)
+    w12 = (alpha12 * y12) @ X12
+    loss12 = hinge(w12, float(b12), X12, y12, 1.0)[0]
+    dual12 = objective(alpha12, y12, K12)
+    gap12 = abs(float(loss12) - float(dual12))
+    if gap12 >= 1e-6:
+        fail(
+            f"twelve-house duality gap is {gap12:.3e}, expected below 1e-6 "
+            f"(J = {float(loss12):.6e}, D = {float(dual12):.6e})"
+        )
