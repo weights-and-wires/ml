@@ -74,6 +74,54 @@ def max_pool_forward(x: np.ndarray, pool_size: int, stride: int) -> np.ndarray:
     return out
 
 
+def max_pool_backward(
+    dout: np.ndarray, x: np.ndarray, pool_size: int, stride: int
+) -> np.ndarray:
+    dx = np.zeros_like(x, dtype=float)
+    n, c, _, _ = x.shape
+    _, _, h_out, w_out = dout.shape
+    for image in range(n):
+        for channel in range(c):
+            for i in range(h_out):
+                for j in range(w_out):
+                    top, left = i * stride, j * stride
+                    window = x[image, channel, top : top + pool_size, left : left + pool_size]
+                    index = int(np.argmax(window))
+                    row, col = divmod(index, pool_size)
+                    dx[image, channel, top + row, left + col] += dout[image, channel, i, j]
+    return dx
+
+
+def average_pool_forward(x: np.ndarray, pool_size: int, stride: int) -> np.ndarray:
+    n, c, h, w = x.shape
+    h_out = conv_output_shape(h, pool_size, stride)
+    w_out = conv_output_shape(w, pool_size, stride)
+    out = np.empty((n, c, h_out, w_out), dtype=float)
+    for i in range(h_out):
+        top = i * stride
+        for j in range(w_out):
+            left = j * stride
+            window = x[:, :, top : top + pool_size, left : left + pool_size]
+            out[:, :, i, j] = window.mean(axis=(2, 3))
+    return out
+
+
+def average_pool_backward(
+    dout: np.ndarray, x: np.ndarray, pool_size: int, stride: int
+) -> np.ndarray:
+    dx = np.zeros(x.shape, dtype=float)
+    _, _, h_out, w_out = dout.shape
+    scale = float(pool_size * pool_size)
+    for i in range(h_out):
+        top = i * stride
+        for j in range(w_out):
+            left = j * stride
+            dx[:, :, top : top + pool_size, left : left + pool_size] += (
+                dout[:, :, i, j][:, :, None, None] / scale
+            )
+    return dx
+
+
 if __name__ == "__main__":
     x = np.array([[0, 0, 1, 1, 1]] * 5, dtype=float)
     edge = np.array([[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]], dtype=float)
@@ -102,3 +150,10 @@ if __name__ == "__main__":
     grid = np.array([[1, 3, 2, 5], [4, 9, 1, 0], [6, 2, 7, 1], [1, 1, 3, 2]], dtype=float)
     print("2x2 max pool:")
     print(max_pool_forward(grid[None, None], 2, 2)[0, 0])
+    dout = np.array([[[[1.0, 2.0], [3.0, 4.0]]]])
+    print("max-pool gradient:")
+    print(max_pool_backward(dout, grid[None, None], 2, 2)[0, 0])
+    print("2x2 average pool:")
+    print(average_pool_forward(grid[None, None], 2, 2)[0, 0])
+    print("average-pool gradient:")
+    print(average_pool_backward(dout, grid[None, None], 2, 2)[0, 0])

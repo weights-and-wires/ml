@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from mlcheck import check, close, equal, fail, has, shape
+from mlcheck import check, close, equal, fail, finite_difference, has, shape
 
 
 def reference_conv(x, w, b, stride, padding):
@@ -167,3 +167,121 @@ def test_max_pool_forward_handles_overlapping_win(sub):
         out = got(x, pool, stride)
         shape(out, want.shape, label=f"shape at pool={pool}, stride={stride}")
         close(out, want, atol=1e-12, label=f"pool={pool}, stride={stride}")
+
+
+@check("max_pool_backward sends the gradient to the first maximum and matches a finite difference")
+def test_max_pool_backward_first_maximum(sub):
+    # Routing the whole max-pool gradient to index 0 of every window (the
+    # top-left cell) fails this check. The tie's first maximum is the top-right
+    # 4, and the 9 in the chapter grid sits at row 1, column 1.
+    backward = has(sub, "max_pool_backward")
+    grid = np.array(
+        [[1, 3, 2, 5], [4, 9, 1, 0], [6, 2, 7, 1], [1, 1, 3, 2]], dtype=float
+    )
+    x = np.stack([grid, -grid])[None]
+    dout = np.array([[[[1.0, 2.0], [3.0, 4.0]]]])
+    dout = np.repeat(dout, 2, axis=1)
+    got = backward(dout, x, 2, 2)
+    want = np.array(
+        [
+            [
+                [[0.0, 0.0, 0.0, 2.0], [0.0, 1.0, 0.0, 0.0], [3.0, 0.0, 4.0, 0.0], [0.0, 0.0, 0.0, 0.0]],
+                [[1.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 2.0], [0.0, 0.0, 0.0, 4.0], [3.0, 0.0, 0.0, 0.0]],
+            ]
+        ]
+    )
+    shape(got, x.shape, label="max_pool_backward output")
+    close(got, want, atol=1e-12, label="chapter grid, including the tie on channel 1")
+
+    tied = np.array([[[[1.0, 4.0], [4.0, 2.0]]]])
+    got_tie = backward(np.array([[[[6.0]]]]), tied, 2, 2)
+    want_tie = np.array([[[[0.0, 6.0], [0.0, 0.0]]]])
+    close(got_tie, want_tie, atol=1e-12, label="tie: gradient on the first maximum only")
+
+    overlap = np.array([[[[0.0, 1.0, 0.2], [0.4, 0.5, 2.0], [0.1, 0.3, 0.0]]]])
+    dout_overlap = np.array([[[[10.0, 20.0], [30.0, 40.0]]]])
+    got_overlap = backward(dout_overlap, overlap, 2, 1)
+    want_overlap = np.array([[[[0.0, 10.0, 0.0], [0.0, 30.0, 60.0], [0.0, 0.0, 0.0]]]])
+    close(got_overlap, want_overlap, atol=1e-12, label="overlapping windows add")
+
+    rng = np.random.default_rng(4)
+    random_x = rng.normal(size=(2, 2, 5, 5))
+    for top, left in ((0, 0), (0, 2), (2, 0), (2, 2)):
+        random_x[:, :, top, left + 1] += 5.0
+    random_dout = rng.normal(size=(2, 2, 2, 2))
+
+    def loss(value):
+        return float(np.sum(random_dout * sub.max_pool_forward(value, 2, 2)))
+
+    numeric = finite_difference(loss, random_x.copy(), eps=1e-6)
+    close(
+        backward(random_dout, random_x, 2, 2),
+        numeric,
+        atol=1e-5,
+        rtol=1e-4,
+        label="max-pool gradient vs finite difference",
+    )
+
+
+@check("average_pool_forward returns window means and average_pool_backward matches a finite difference")
+def test_average_pool_forward_and_backward(sub):
+    # Dividing the average-pool gradient by pool_size (the side length) instead
+    # of by pool_size * pool_size (the number of cells) fails this check. The
+    # top-left share of upstream 1 is 0.25, not 0.5.
+    forward = has(sub, "average_pool_forward")
+    backward = has(sub, "average_pool_backward")
+    grid = np.array(
+        [[1, 3, 2, 5], [4, 9, 1, 0], [6, 2, 7, 1], [1, 1, 3, 2]], dtype=float
+    )
+    x = grid[None, None]
+    out = forward(x, 2, 2)
+    shape(out, (1, 1, 2, 2), label="average_pool_forward output")
+    close(out[0, 0], np.array([[4.25, 2.0], [2.5, 3.25]]), atol=1e-12, label="window means")
+
+    dout = np.array([[[[1.0, 2.0], [3.0, 4.0]]]])
+    got = backward(dout, x, 2, 2)
+    want = np.array(
+        [
+            [
+                [
+                    [0.25, 0.25, 0.5, 0.5],
+                    [0.25, 0.25, 0.5, 0.5],
+                    [0.75, 0.75, 1.0, 1.0],
+                    [0.75, 0.75, 1.0, 1.0],
+                ]
+            ]
+        ]
+    )
+    shape(got, x.shape, label="average_pool_backward output")
+    close(got, want, atol=1e-12, label="equal shares of the upstream gradient")
+
+    overlap = np.array([[[[0.0, 1.0, 0.2], [0.4, 0.5, 2.0], [0.1, 0.3, 0.0]]]])
+    means = forward(overlap, 2, 1)
+    close(
+        means[0, 0],
+        np.array([[0.475, 0.925], [0.325, 0.7]]),
+        atol=1e-12,
+        label="overlapping window means",
+    )
+    dout_overlap = np.array([[[[10.0, 20.0], [30.0, 40.0]]]])
+    got_overlap = backward(dout_overlap, overlap, 2, 1)
+    want_overlap = np.array(
+        [[[[2.5, 7.5, 5.0], [10.0, 25.0, 15.0], [7.5, 17.5, 10.0]]]]
+    )
+    close(got_overlap, want_overlap, atol=1e-12, label="overlapping average-pool shares add")
+
+    rng = np.random.default_rng(5)
+    random_x = rng.normal(size=(2, 2, 5, 4))
+    random_dout = rng.normal(size=(2, 2, 4, 3))
+
+    def loss(value):
+        return float(np.sum(random_dout * sub.average_pool_forward(value, 2, 1)))
+
+    numeric = finite_difference(loss, random_x.copy(), eps=1e-6)
+    close(
+        backward(random_dout, random_x, 2, 1),
+        numeric,
+        atol=1e-5,
+        rtol=1e-4,
+        label="average-pool gradient vs finite difference",
+    )

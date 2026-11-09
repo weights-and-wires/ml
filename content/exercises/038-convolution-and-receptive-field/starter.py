@@ -1,6 +1,6 @@
 """Convolution by hand: slide a filter, count the weights, count the output, count the view.
 
-Fill in the six functions below. The loop version of the convolution is slow on
+Fill in the nine functions below. The loop version of the convolution is slow on
 purpose: later chapters compare faster versions against it.
 """
 
@@ -115,6 +115,64 @@ def max_pool_forward(x: np.ndarray, pool_size: int, stride: int) -> np.ndarray:
     raise NotImplementedError("max_pool_forward")
 
 
+def max_pool_backward(
+    dout: np.ndarray, x: np.ndarray, pool_size: int, stride: int
+) -> np.ndarray:
+    """Route each max-pool gradient to the first maximum in its window.
+
+    Args:
+        dout: Upstream gradient, shape (N, C, H_out, W_out), the shape
+            `max_pool_forward` returns for this `x`.
+        x: The same input that was pooled, shape (N, C, H, W).
+        pool_size: Side length of the square window.
+        stride: Step between consecutive windows.
+
+    Returns:
+        Gradient with respect to `x`, shape (N, C, H, W). On a tie, the whole
+        upstream value goes to the first maximum in row-major order (the index
+        `np.argmax` returns on the flattened window) and the later ties get
+        zero. Overlapping windows add. Cells that no window covers stay zero.
+    """
+    raise NotImplementedError("max_pool_backward")
+
+
+def average_pool_forward(x: np.ndarray, pool_size: int, stride: int) -> np.ndarray:
+    """Average pooling over square windows, separately for every channel.
+
+    Args:
+        x: Input, shape (N, C, H, W).
+        pool_size: Side length of the square window.
+        stride: Step between consecutive windows; may be smaller than
+            pool_size, in which case windows overlap.
+
+    Returns:
+        Output, shape (N, C, H_out, W_out), where H_out and W_out come from
+        `conv_output_shape` with padding 0 and dilation 1. Each value is the
+        mean of its window.
+    """
+    raise NotImplementedError("average_pool_forward")
+
+
+def average_pool_backward(
+    dout: np.ndarray, x: np.ndarray, pool_size: int, stride: int
+) -> np.ndarray:
+    """Split each average-pool gradient evenly across its window.
+
+    Args:
+        dout: Upstream gradient, shape (N, C, H_out, W_out).
+        x: The input that was pooled, shape (N, C, H, W). Only the shape is
+            needed; leftover cells that no window covers stay zero.
+        pool_size: Side length of the square window.
+        stride: Step between consecutive windows.
+
+    Returns:
+        Gradient with respect to `x`, shape (N, C, H, W). Every cell of a
+        window receives `dout / (pool_size * pool_size)`. Overlapping windows
+        add.
+    """
+    raise NotImplementedError("average_pool_backward")
+
+
 if __name__ == "__main__":
     x = np.array([[0, 0, 1, 1, 1]] * 5, dtype=float)
     edge = np.array([[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]], dtype=float)
@@ -143,3 +201,10 @@ if __name__ == "__main__":
     grid = np.array([[1, 3, 2, 5], [4, 9, 1, 0], [6, 2, 7, 1], [1, 1, 3, 2]], dtype=float)
     print("2x2 max pool:")
     print(max_pool_forward(grid[None, None], 2, 2)[0, 0])
+    dout = np.array([[[[1.0, 2.0], [3.0, 4.0]]]])
+    print("max-pool gradient:")
+    print(max_pool_backward(dout, grid[None, None], 2, 2)[0, 0])
+    print("2x2 average pool:")
+    print(average_pool_forward(grid[None, None], 2, 2)[0, 0])
+    print("average-pool gradient:")
+    print(average_pool_backward(dout, grid[None, None], 2, 2)[0, 0])
