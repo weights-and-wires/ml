@@ -2,14 +2,15 @@
 title: "Gradient boosting: fit what is still wrong"
 slug: 023-gradient-boosting
 part: "Part 3 — Trees, ensembles, and unsupervised learning"
-summary: Start from nothing, repeatedly fit a small stump to what the model still gets wrong, and add a fraction of it, which is gradient descent on the predictions.
-minutes: 40
+summary: Fit each round to what the model still gets wrong, then set a leaf with a Newton step that divides the slope by the bend.
+minutes: 45
 gpu: false
 objectives:
   - Build a model one stump at a time, where each stump fits the gap between the labels and the model so far.
   - Explain why the gap is the negative gradient of the squared loss, and what changes for another loss.
   - Explain why you add only a fraction of each stump, and what too many rounds does.
   - Write gradient boosting with stumps, and check each round's loss drop against a closed form.
+  - Set a leaf with a Newton step, and score a split by the regularised gain.
 prereqs:
   - 022-averaging-and-bagging
   - 005-gradient-descent-and-momentum
@@ -345,16 +346,58 @@ The classic AdaBoost method uses the exponential loss $e^{-yF}$ for labels $y = 
 
 The negative gradient of this loss has size $e^{-yF}$, so the confidently wrong row in the last line pulls on the next stump 55 times harder than the confidently right row in the first line. That pull is what AdaBoost calls the weight of a row. One caution: the original AdaBoost fits a weighted classifier and sets its step size in closed form, so it is a close relative of this loop and not the same procedure. The loop here, with `neg_grad` set to this loss, is gradient boosting with the exponential loss.
 
+## A leaf from the slope and the bend
+
+A stump leaf in this chapter is the mean of the negative gradients that land in it. That mean moves the prediction downhill, and the distance is the average slope. The curvature never enters, so a flat loss and a sharp loss with the same slope get the same step. Divide the slope by the bend, the second derivative of the loss, and a flat loss takes a longer step than a sharp one. That division is a Newton step. [A Newton step on the weights](/lessons/009-fitting-logistic-regression) does the same division, and a leaf is one number, so you divide instead of solving a linear system.
+
+The leaf formula takes the uphill slope $g_i = \partial \ell / \partial F_i$. The negative gradient you fitted the stump to is $-g_i$. Write $h_i = \partial^2 \ell / \partial F_i^2$ for the bend. In the loss-drop calculation, $h$ is the stump. In this section, $h_i$ is the bend of row $i$.
+
+For the squared loss $\ell = \tfrac12 (y - F)^2$, the slope is $g_i = F_i - y_i$ and the bend is $h_i = 1$. On the four flats, with $F = 0$, the slopes are $[-1, -3, -8, -10]$ and every bend is $1$. The left leaf holds the first two rows. With penalty $\lambda = 0$ its Newton value is
+
+$$
+w = -\frac{\sum_i g_i}{\sum_i h_i + \lambda} = -\frac{-4}{2} = 2.
+$$
+
+The right leaf is $-(-18)/2 = 9$. Those are the leaf means the stump already used: every bend is $1$, so the Newton step and the gradient step coincide. Set $\lambda = 1$ and the left leaf is $-(-4)/(2+1) = 4/3$. The penalty sits in the denominator, so a larger $\lambda$ pulls the leaf toward $0$. Leave $\lambda$ out and this leaf stays at $2$.
+
+In code:
+
+```python
+w = -np.sum(g) / (np.sum(h) + lam)
+```
+
+Squared loss hides the bend, because the bend of $\tfrac12 (y - F)^2$ is $1$. Logistic loss does not. Take three labels $y = [1, 1, 0]$ and scores $F = [0, 0, 0]$. The loss on one row is $\log(1 + e^{F}) - y F$, the log loss from [From a score to a probability, and how wrong it is](/lessons/008-sigmoid-and-log-loss). Its slope is $\sigma(F) - y$ and its bend is $\sigma(F)\,(1 - \sigma(F))$, where $\sigma(F) = 1/(1+e^{-F})$ is the sigmoid. At $F = 0$ the sigmoid is $1/2$, so the slopes are $[-0.5, -0.5, 0.5]$ and every bend is $0.25$.
+
+The gradient leaf is the mean of the downhill steps, $-\text{mean}(g) = 1/6$. The Newton leaf with $\lambda = 0$ is $-(-0.5)/0.75 = 2/3$. The bend is $1/4$, so the same total slope is divided by a smaller number and the step is longer. The mean loss starts at $\log 2$, which is $0.6931$. Adding $1/6$ to every score lowers it to $0.6688$. Adding $2/3$ lowers it to $0.6366$. One Newton step lowers the loss more than one gradient step.
+
+A split is worth making when the two new leaves score better than the leaf you split, after you pay for the extra leaf. Let $G_L$ and $H_L$ be the sums of the slopes and the bends on the left, and $G_R$ and $H_R$ the sums on the right. The regularised gain is
+
+$$
+\frac{1}{2}\left[\frac{G_L^{2}}{H_L+\lambda}+\frac{G_R^{2}}{H_R+\lambda}-\frac{(G_L+G_R)^{2}}{H_L+H_R+\lambda}\right]-\gamma .
+$$
+
+Each group earns a score, the square of its total slope divided by its total bend plus $\lambda$. The gain is half of the left score plus the right score minus the parent score, and then minus $\gamma$, the cost of the extra leaf.
+
+On the four flats, send the first two rows left, so $G_L = -4$, $H_L = 2$, $G_R = -18$, and $H_R = 2$. With $\lambda = 0$ and $\gamma = 0$ the scores are $16/2 = 8$, $324/2 = 162$, and $484/4 = 121$. The gain is $\tfrac{1}{2}(8 + 162 - 121) = 24.5$. With $\lambda = 1$ the denominators are $3$, $3$, and $5$, the scores are $16/3$, $108$, and $96.8$, and the gain falls to $8.2667$. $\gamma$ subtracts once more, so a split has to clear that cost before it is worth making.
+
+```python
+score = (g_sum ** 2) / (h_sum + lam)
+gain = 0.5 * (score_left + score_right - score_parent) - gamma
+```
+
+> [!KEY]
+> A Newton leaf is minus the total slope, divided by the total bend plus $\lambda$. For squared loss the bend is $1$, so the leaf matches the residual mean. For logistic loss the bend is smaller than $1$, and one Newton step lowers the loss more than a gradient step.
+
 > [!RECAP]
 > - Boosting adds stumps in a row, and each stump fits what the model so far still gets wrong.
-> - What is wrong is the negative gradient of the loss. For squared error it is the residual $y - F$.
+> - What is wrong is the negative gradient of the loss. For squared error it is the residual $y - F$. A Newton leaf divides the slope by the bend plus $\lambda$, and that bend is $1$ for squared error, so the leaf matches the residual mean.
 > - You add only a fraction $\eta$ of each stump, so no single stump dominates and the path is gentle.
-> - Each round lowers the squared loss by exactly $\eta(1 - \eta/2)\,\text{mean}(h^2)$.
+> - Each round lowers the squared loss by exactly $\eta(1 - \eta/2)$ times the mean squared size of the stump.
 > - Too many rounds fit noise, so unlike bagging you must choose when to stop.
 
 ## Build it step by step
 
-`_fit_stump` and `_predict_stump` are already written. You write three functions in this order.
+`_fit_stump` and `_predict_stump` are already written. You write five functions in this order.
 
 1. **`squared_error_neg_grad(y, F)`** takes two arrays of shape `(n,)` and returns an array of shape `(n,)`, the negative gradient of $\tfrac12 (y - F)^2$. Return `y - F`. The usual mistake is the wrong sign, `F - y`. Write it like this:
 
@@ -377,13 +420,34 @@ The negative gradient of this loss has size $e^{-yF}$, so the confidently wrong 
         # F starts at zeros. Each round: target, stump, update, record a copy.
     ```
 
+4. **`newton_leaf_value(g, h, lam)`** takes slopes `g` and bends `h`, each of shape `(n,)`, and a penalty `lam`, and returns one float. For squared error, `g` is `F - y`. The usual mistake is dropping `lam` from the denominator. For the left leaf with `lam` = $1$, the mistake returns $2$ and the formula returns $4/3$. Flipping the sign steps uphill. Write it like this:
+
+    ```python
+    def newton_leaf_value(g, h, lam):
+        # Minus the total slope, over the total bend plus lam.
+    ```
+
+5. **`split_gain(g, h, left, lam, gamma)`** takes the same `g` and `h`, a boolean mask `left` of shape `(n,)`, and the penalties `lam` and `gamma`. Sum each side, form the three scores, and return half of left plus right minus parent, minus `gamma`. The usual mistake is forgetting the $1/2$, or leaving `lam` out of a denominator. With the first two flats on the left, `lam = 0` and `gamma = 0` give $24.5$. Write it like this:
+
+    ```python
+    def split_gain(g, h, left, lam, gamma):
+        # Half of (left score + right score - parent score), then minus gamma.
+    ```
+
 ## Where this breaks
 
 - A large $\eta$ with many rounds fits noise, as Figure 3 shows. Keep $\eta$ small, and stop when the held-out loss stops falling.
 - Under the exponential loss, one mislabelled row keeps a huge pull however well the rest fit, so it can dominate. A loss that grows more slowly is steadier.
 - Boosting is a chain, so round $m$ needs round $m - 1$ first. You cannot train the stumps side by side as you can in bagging.
 - The out-of-bag trick from the previous chapter does not apply. Every stump sees every row, so no row is left out.
+- A bend near $0$ makes the Newton step huge unless $\lambda$ is positive. The leaf jumps, and the next rounds undo that jump instead of fitting what is still wrong. Keep $\lambda$ above $0$ when the loss is nearly flat.
 
 ## The exercise
 
 You implement `squared_error_neg_grad`, `absolute_error_neg_grad`, and `gradient_boost`. The checks compare both gradients to finite-difference slopes of their losses. They confirm that round 1 fits $y$ itself from a zero start, that the hand example gives $F = [1, 1, 4.5, 4.5]$ and then $[1.5, 1.5, 6.75, 6.75]$, that the loss falls every round, and that each round's drop equals $\eta(1-\eta/2)$ times the mean of $h^2$. They also confirm that history entries are independent copies and that the `neg_grad` hook decides what each round fits.
+
+You also implement `newton_leaf_value` and `split_gain`. On squared error with $\lambda = 0$ the Newton leaf equals the mean of the residuals, and with $\lambda = 1$ the left leaf of the four flats is $4/3$. On the labels $[1, 1, 0]$ at scores of $0$, one Newton step lowers the mean log loss more than a gradient step of $1/6$. The gain of sending the first two flats left is $24.5$ when $\lambda$ and $\gamma$ are $0$, and $8.2667$ when $\lambda$ is $1$ and $\gamma$ is $0$.
+
+## Further reading
+
+For the leaf value and the regularised split gain, see [XGBoost: A Scalable Tree Boosting System](https://arxiv.org/abs/1603.02754) (Tianqi Chen and Carlos Guestrin). [CS229 Lecture Notes: Decision Trees](https://cs229.stanford.edu/cs229-notes-decision_trees.pdf) (Selwin George) describes this step as a second-order approximation: the update uses the bend of the loss as well as the slope.
