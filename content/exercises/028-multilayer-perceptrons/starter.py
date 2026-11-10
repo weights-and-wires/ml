@@ -2,7 +2,7 @@
 
 A layer is a dict {"W": array (out, in), "b": array (out,), "activation": name}
 with name one of "relu", "gelu", or "identity". A network is a list of layers.
-Fill in the eleven functions below, in order. The lesson walks through each one.
+Fill in the twelve functions below, in order. The lesson walks through each one.
 """
 
 import numpy as np
@@ -161,6 +161,29 @@ def activation_memory(params: list[dict], in_dim: int) -> int:
         The input size plus the output size of every layer, as an int.
     """
     raise NotImplementedError("activation_memory")
+
+
+def hinge_interpolant(xs: np.ndarray, ys: np.ndarray) -> list[dict]:
+    """Return a one-hidden-layer ReLU network through every knot (xs[j], ys[j]).
+
+    Use one hinge relu(x - xs[j]) per segment, at the segment's left knot. The
+    output weight of a hinge is the CHANGE in slope there (the first hinge's is
+    the first slope), and the output bias is ys[0].
+
+    Args:
+        xs: Strictly increasing knot positions, shape (n,), with n >= 2.
+        ys: The heights at the knots, shape (n,).
+
+    Returns:
+        A list of two layers in the format mlp_forward reads: a "relu" layer
+        with W of shape (n - 1, 1), then an "identity" layer with W of shape
+        (1, n - 1). The network equals the straight-segment interpolant of the
+        knots on [xs[0], xs[-1]].
+
+    Raises:
+        ValueError: If xs is not strictly increasing or the lengths differ.
+    """
+    raise NotImplementedError("hinge_interpolant")
 
 
 def _make_net(dims, acts, seed=0):

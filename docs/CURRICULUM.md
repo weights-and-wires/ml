@@ -57,7 +57,7 @@ replaced it, so readers keep their progress.
 
 | Slug | Title | Exercise delivers | Needs GPU |
 |---|---|---|---|
-| `028-multilayer-perceptrons` | Multilayer perceptrons | Write ReLU, GELU, and their slopes, merge affine layers, run a forward pass, count the pieces of a folded network, and count its parameters, flops, and stored activations. | No |
+| `028-multilayer-perceptrons` | Multilayer perceptrons | Write ReLU, GELU, and their slopes, merge affine layers, run a forward pass, count the pieces of a folded network, build a hinge network through any knots, and count its parameters, flops, and stored activations. | No |
 | `029-backpropagation` | Backpropagation | Write the two-sided slope check, the multiply rule, the backward walk, unbroadcast, the matrix-product rule, and the ReLU rule, so slopes flow through a layer that multiplies, adds a bias, and bends. | No |
 | `030-softmax-and-whole-network-gradients` | Softmax and whole-network gradients | Write a stable softmax and cross-entropy whose slope is prediction minus truth, wire the engine into a two-layer network, and write the finite-difference check that proves its gradients. | No |
 | `031-sgd-adam-and-schedules` | SGD, Adam, and learning-rate schedules | Compute mini-batch gradients, then build SGD, momentum, Adam, and AdamW steps, a warmup-plus-cosine schedule, and the gradient noise scale, and run them on noisy batches of a long valley. | No |
