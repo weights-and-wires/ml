@@ -2,14 +2,15 @@
 title: Averaging models and bagging
 slug: 022-averaging-and-bagging
 part: "Part 3 — Trees, ensembles, and unsupervised learning"
-summary: Averaging B models cancels private noise but not shared noise, and the bootstrap supplies the models and a free out-of-bag test set.
-minutes: 80
+summary: Averaging cancels private noise but not shared noise. Bagging adds a free out-of-bag test set, and random forests lower the shared part.
+minutes: 90
 gpu: false
 objectives:
   - Split a model's noise into a shared part and a private part, and use the split to derive the variance of an average.
   - Compute the variance of an average for any number of models, find the floor that more models cannot get below, and say what lowers it.
   - Draw a bootstrap sample, show that it holds about 63.2% of the distinct rows, and fit a bagged ensemble of stumps.
   - Compute the out-of-bag error by scoring each row with only the trees that missed it, and explain why it tracks the test error while the training error does not.
+  - Restrict each split to `max_features` random columns, measure the correlation between trees, and rank columns by out-of-bag permutation importance.
 prereqs:
   - 002-curves-and-bias-variance
   - 021-grow-and-prune-trees
@@ -19,19 +20,19 @@ exercise: 022-averaging-and-bagging
 
 # Averaging models and bagging
 
-Eight flats, and you fit a tree that grows until every flat has its own leaf. The tree passes through all eight rents. Next, swap three of the flats for three others from the same market and fit again. The tree comes out different, and the rent it predicts for a flat in the middle of town can move a long way. A model that changes this much with its training rows cannot be trusted at any one spot.
+Eight flats, and a tree grown until every flat has its own leaf. Swap three of the flats for three others from the same market and fit again, and the rent it predicts for a flat in the middle of town can move a long way. A model that changes this much with its training rows cannot be trusted at any one spot.
 
-[Pruning](/lessons/021-grow-and-prune-trees) calms a tree by making it stiffer, and that costs bias, because a small tree cannot follow the true pattern. Here is a different move: keep the trees flexible, train a hundred of them, and average their predictions. If a single tree is noisy, how noisy is the average of a hundred, and why does a thousand trees not make the noise vanish?
+[Pruning](/lessons/021-grow-and-prune-trees) calms a tree by making it stiffer, and that costs bias. Here is a different move: keep the trees flexible, train a hundred of them, and average their predictions. How noisy is the average of a hundred, and why does a thousand trees not make the noise vanish?
 
-There is a catch. You have one dataset, so you cannot go back to the market for a hundred independent training sets. This chapter first works out what averaging buys and where it stops. Then it builds many different training sets from one dataset with the bootstrap, and ends with a second payoff: the rows each training set leaves out test the ensemble without holding any data back.
+You have one dataset, not a hundred. This chapter works out what averaging buys and where it stops, builds many training sets from one dataset with the bootstrap, and scores the ensemble on the rows each set leaves out. It ends with random forests, which make the trees less alike.
 
 ## What you already know
 
-- A tree predicts the mean of the training rows in the box a point falls in, so a tree grown deep enough passes through its training points, as in [growing a tree](/lessons/021-grow-and-prune-trees).
+- A tree predicts the mean of the training rows in the box a point falls in, as in [growing a tree](/lessons/021-grow-and-prune-trees). A stump is a tree with one split and two leaves.
 - The variance of a model is how much its prediction at a fixed spot moves when the training set is redrawn, as in [bias and variance](/lessons/002-curves-and-bias-variance).
-- Independent noises add their variances: two with variance 1 each give a sum with variance 2, and their mean has variance $2/4 = 0.5$.
-- Two numbers have correlation 0 when one tells you nothing about the other, and correlation 1 when they always move together.
-- Training error flatters a model, because the model has seen the answers, as in [honest scores](/lessons/001-loss-and-honest-scores). A stump is a tree with one split and two leaves.
+- Independent noises add their variances: two with variance 1 give a sum with variance 2, and their mean has variance $2/4 = 0.5$.
+- Correlation 0 means one number tells you nothing about the other, and 1 means they move together.
+- Training error flatters a model, because the model has seen the answers, as in [honest scores](/lessons/001-loss-and-honest-scores).
 
 ## Picture: three jumpy trees, then their average
 
@@ -112,29 +113,27 @@ Figure 1 starts from a market where the true rent follows a sine wave, with a ra
 Figure 1. Each tree (orange) chases the noise in its own eight points (blue), so the three fits jump in different places. Averaging 25 such trees (bottom right, bold) follows the dashed true curve far more calmly. Here the 25 training sets are independent, which is the best case.
 ```
 
-Each tree (orange) bends toward its own blue points, including the wobble in them, so the three trees jump in different places. The fourth panel averages 25 such trees. The jumps land in different places for different trees, so they partly cancel, and the average follows the dashed true curve closely.
-
-Put a number on "jumpy". Redraw the training set 4000 times and look at the prediction at $x = 0.5$: its variance is about 0.26. Average 10 trees, each grown on its own independent training set, and the variance is about 0.03, a tenth of 0.26. For independent trees, averaging $B$ of them divides the variance by $B$.
+Redraw the training set 4000 times and look at the prediction at $x = 0.5$: its variance is about 0.26. Average 10 trees, each grown on its own independent training set, and the variance is about 0.03, a tenth of 0.26. For independent trees, averaging $B$ of them divides the variance by $B$.
 
 ## Why independence is the catch
 
-That tenfold drop leans on one word, independent. Think of 100 people guessing the number of jelly beans in a jar. Their errors are random, some high and some low, so they cancel in the average. If everyone first peeks at the loudest guesser and copies a little of it, the errors no longer cancel, because most of them are the same error. Trees grown on one dataset learn from the same rows, so they copy each other too. The size of the copying is the **correlation** $\rho$ between the predictions of two trees: 0 means they never copy, and 1 means they are the same tree.
+That tenfold drop leans on one word, independent. Picture 100 people guessing the number of jelly beans in a jar. Their errors are random, so they cancel in the average. If everyone first copies a little of the loudest guesser, most errors become the same error and stop cancelling. Trees grown on one dataset learn from the same rows, so they copy each other too. The size of the copying is the **correlation** $\rho$ between the predictions of two trees: 0 means they never copy, and 1 means they are the same tree.
 
 ## Shared noise and private noise
 
 Split each model's prediction at a spot into a part all models share and a part that belongs to one model alone. Model $b$ predicts $s + e_b$, where $s$ is the shared part and $e_b$ is the private part. Every model carries the same $s$, because they all learned from the same data. Each $e_b$ is a model's own mistake, and the private mistakes of different models are independent.
 
-Take two models with $s = 1.2$, $e_1 = -1.0$, and $e_2 = 0.6$. They predict $0.2$ and $1.8$, and their average is $1.0 = 1.2 + (-1.0 + 0.6)/2 = 1.2 - 0.2$. The two private parts partly cancelled and shrank to 0.2, while the shared 1.2 did not move, because averaging a number with itself returns that number.
+Take $s = 1.2$, $e_1 = -1.0$, and $e_2 = 0.6$. The models predict $0.2$ and $1.8$, and their average is $1.0 = 1.2 - 0.2$. The private parts partly cancelled to $-0.2$, while the shared 1.2 did not move.
 
-Now count variances. Let each model have variance $\sigma^2$ in total, and give the shared part a variance of $\rho\sigma^2$. Two different models then have covariance $\rho\sigma^2$, so their correlation is $\rho\sigma^2/\sigma^2 = \rho$, which is the definition of $\rho$. The private part has the rest, $(1-\rho)\sigma^2$. The average of $B$ private parts has variance $B(1-\rho)\sigma^2 / B^2$, because the variances of independent pieces add and the mean divides the sum by $B$. That gives the **variance of an average**:
+Now count variances. Let each model have variance $\sigma^2$, and give the shared part a variance of $\rho\sigma^2$. Two different models then have covariance $\rho\sigma^2$, so their correlation is $\rho$. The private part has the rest, $(1-\rho)\sigma^2$. The average of $B$ private parts has variance $B(1-\rho)\sigma^2 / B^2$, because independent variances add and the mean divides the sum by $B$. That gives the **variance of an average**:
 
 $$
 \operatorname{Var}(\text{average}) = \rho\,\sigma^2 + \frac{1-\rho}{B}\,\sigma^2 .
 $$
 
-Read it aloud: the shared variance, $\rho\sigma^2$, stays whole, and the private variance is shared out across $B$ models. In numpy it is one line, `var_avg = rho * sigma2 + (1 - rho) * sigma2 / B`. The usual mistake is dividing the shared term by $B$ as well. That gives the independent-trees answer, and it is wrong whenever $\rho > 0$.
+Read it aloud: the shared variance, $\rho\sigma^2$, stays whole, and the private variance is shared out across $B$ models. In numpy it is `rho * sigma2 + (1 - rho) * sigma2 / B`. The usual mistake is dividing the shared term by $B$ as well, which is wrong whenever $\rho > 0$.
 
-Try $\sigma^2 = 4$ and $\rho = 0.5$. The shared part is $0.5 \times 4 = 2$ and the private part is also 2. With $B = 1$ you get $2 + 2 = 4$, a single model, and with $B = 2$ you get $2 + 1 = 3$. In Figure 2 the blue shared block never changes height, while the orange block halves and halves again. The total falls from 2.4 to 2.04 between $B = 5$ and $B = 50$, which is ten times the work for a gain of 0.36.
+Try $\sigma^2 = 4$ and $\rho = 0.5$. The shared part is 2 and the private part is also 2. With $B = 1$ you get $2 + 2 = 4$, and with $B = 2$ you get $2 + 1 = 3$. In Figure 2 the blue shared block never changes height, while the orange block halves and halves again. The total falls from 2.4 to 2.04 between $B = 5$ and $B = 50$, ten times the work for a gain of 0.36.
 
 ```figure
 <svg viewBox="0 0 600 305" role="img" aria-label="Stacked bars of the variance of an average of B models with sigma squared 4 and rho 0.5: the shared block stays at 2 while the private block shrinks from 2 to 1, 0.4, and 0.04">
@@ -171,22 +170,20 @@ Figure 2. Total variance of the average for B = 1, 2, 5, and 50. The blue shared
 
 ## The floor, and how many trees you need
 
-The shared part is a **floor**: variance cannot go below $\rho\sigma^2$, however many models you average. For $\rho = 0$ there is no floor and the variance keeps falling like $1/B$. With $\sigma^2 = 1$ and $\rho = 0.3$ the curve levels off at 0.3: 50 models give $0.314$, and going to 5000 models costs a hundred times the work and reaches $0.30014$. After the curve bends, more trees cost time and buy almost nothing.
+The shared part is a **floor**: variance cannot go below $\rho\sigma^2$, however many models you average. For $\rho = 0$ there is no floor and the variance keeps falling like $1/B$. With $\sigma^2 = 1$ and $\rho = 0.3$ the curve levels off at 0.3: 50 models give $0.314$, and 5000 models cost a hundred times the work and reach $0.30014$.
 
-How many trees are enough? Ask for a variance within a fraction $t$ of the floor. The private term must be at most $t\rho\sigma^2$, which means $(1-\rho)\sigma^2/B \le t\rho\sigma^2$. The $\sigma^2$ cancels, and you get $B \ge (1-\rho)/(t\rho)$. For $\rho = 0.3$ and $t = 0.05$ that is $0.7/0.015 = 46.7$, so 47 trees. At $\rho = 0$ the floor is 0 and no finite $B$ gets within a fraction of it, which is why the exercise raises an error there.
+How many trees are enough? Ask for a variance within a fraction $t$ of the floor, so the private term is at most $t\rho\sigma^2$. Then $(1-\rho)\sigma^2/B \le t\rho\sigma^2$, and the $\sigma^2$ cancels, giving $B \ge (1-\rho)/(t\rho)$. For $\rho = 0.3$ and $t = 0.05$ that is $0.7/0.015 = 46.7$, so 47 trees. At $\rho = 0$ the floor is 0 and no finite $B$ gets within a fraction of it, so the exercise raises an error.
 
-If more trees cannot move the floor, then $\rho$ has to move. The trees copy each other mostly because one strong feature wins the first split in nearly every tree. A **random forest** hides that feature from some splits: each split sees only a random subset of the columns, so the trees disagree more and $\rho$ falls. It costs something, because a tree that cannot use the best column is a worse tree, so its own variance $\sigma^2$ rises. With $B = 50$, $\rho = 0.8$ and $\sigma^2 = 1$, the average has variance $0.804$. Lower $\rho$ to $0.2$ and let $\sigma^2$ rise to 1.2, and you get $0.2592$, a good trade.
+If more trees cannot move the floor, then $\rho$ has to move. A **random forest**, covered [below](#random-forests-hide-columns-from-each-split), makes the trees less alike by hiding columns from each split, and that raises each tree's own $\sigma^2$ a little. With $B = 50$, $\rho = 0.8$ and $\sigma^2 = 1$, the average has variance $0.804$. Lower $\rho$ to $0.2$ and let $\sigma^2$ rise to 1.2, and you get $0.2592$, a good trade.
 
 > [!KEY]
-> A single deep tree is noisy, and averaging $B$ of them cancels only the part of the noise that belongs to each tree alone. The part the trees share, $\rho\sigma^2$, is a floor, so a thousand trees do not fix a hundred. To lower the floor, make the trees less alike.
+> Averaging $B$ trees cancels only the noise that belongs to each tree alone. The part they share, $\rho\sigma^2$, is a floor, so a thousand trees do not fix a hundred. To lower the floor, make the trees less alike.
 
 ## Different training sets from one dataset
 
-The formula needs trees that are different, and one dataset of 100 rows gives you one tree. The obvious fix, to train the same tree a hundred times, does nothing, because the same rows always give the same tree, so $\rho = 1$ and the average has the variance of one tree.
+The formula needs different trees, and one dataset of 100 rows gives one tree. Training the same tree a hundred times does nothing, because $\rho = 1$. Ten chunks of 10 rows give much noisier trees, and shuffling the rows changes nothing, because a tree ignores row order. What you need is a copy with the same number of rows that contains different rows, and sampling with replacement gives one. Write each row on a ticket and put the tickets in a hat. Pull a ticket, copy its row onto your list, put the ticket back, and repeat until the list has $n$ rows. A row can be drawn two or three times, and other rows never come up. This recipe is the **bootstrap**, and one draw is a **bootstrap sample**. The rows a draw contains are *in the bag*, and the rows it misses are *out of the bag*.
 
-Two other ideas fail. Ten chunks of 10 rows give trees that are far noisier than one trained on 100, so each model's $\sigma^2$ goes up and the average pays for it. Shuffling the rows changes nothing, because a tree does not care about row order. What you need is a copy with the same number of rows that really contains different rows, and sampling with replacement gives one. Write each row on a ticket and put all the tickets in a hat. To build one training set, pull a ticket, copy the row onto your list, and put the ticket back. Repeat until the list has $n$ rows. Because each ticket goes back, a row can be drawn two or three times, and because only $n$ draws are made, other rows never come up. This recipe is the **bootstrap**, and one draw is a **bootstrap sample**. The rows a draw contains are *in the bag*, and the rows it misses are *out of the bag*.
-
-Take $n = 4$ rows and the draw `idx = [0, 0, 2, 3]`. Row 0 appears twice, rows 2 and 3 once each, and row 1 is out of the bag. In numpy, one draw is one line, `idx = rng.integers(0, n, size=n)`. Avoid `rng.choice(n, n, replace=False)`, which is the shuffle again.
+Take $n = 4$ rows and the draw `idx = [0, 0, 2, 3]`. Row 0 appears twice and row 1 is out of the bag. In numpy, one draw is `idx = rng.integers(0, n, size=n)`. Avoid `rng.choice(n, n, replace=False)`, which is the shuffle again.
 
 ### How many rows does a draw contain?
 
@@ -196,20 +193,20 @@ $$
 \left(1 - \frac{1}{n}\right)^n .
 $$
 
-Read it aloud: one draw's miss chance, raised to the number of draws. It is $0.316$ at $n = 4$, which is $(3/4)^4$, so your draw `[0, 0, 2, 3]` missing a row is ordinary. It is $0.349$ at $n = 10$ and $0.366$ at $n = 100$, and it settles near $0.368$, which is $1/e$. Read the result the other way around: about $36.8\%$ of the rows are out of any one bag, and about $63.2\%$ of the distinct rows are in it. A bag holds $n$ draws but only about two thirds as many different rows, because the rest are repeats.
+Read it aloud: one draw's miss chance, raised to the number of draws. It is $0.316$ at $n = 4$, so your draw `[0, 0, 2, 3]` missing a row is ordinary. It is $0.349$ at $n = 10$ and $0.366$ at $n = 100$, and it settles near $0.368$, which is $1/e$. So about $36.8\%$ of the rows are out of any one bag, and about $63.2\%$ of the distinct rows are in it.
 
 > [!KEY]
 > A bootstrap sample has as many rows as the dataset, but only about 63.2% of the distinct rows. The repeats and the gaps make each sample, and so each tree, different. The same gaps are rows that tree never saw.
 
 ### Bagging: train on every draw, then average
 
-**Bagging** is short for bootstrap aggregating. Draw $B$ bootstrap samples, train one model on each, and predict with the average of the $B$ models. The trees are still correlated, because two bags from the same rows share most of them, so $\rho$ is above zero and the floor is real. In the sine market, three-level trees on eight noisy points have a prediction variance of about $0.26$ at $x = 0.5$, and the average of 25 bagged trees has about $0.15$, which solves to $\rho \approx 0.58$. Bagging cut the variance by about 40%, and the shared part of the noise is what remains.
+**Bagging** is short for bootstrap aggregating. Draw $B$ bootstrap samples, train one model on each, and predict with the average. The trees are still correlated, because two bags from the same rows share most of them, so the floor is real. In the sine market, three-level trees on eight noisy points have a prediction variance of about $0.26$ at $x = 0.5$, and the average of 25 bagged trees has about $0.15$, which solves to $\rho \approx 0.58$.
 
-The exercise bags stumps because they are short to implement. A stump has one split, so its error is mostly bias, and averaging cannot fix bias. Bagging pays off with deep trees, which have low bias and high variance, and the code is the same with a deeper tree in place of `_fit_stump`.
+The exercise bags stumps because they are short to implement. A stump's error is mostly bias, and averaging cannot fix bias, so bagging pays off with deep trees. The code is the same with a deeper tree in place of `_fit_stump`.
 
 ## Out of the bag: a free test set
 
-Return to the rows each bag missed. You trained 80 deep trees on all 200 of your rows. How well will the ensemble do on flats it has never seen? Scoring it on the training rows lies, because each tree has seen most of them, and holding rows back costs data. Bagging fixes it for free, because each tree already has about a third of the rows it never saw.
+You trained 80 deep trees on 200 rows. How well will the ensemble do on flats it has never seen? Scoring it on the training rows lies, because each tree has seen most of them, and holding rows back costs data. Bagging fixes this for free, because each tree never saw about a third of the rows.
 
 ### Each row asks only the trees that missed it
 
@@ -260,9 +257,9 @@ Take four rows, $x = [1, 2, 3, 4]$ and $y = [0, 10, 10, 0]$, and two stumps. Tre
 Figure 3. Only the shaded orange cells count. Each row is scored by the one tree that never saw it, and the dashed grey cells are skipped. The four squared errors 100, 0, 0, and 100 average 50.
 ```
 
-Rows 0 and 1 are in tree 1's bag, so tree 1 has seen their labels and gets no vote. Tree 2 never saw them, so it votes, and at $x = 1$ and $x = 2$ it predicts 10. Rows 2 and 3 are in tree 2's bag, so tree 1 votes on them, and at $x = 3$ and $x = 4$ it predicts 10. The squared errors are $(10-0)^2 = 100$, $(10-10)^2 = 0$, $0$, and $100$, and their mean is 50. That is the **out-of-bag error**, usually shortened to OOB error. This shows the mechanism, not a good model: each stump saw two $x$ values and guessed wildly elsewhere, so 50 is worse than the 25 you get by always predicting the mean of $y$.
+Rows 0 and 1 are in tree 1's bag, so tree 1 gets no vote on them. Tree 2 never saw them, and at $x = 1$ and $x = 2$ it predicts 10. Tree 1 votes on rows 2 and 3, and at $x = 3$ and $x = 4$ it predicts 10. The squared errors are $100$, $0$, $0$, and $100$, and their mean is 50. That is the **out-of-bag error**, or OOB error. It shows the mechanism, not a good model: each stump saw two $x$ values and guessed wildly elsewhere.
 
-A tree that missed row $i$ never used its label $y_i$, so its prediction at $x_i$ is a genuine guess, as for a test row. Averaging both stumps on every row would give $[5, 10, 10, 5]$, with errors $25, 0, 0, 25$ and a mean of $12.5$. That is the training error, four times smaller than the honest 50, because half its votes come from the tree that saw the answer. Let $S$ be the rows that at least one tree missed, and $\hat y_i$ the mean prediction of the trees that did not use row $i$. Then
+A tree that missed row $i$ never used its label, so its prediction at $x_i$ is a genuine guess. Averaging both stumps on every row would give $[5, 10, 10, 5]$, with a mean error of $12.5$. That is the training error, four times smaller than the honest 50, because half its votes come from the tree that saw the answer. Let $S$ be the rows that at least one tree missed, and $\hat y_i$ the mean prediction of the trees that did not use row $i$. Then
 
 $$
 \text{OOB error} = \frac{1}{|S|} \sum_{i \in S} \left( y_i - \hat y_i \right)^2 .
@@ -276,7 +273,7 @@ count[missed] += 1
 pred = total[count > 0] / count[count > 0]
 ```
 
-The usual mistake is averaging every tree on every row. That computes the training error, and it never looks wrong, because the number is small.
+The usual mistake is averaging every tree on every row, which computes the training error.
 
 > [!KEY]
 > A row's out-of-bag prediction uses only the trees that never saw that row, so the out-of-bag error is a held-out error. It costs no extra data and no extra training.
@@ -319,31 +316,62 @@ Figure 4. Full-depth trees on 200 noisy rows. The purple training error stays lo
 
 At 80 trees the training error is $0.018$, far below the noise floor of $0.09$ that the wobble of $0.3$ in every rent makes unavoidable, so the ensemble has memorised its rows. The OOB error is $0.129$, and the test error on the 3000 fresh rows is $0.130$. The OOB error found the true error without a single row set aside.
 
-There is a small catch. Each row is missed by only about $0.368 \times B$ trees, about 29 of 80, so the OOB error runs slightly above that of the full ensemble: in the stump exercise it is $0.376$ against a test error of $0.366$. Also, a row is in every one of $B$ bags with chance $0.632^B$, and then no tree can vote on it. With one tree, 63% of the rows have no vote, and with 10 trees about 1 row in 100. So you skip rows with `count == 0`, and raise an error when no row has a vote.
+There is a catch. A row is in every one of $B$ bags with chance $0.632^B$, and then no tree can vote on it. With 10 trees that is about 1 row in 100. So you skip rows with `count == 0`, and raise an error when no row has a vote.
 
 > [!WARNING]
 > A row that sits in every bag has `count == 0`, and its prediction is `nan`. Average the squared error only over the rows with `count > 0`, or the whole error becomes `nan`.
 
 > [!KEY]
-> Averaging $B$ models cancels the noise each one adds alone and leaves the noise they share, so the variance of an average falls to a floor of $\rho\sigma^2$. The bootstrap supplies the different training sets, and the rows each draw misses score the ensemble honestly, with no data held back. That answers the opening: a hundred trees beat one, and a thousand trees do not beat a hundred by much.
+> Averaging cancels the noise each model adds alone and leaves the noise they share, so the variance falls to a floor of $\rho\sigma^2$. The bootstrap supplies different training sets, and the rows each draw misses score the ensemble honestly. A hundred trees beat one, and a thousand do not beat a hundred by much. Hiding columns lowers $\rho$ itself.
+
+## Random forests: hide columns from each split
+
+Ten doctors trained on the same journals all order the best blood test first, so their diagnoses agree. Give each a random handful of tests, and some never see the star test. Each diagnosis gets a little worse, but the errors stop being copies.
+
+In a bagged forest one strong column wins the first split in nearly every tree, so $\rho$ stays high. A **random forest** (Breiman 2001) searches only `max_features` random columns at each split. With `max_features` equal to $d$, the column count, it is plain bagging.
+
+Take $y = [1, 2, 9, 10]$ and three columns, $[1,2,3,4]$, $[4,1,3,2]$, and $[2,4,1,3]$. The best split on each leaves a squared error of 1, 38, and $48.67$, so a full search picks column 0. With `max_features = 2`, the pairs $\{0,1\}$ and $\{0,2\}$ pick column 0 and $\{1,2\}$ picks column 1. Column 0 wins 2/3 of the time, column 1 wins 1/3, and column 2 never wins. Hiding column 0 costs that tree 37 squared error, the rise in $\sigma^2$.
+
+```python
+columns = np.sort(rng.choice(d, size=max_features, replace=False))
+stump = _fit_stump(X[:, columns], y)
+stump["feature"] = int(columns[stump["feature"]])
+```
+
+The usual mistake is skipping the last line, which reports a position in the subset as a column of `X`.
+
+### Measure ρ
+
+Measure $\rho$ instead of assuming it: stack $B$ trees' predictions on $n$ rows into shape $(B, n)$, correlate every pair of trees across the rows, and average the pairs. Take 300 rows, six columns, $y = 3x_0 + x_1 + x_2$ plus noise of standard deviation 0.5, and 40 stumps. The measured $\rho$ is $0.845$ with `max_features = 6`, $0.436$ with 3, and $0.135$ with 1. The floor $\rho\sigma^2$ falls with it, and the out-of-bag error rises from $4.69$ to $8.09$ because each stump is worse. That is the trade in the variance formula.
+
+### Which columns mattered
+
+Shuffle one column among the rows. If the column matters, the out-of-bag error rises. Take $x_0 = [1,2,3,4]$, $x_1 = [5,6,5,6]$, $y = [0,0,10,10]$, and two stumps that split $x_0$ at 2.5 into 0 and 10. Stump A saw rows 0 and 1, and stump B saw rows 2 and 3, so the out-of-bag error is 0. Reorder $x_0$ to $[3,4,1,2]$. Stump A now votes on rows 2 and 3 with $x_0 = 1, 2$, predicts 0, and misses $y = 10$. Stump B votes on rows 0 and 1 with $x_0 = 3, 4$, predicts 10, and misses $y = 0$. Every squared error is 100. Shuffling $x_1$ changes nothing, because no stump reads it. The **permutation importance** of column $j$ is
+
+$$
+\text{importance}_j = \text{OOB error with column } j \text{ shuffled} - \text{OOB error}.
+$$
+
+Here $x_0$ scores 100 and $x_1$ scores 0. In numpy, shuffle with `X[rng.permutation(n), j]`. Breiman shuffles tree by tree; the exercise shuffles the whole column and averages repeats. With $y = 2x_2$ plus noise, six columns, 40 stumps, and `max_features = 2`, column 2 scores $1.35$ and the other five score within $0.02$ of zero.
 
 ## Where this breaks
 
-- The variance formula assumes every model has the same variance $\sigma^2$ and every pair has the same correlation $\rho$, at one spot. Real trees only come close, so treat the formula as a map and not an exact count.
-- Averaging changes variance and nothing else. Models that all lean the same way keep the lean, so a stiff model gives a stiff average. This is why the plan is to average flexible, low-bias trees.
+- The variance formula assumes every model has the same $\sigma^2$ and every pair the same $\rho$, at one spot. Treat it as a map and not an exact count.
+- Permutation importance splits credit between correlated columns, so two copies of one signal can each look unimportant.
+- Averaging changes variance and nothing else, so a stiff model gives a stiff average. Average flexible, low-bias trees.
 - Tuning settings on the lowest OOB error makes the winner's score optimistic, as tuning on a test set does.
-- A method where every tree sees every row, such as the boosting in [the next chapter](/lessons/023-gradient-boosting), has no out-of-bag rows and no free test set.
+- Boosting, in [the next chapter](/lessons/023-gradient-boosting), has no out-of-bag rows and no free test set.
 
 > [!RECAP]
 > - Each model is a shared part plus a private part. Averaging cancels private parts and leaves the shared part.
-> - The variance of an average is $\rho\sigma^2 + (1-\rho)\sigma^2/B$, and $\rho\sigma^2$ is the floor. To get within a fraction $t$ of it you need $B \ge (1-\rho)/(t\rho)$ models. Lowering $\rho$ lowers the floor, at the price of a higher $\sigma^2$.
-> - A bootstrap sample draws $n$ rows with replacement. A row is missed with chance $(1-1/n)^n \to 1/e \approx 0.368$, so about 63.2% of the distinct rows are in the bag.
-> - Bagging trains one model per bootstrap sample and averages them.
-> - Score each row with only the trees that missed it. Using every tree on every row gives the training error. OOB error tracks the test error, and a row in every bag has no vote and must be skipped.
+> - The variance of an average is $\rho\sigma^2 + (1-\rho)\sigma^2/B$, and $\rho\sigma^2$ is the floor. You need $B \ge (1-\rho)/(t\rho)$ models to get within a fraction $t$ of it.
+> - A bootstrap sample draws $n$ rows with replacement, so about 63.2% of the distinct rows are in the bag. Bagging trains one model per sample and averages them.
+> - Score each row with only the trees that missed it. OOB error tracks the test error, and a row in every bag has no vote.
+> - A random forest hides columns from each split to lower the measured $\rho$. Shuffling a column and watching the OOB error rise ranks the columns.
 
 ## Build it step by step
 
-`_fit_stump`, `_predict_stump`, and `in_bag_fraction` are already written. You write nine functions in this order.
+`_fit_stump`, `_predict_stump`, and `in_bag_fraction` are already written. You write thirteen functions in this order.
 
 1. **`bagging_variance(rho, sigma2, B)`** takes three numbers and returns a float, the one-line formula above. The usual mistake is dividing the shared term by `B`.
 2. **`correlated_estimators(rho, sigma2, B, n_draws, rng)`** returns an array of shape `(n_draws, B)`. Each row is one redraw, and each column is one model. Build every entry as `sqrt(rho * sigma2) * shared + sqrt((1 - rho) * sigma2) * private`. The usual mistake is drawing `shared` with shape `(n_draws, B)`, which makes the columns independent. The shapes are:
@@ -360,9 +388,20 @@ private = rng.normal(size=(n_draws, B))  # one value per entry
 7. **`oob_mask(idx, n)`** returns a boolean array of shape `(n,)`, True for each row the draw missed. Set `in_bag[idx] = True` on a zero boolean array and return `~in_bag`. The usual mistake is returning `in_bag`, which flips the meaning.
 8. **`oob_predictions(X, stumps, in_bag_indices)`** returns `(pred, count)`, both of shape `(n,)`. For each stump, get `missed = oob_mask(idx, n)`, add `_predict_stump(stump, X[missed])` into `total[missed]`, and add 1 into `count[missed]`. Divide where `count > 0` and leave `np.nan` elsewhere. The usual mistake is predicting on all of `X` and adding it to every row.
 9. **`out_of_bag_error(X, y, stumps, in_bag_indices)`** returns a float. Keep the rows with `count > 0` and average the squared error there. Raise `ValueError` if no row has a vote. The usual mistake is averaging over all rows, which gives `nan` the first time one row has no vote.
+10. **`random_subspace_split(X, y, max_features, rng)`** returns a stump dict. Choose columns with `rng.choice`, call `_fit_stump` on them, and map the feature back to a column of `X`. Raise `ValueError` when `max_features` is outside 1 to $d$. The usual mistake is returning the position in the subset.
+11. **`fit_random_subspace_stumps(X, y, n_estimators, max_features, rng)`** returns the pair from step 5, using `random_subspace_split` for each draw.
+12. **`oob_permutation_importance(X, y, stumps, in_bag_indices, rng, n_repeats=5)`** returns shape `(d,)`: the rise in out-of-bag error after shuffling each column. The usual mistake is forgetting to subtract the baseline.
+13. **`mean_tree_correlation(stumps, X)`** returns the mean pairwise correlation of the stumps' predictions, leaving out stumps that predict one value.
 
 ## The exercise
 
-You implement `bagging_variance`, `correlated_estimators`, `trees_needed`, `bootstrap_indices`, `fit_bagged_stumps`, `bagged_predict`, `oob_mask`, `oob_predictions`, and `out_of_bag_error`.
+You implement `bagging_variance`, `correlated_estimators`, `trees_needed`, `bootstrap_indices`, `fit_bagged_stumps`, `bagged_predict`, `oob_mask`, `oob_predictions`, `out_of_bag_error`, `random_subspace_split`, `fit_random_subspace_stumps`, `oob_permutation_importance`, and `mean_tree_correlation`.
 
-The checks hit the extremes of the variance formula: $\rho = 0$ gives $\sigma^2/B$ and $\rho = 1$ gives $\sigma^2$. A large array from `correlated_estimators` has column variance $\sigma^2$, pairwise correlation $\rho$, and row means whose variance matches `bagging_variance`. `trees_needed` returns the smallest $B$ that reaches the tolerance. Draws land near an in-bag fraction of $1 - 1/e$, each stump matches a fit on its own draw, and bagging lowers a stump's variance. The hand example from Figure 3 gives 50 and not 12.5, rows without a vote are skipped, and on a seeded dataset the OOB error lands within 10% of the error on 500 fresh rows.
+The checks hit the extremes of the variance formula: $\rho = 0$ gives $\sigma^2/B$ and $\rho = 1$ gives $\sigma^2$. A large array from `correlated_estimators` has column variance $\sigma^2$ and pairwise correlation $\rho$. `trees_needed` returns the smallest $B$ that reaches the tolerance. Draws land near an in-bag fraction of $1 - 1/e$, each stump matches a fit on its own draw, and bagging lowers a stump's variance. The hand example from Figure 3 gives 50 and not 12.5, and on a seeded dataset the OOB error lands within 10% of the error on 500 fresh rows.
+
+The forest checks confirm that `random_subspace_split` never picks column 2 on the four-row example, that a planted column gets the highest permutation importance, and that the measured $\rho$ falls as `max_features` goes from 6 to 3 to 1.
+
+## Further reading
+
+- Leo Breiman, "Random Forests" (Statistics Department, University of California, Berkeley, January 2001), [PDF](https://www.stat.berkeley.edu/~breiman/randomforest2001.pdf). Section 4 grows forests with random input selection, and Section 10 describes variable importance by permuting out-of-bag values.
+- Cornell CS4780 lecture notes, [18: Bagging](https://www.cs.cornell.edu/courses/cs4780/2018fa/lectures/lecturenote18.html). Its Random Forest section picks $k \le d$ features before each split, and its Advantages of Bagging section explains the out-of-bag error.
