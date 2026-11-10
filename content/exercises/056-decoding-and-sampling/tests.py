@@ -244,3 +244,124 @@ def test_speculative(sub):
     drafts = rng.choice(3, size=n, p=q2)
     out = np.array([got(P, q2, int(d), rng) for d in drafts])
     close(np.bincount(out, minlength=3) / n, P, atol=0.02, label="empirical output vs p, milder draft")
+
+
+def _chain(rows, vocab=4):
+    """Transition log-probabilities from {token: {next: probability}}."""
+    out = np.full((vocab, vocab), -np.inf)
+    for i, row in rows.items():
+        for j, pr in row.items():
+            out[i, j] = np.log(pr)
+    out[vocab - 1, vocab - 1] = 0.0
+    return out
+
+
+# Tokens 0 = bos, 1 = a, 2 = b, 3 = eos. Greedy takes a (0.5) and then eos (0.4), which is 0.20,
+# but b (0.4) is followed by eos with 0.9, which is 0.36.
+TRAP = _chain({0: {1: 0.5, 2: 0.4, 3: 0.1}, 1: {1: 0.3, 2: 0.3, 3: 0.4}, 2: {1: 0.05, 2: 0.05, 3: 0.9}})
+# Two children of the same hypothesis outrank the only child of the other, so a beam of 2
+# drops "b eos" (0.16) and ends with "a a a" (0.0882), while a beam of 3 keeps it.
+PRUNE = _chain({0: {1: 0.5, 2: 0.4, 3: 0.1}, 1: {1: 0.42, 2: 0.38, 3: 0.2}, 2: {1: 0.3, 2: 0.3, 3: 0.4}})
+# Tokens 0 = bos, 1 = a, 2 = b, 3 = c, 4 = eos. "a eos" has probability 0.30 and length 2,
+# "b c eos" has 0.27 and length 3. Raw scores pick the short one, alpha = 1 picks the long one.
+SHORT = _chain(
+    {
+        0: {1: 0.5, 2: 0.5},
+        1: {1: 0.2, 2: 0.2, 4: 0.6},
+        2: {1: 0.05, 3: 0.9, 4: 0.05},
+        3: {1: 0.2, 2: 0.2, 4: 0.6},
+    },
+    vocab=5,
+)
+
+
+def _length_penalty(n_tokens, alpha):
+    return ((5 + n_tokens) / 6) ** alpha
+
+
+def _exhaustive(log_probs, bos, eos, max_len, alpha):
+    """Best finished hypothesis by brute force: every path to eos or to max_len."""
+    best = (None, -np.inf)
+    stack = [([bos], 0.0)]
+    while stack:
+        tokens, raw = stack.pop()
+        if tokens[-1] == eos or len(tokens) - 1 == max_len:
+            score = raw / _length_penalty(len(tokens) - 1, alpha)
+            if score > best[1]:
+                best = (tokens, score)
+            continue
+        for j in range(log_probs.shape[0]):
+            if log_probs[tokens[-1], j] > -np.inf:
+                stack.append((tokens + [j], raw + log_probs[tokens[-1], j]))
+    return best
+
+
+def _greedy(log_probs, bos, eos, max_len):
+    tokens, raw = [bos], 0.0
+    while tokens[-1] != eos and len(tokens) - 1 < max_len:
+        j = int(np.argmax(log_probs[tokens[-1]]))
+        raw += log_probs[tokens[-1], j]
+        tokens.append(j)
+    return tokens, raw
+
+
+@check("beam_search with a wide beam equals exhaustive enumeration, and a beam of 1 equals greedy decoding")
+def test_beam_exhaustive_and_greedy(sub):
+    beam = has(sub, "beam_search")
+    rng = np.random.default_rng(11)
+    for trial in range(6):
+        vocab = 5
+        probs = rng.dirichlet(np.ones(vocab), size=vocab)
+        probs[:, 0] = 0.0  # nothing is followed by bos
+        probs /= probs.sum(axis=1, keepdims=True)
+        with np.errstate(divide="ignore"):
+            lp = np.log(probs)
+        lp[vocab - 1] = -np.inf
+        lp[vocab - 1, vocab - 1] = 0.0
+        for alpha in (0.0, 0.7):
+            want_tokens, want_score = _exhaustive(lp, 0, vocab - 1, 4, alpha)
+            tokens, score = beam(lp, 0, vocab - 1, 1000, 4, alpha)
+            equal(list(tokens), want_tokens, label=f"model {trial}, alpha {alpha}: wide beam tokens")
+            almost(score, want_score, tol=1e-9, label=f"model {trial}, alpha {alpha}: wide beam score")
+        g_tokens, g_raw = _greedy(lp, 0, vocab - 1, 4)
+        tokens, score = beam(lp, 0, vocab - 1, 1, 4)
+        equal(list(tokens), g_tokens, label=f"model {trial}: beam of 1 tokens")
+        almost(score, g_raw, tol=1e-9, label=f"model {trial}: beam of 1 score")
+
+
+@check("beam_search finds b eos (0.36) where greedy settles for a eos (0.20), and keeps the global top B, not the top per hypothesis")
+def test_beam_hand_examples(sub):
+    beam = has(sub, "beam_search")
+    tokens, score = beam(TRAP, 0, 3, 1, 4)
+    equal(list(tokens), [0, 1, 3], label="beam 1 on the greedy trap")
+    almost(float(np.exp(score)), 0.20, tol=1e-9, label="beam 1 probability")
+    # Wrong implementation caught here: each hypothesis keeps only its own best child instead of
+    # the global top B over all hypothesis-and-token pairs. The first step then keeps only "a",
+    # so it returns "a eos" (0.20) and never finds "b eos" (0.36).
+    tokens, score = beam(TRAP, 0, 3, 2, 4)
+    equal(list(tokens), [0, 2, 3], label="beam 2 on the greedy trap")
+    almost(float(np.exp(score)), 0.36, tol=1e-9, label="beam 2 probability")
+    tokens, score = beam(PRUNE, 0, 3, 2, 3)
+    equal(list(tokens), [0, 1, 1, 1], label="beam 2 on the pruning model")
+    almost(float(np.exp(score)), 0.0882, tol=1e-9, label="beam 2 probability")
+    tokens, score = beam(PRUNE, 0, 3, 3, 3)
+    equal(list(tokens), [0, 2, 3], label="beam 3 on the pruning model")
+    almost(float(np.exp(score)), 0.16, tol=1e-9, label="beam 3 probability")
+
+
+@check("beam_search length normalisation flips the winner on the planted case, and finished hypotheses leave the beam")
+def test_beam_length_and_eos(sub):
+    beam = has(sub, "beam_search")
+    tokens, score = beam(SHORT, 0, 4, 5, 4, 0.0)
+    equal(list(tokens), [0, 1, 4], label="alpha 0 picks the short hypothesis")
+    almost(score, float(np.log(0.30)), tol=1e-9, label="alpha 0 score")
+    tokens, score = beam(SHORT, 0, 4, 5, 4, 1.0)
+    equal(list(tokens), [0, 2, 3, 4], label="alpha 1 picks the long hypothesis")
+    want = float(np.log(0.27)) / (8 / 6)
+    almost(score, want, tol=1e-9, label="alpha 1 score, log(0.27) / (8 / 6)")
+    # Wrong implementation caught here: finished hypotheses stay in the beam. Extended with eos at
+    # no cost, "b eos" becomes "b eos eos" and the returned sequence has extra tokens.
+    tokens, _ = beam(TRAP, 0, 3, 2, 4)
+    equal(len(tokens), 3, label="length of the best hypothesis, which must stop at its first eos")
+    tokens, _ = beam(TRAP, 0, 3, 2, 4, 0.6)
+    equal(list(tokens), [0, 2, 3], label="alpha 0.6 on the greedy trap")

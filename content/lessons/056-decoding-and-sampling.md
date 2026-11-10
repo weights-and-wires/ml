@@ -2,13 +2,14 @@
 title: "Decoding and sampling: cache, temperature, speculation"
 slug: 056-decoding-and-sampling
 part: "Part 7 — Large language models"
-summary: Why writing one token waits on memory, how a KV cache and temperature sampling work, and how a draft model speeds decoding without changing the output.
+summary: Why decoding waits on memory, how a KV cache, temperature sampling, and beam search work, and how a draft model speeds it up without changing the output.
 minutes: 80
 gpu: false
 objectives:
   - Explain why a model writing one token at a time is limited by memory bandwidth, compute flops per byte and seconds per token, and find the batch that saturates a chip.
   - Compute the size of a KV cache, build one, and show a cached decode matches a full recompute.
   - Turn scores into a token with temperature, top-k, top-p, and a seeded draw.
+  - Run beam search with a length penalty and finished hypotheses, and show on a small example that greedy decoding can miss the most probable sequence.
   - Show with a small example that accept-or-replace speculative decoding gives exactly the target model's distribution, and estimate its speedup.
 prereqs:
   - 047-scaled-attention-and-heads
@@ -19,25 +20,24 @@ exercise: 056-decoding-and-sampling
 
 # Decoding and sampling: cache, temperature, speculation
 
-Picture a 7-billion-parameter language model on a chip that can do 312 trillion arithmetic operations every second. The answer appears one token at a time, where a token is a word or a piece of a word. Writing one token takes about 14 billion operations, which the chip could finish in 0.045 milliseconds, or over 20,000 tokens per second. A single user sees at most about 140. Where does the other 99 percent of the time go?
+Picture a 7-billion-parameter language model on a chip that can do 312 trillion arithmetic operations every second. The answer appears one token at a time, where a token is a word or a piece of a word. Writing one token takes about 14 billion operations, so the chip could write over 20,000 tokens per second. A single user sees at most about 140. Where does the other 99 percent of the time go?
 
-It goes into waiting. The chip is a chef who cooks a dish in a blink, but the ingredients sit in a pantry down a long corridor, and each dish needs a fresh trip. The weights are not the only thing in the pantry: by token 1001 of a story, the model needs a key and a value from each of the 1000 earlier tokens, and keeping them is another trip. Two questions follow. The last layer hands you one score per vocabulary entry, so how do you pick a token without repeating yourself or writing nonsense? And can the waiting itself be put to work?
+It goes into waiting. The chip is a chef who cooks a dish in a blink, but the ingredients sit in a pantry down a long corridor, and each dish needs a fresh trip. By token 1001 of a story, the model also needs a key and a value from each of the 1000 earlier tokens, which is another trip. How do you then pick a token without repeating yourself or writing nonsense, and can the waiting be put to work?
 
-This chapter counts the trips, builds the cache, turns scores into a token, and ends with speculative decoding, where a cheap model drafts and the large one checks.
+This chapter counts the trips, builds the cache, turns scores into a token, searches for the best whole sequence with a beam, and ends with speculative decoding, where a cheap model drafts and the large one checks.
 
 ## What you already know
 
 - A flop is one multiply or one add. A forward pass costs about 2 flops per weight per token, and a weight in bf16 takes 2 bytes, as in [the cost of a training run](/lessons/053-training-loop-and-cost).
-- Attention scores a query against every earlier key, divides by the square root of the head width, and blends the values, and a causal mask makes token $t$ read only tokens up to $t$, as in [scaled attention and heads](/lessons/047-scaled-attention-and-heads).
-- A softmax turns scores into positive numbers that add to 1, and subtracting the largest score first keeps `np.exp` from overflowing.
+- Attention scores a query against earlier keys, divides by the square root of the head width, and blends the values, and a causal mask hides later tokens, as in [scaled attention and heads](/lessons/047-scaled-attention-and-heads).
+- A softmax turns scores into positive numbers that add to 1, and subtracting the largest first avoids overflow.
 - A language model gives a probability to every possible next token, as in [next-token loss](/lessons/052-next-token-loss-and-safe-steps), and a token you pick is fed back in.
-- A draw with probabilities $p$ picks token $i$ with probability $p_i$.
 
 ## Decoding waits on memory
 
-When the model writes a token, each weight is fetched from memory, multiplied by one number, and added into a running sum. That is 2 flops for each 2-byte weight, so the chip does 1 flop for each byte it fetches. Take one 4096-by-4096 matrix on a chip with 312 trillion flops per second and 2 trillion bytes per second of bandwidth. It holds 16,777,216 weights, so reading it moves 33.6 million bytes, which takes 16.8 microseconds. The arithmetic takes 0.108 microseconds. The chip idles 99.4 percent of the time. Doubling the width multiplies flops and bytes alike, so the ratio stays at 1.
+When the model writes a token, each weight is fetched from memory, multiplied by one number, and added into a running sum. That is 2 flops for each 2-byte weight, so the chip does 1 flop for each byte it fetches. Take one 4096-by-4096 matrix on a chip with 312 trillion flops per second and 2 trillion bytes per second of bandwidth. Reading its 16,777,216 weights moves 33.6 million bytes, which takes 16.8 microseconds, and the arithmetic takes 0.108 microseconds. The chip idles 99.4 percent of the time. 
 
-The escape is to give each read more work. Process $B$ tokens together, and the weight is fetched once but multiplies $B$ numbers. We call $B$ the batch size. The tokens can come from different users or from positions in one long prompt, but not from one user's own future tokens, because each depends on the one before. The ratio of flops to bytes is the arithmetic intensity. For a $d \times d$ matrix, $B$ vectors, and $b$ bytes per weight, the matrix does $2Bd^2$ flops and reads $bd^2$ bytes:
+The escape is to give each read more work. Process $B$ tokens together, the batch size, and each weight is fetched once but multiplies $B$ numbers. The tokens can come from different users or from one long prompt, but not from one user's own future tokens. The ratio of flops to bytes is the arithmetic intensity. For a $d \times d$ matrix, $B$ vectors, and $b$ bytes per weight, the matrix does $2Bd^2$ flops and reads $bd^2$ bytes:
 
 $$
 I = \frac{2Bd^2}{b\,d^2} = \frac{2B}{b}
@@ -83,7 +83,7 @@ $$
 Figure 1. Speed is the lower of two limits. Left of the ridge the memory limit rules, and decode at batch 1 sits at 1 flop per byte, far below the roof. A long prompt reads each weight for many tokens at once, so it reaches the roof.
 ```
 
-In Figure 1, the sloped line is the memory limit and the flat line the arithmetic limit. Below 156 flops per byte a workload is memory bound, and above it compute bound. Decode at batch 1 sits at intensity 1, so it gets about 0.6 percent of the chip. Prefill, which reads a whole prompt, is a batch of 1000 on one read of the weights, so it sits on the flat roof.
+In Figure 1, the sloped line is the memory limit and the flat line the arithmetic limit. Below 156 flops per byte a workload is memory bound. Decode at batch 1 sits at intensity 1, so it gets about 0.6 percent of the chip, while prefill, which reads a whole prompt, is a batch of 1000 and sits on the roof.
 
 If decode waits on memory, the time per token is the time to fetch every weight once. A 7-billion-parameter model in bf16 holds $14 \times 10^9$ bytes, so at $2 \times 10^{12}$ bytes per second:
 
@@ -91,10 +91,10 @@ $$
 t = \frac{\text{parameters} \times \text{bytes per weight}}{\text{bandwidth}} = \frac{14 \times 10^9}{2 \times 10^{12}} = 7\ \text{ms}
 $$
 
-That is 143 tokens per second. A server cannot make one user's token cheaper, but with 156 users in a batch each step still takes 7 ms and writes 156 tokens, about 22,000 per second in total, while each user still sees 143. The smallest batch that reaches the ridge solves $2B/b \ge I_{\text{ridge}}$, so $B = \lceil I_{\text{ridge}}\, b / 2 \rceil$. Past that, batching has a ceiling.
+That is 143 tokens per second. With 156 users in a batch, each step still takes 7 ms and writes 156 tokens, about 22,000 per second in total. The smallest batch that reaches the ridge solves $2B/b \ge I_{\text{ridge}}$, so $B = \lceil I_{\text{ridge}}\, b / 2 \rceil$.
 
 > [!KEY]
-> A single user gets 140 tokens per second instead of 20,000 because each token needs every weight fetched once, and each fetched weight does only 2 flops. That is 1 flop per byte against the 156 a chip needs. Sharing one read among more tokens raises the ratio, and a wider model does not.
+> A single user gets 140 tokens per second instead of 20,000 because each token needs every weight fetched once, and each fetched weight does only 2 flops. That is 1 flop per byte against the 156 a chip needs.
 
 ## The second trip: the key-value cache
 
@@ -185,7 +185,7 @@ Batching shares the weights but not each user's private history. Without a cache
 Figure 2. Each row is a decoding step and each cell a token whose key and value that step needs. Without a cache the triangle is computed again every step, 21 cells for six tokens. With a cache only the diagonal is computed. The grey cells are still read, so the cache saves arithmetic, not memory traffic.
 ```
 
-Reading the old keys and values is safe because of the causal mask. Token 2 never looks at token 3, so token 3 cannot change token 2's hidden state at any layer, and token 2's key and value are the same at step 3 as at step 2. Figure 2 shows the saving: the cache computes only the diagonal, but attention still reads every stored cell, so it saves arithmetic and not memory traffic.
+Reading old keys and values is safe because of the causal mask. Token 2 never looks at token 3, so token 2's key and value are the same at step 3 as at step 2.
 
 Take one head of width 2 with two cached tokens. The keys are $[1, 0]$ and $[0, 1]$, the values are $[1, 2]$ and $[3, 4]$, and the query is $q = [2, 0]$. The scores are each key dotted with $q$, divided by $\sqrt{2}$, giving $[1.4142, 0]$. The exponentials 4.1133 and 1 add to 5.1133, so the weights are $[0.8044, 0.1956]$ and the output is $0.8044\,[1, 2] + 0.1956\,[3, 4] = [1.3911, 2.3911]$. In numpy:
 
@@ -201,18 +201,18 @@ $$
 \text{bytes} = 2 \cdot n_{\text{layer}} \cdot n_{\text{kv}} \cdot d_{\text{head}} \cdot T \cdot \text{bytes per number}
 $$
 
-Read it aloud: two copies, for every layer, key-value head, position in the head, and token. With 24 layers, 8 key-value heads, head width 64, and 2048 tokens in bf16, one token adds $2 \times 24 \times 8 \times 64 \times 2 = 49{,}152$ bytes, and 2048 tokens make 96 MiB. With 32 layers, 8 key-value heads, head width 128, and 32,768 tokens, one sequence needs 4 GiB, and an 80 GiB card holding 13 GiB of 7-billion-parameter weights fits only 16 of them.
+Read it aloud: two copies, for every layer, key-value head, head position, and token. With 24 layers, 8 key-value heads, head width 64, and 2048 tokens in bf16, one token adds $2 \times 24 \times 8 \times 64 \times 2 = 49{,}152$ bytes, and 2048 tokens make 96 MiB. With 32 layers, 8 key-value heads, head width 128, and 32,768 tokens, one sequence needs 4 GiB, so an 80 GiB card with 13 GiB of weights fits only 16.
 
-Only key-value heads are stored, so the fix is to let several query heads share one. Each still asks its own question with its own query, but they all read the same stored keys and values. Grouped-query attention shares one key-value head per group of query heads, and multi-query attention shares one across all. With 8 query heads, 2 key-value heads shrink the cache by 4 and 1 shrinks it by 8, so the 4 GiB sequence becomes 0.5 GiB and the card holds 133 sequences instead of 16.
+Only key-value heads are stored, so let several query heads share one. Grouped-query attention shares one key-value head per group of query heads, and multi-query attention shares one across all. With 8 query heads, 2 key-value heads shrink the cache by 4 and 1 shrinks it by 8, so the card holds 133 sequences instead of 16.
 
 > [!KEY]
 > The causal mask guarantees that earlier keys and values never change, so the model stores them instead of recomputing them. That trades memory for arithmetic, and sharing key-value heads is the main way to shrink the bill.
 
 ## From scores to a token
 
-The last layer gives one score per token. Take five tokens with scores `[0.5, -2.0, 3.5, 3.4, -1.0]`. Greedy decoding returns `int(np.argmax(logits))`, which is 2. It is dull, because every run of a prompt is identical, and it loops, because a phrase that was the top continuation once looks even likelier after it appears again. Drawing from the model's own probabilities fixes both. Subtract the largest score, exponentiate, and divide: the probabilities are `[0.0253, 0.0021, 0.5077, 0.4594, 0.0056]`, so tokens 2 and 3 both appear. A real vocabulary has thousands of junk tokens, though, and 10,000 of them at 0.00001 each add up to 10 percent, so one draw in ten is nonsense. A dial on boldness and a filter on the tail handle this.
+The last layer gives one score per token. Take five tokens with scores `[0.5, -2.0, 3.5, 3.4, -1.0]`. Greedy decoding returns `int(np.argmax(logits))`, which is 2. It is dull, because every run is identical, and it loops, because a phrase that was the top continuation once looks likelier after it repeats. Drawing from the model's own probabilities fixes both. Subtract the largest score, exponentiate, and divide: the probabilities are `[0.0253, 0.0021, 0.5077, 0.4594, 0.0056]`, so tokens 2 and 3 both appear. A real vocabulary has thousands of junk tokens, though, and 10,000 of them at 0.00001 each add up to 10 percent, so one draw in ten is nonsense. A temperature dial and a tail filter handle this.
 
-The dial divides every score by a temperature $\tau$ before the softmax. Because the softmax exponentiates, it magnifies gaps between scores. Dividing by $\tau$ above 1 shrinks the gaps and flattens the distribution, and below 1 it stretches them so the leader dominates.
+The dial divides every score by a temperature $\tau$ before the softmax. Dividing by $\tau$ above 1 shrinks the gaps between scores and flattens the distribution, and below 1 it stretches them so the leader dominates.
 
 ```figure
 <svg viewBox="0 0 600 252" role="img" aria-label="Three bar charts of the same five scores at temperature 0.5, 1, and 2: the junk tail shrinks when cold and grows when hot">
@@ -282,13 +282,13 @@ The dial divides every score by a temperature $\tau$ before the softmax. Because
 Figure 3. The same scores at three temperatures. Cold (left), the two leaders take almost everything and the tail all but vanishes, yet the near tie between tokens 2 and 3 stays a near tie. Hot (right), the tail grows to 0.167 in total. Temperature reshapes the whole distribution, but a gap of 0.1 only decides the draw at very low temperatures.
 ```
 
-Figure 3 shows the same scores at three temperatures: cold, the two leaders take almost everything, and hot, the junk tail grows to about 0.17 in total. At $\tau = 2$ the scaled scores are `[0.25, -1, 1.75, 1.7, -0.5]`. Subtract 1.75 and exponentiate to get `[0.2231, 0.0639, 1, 0.9512, 0.1054]`, which add to 2.3437, so the probabilities are `[0.0952, 0.0273, 0.4267, 0.4059, 0.0450]`.
+At $\tau = 2$ in Figure 3 the scaled scores are `[0.25, -1, 1.75, 1.7, -0.5]`. Subtract 1.75 and exponentiate to get `[0.2231, 0.0639, 1, 0.9512, 0.1054]`, which add to 2.3437, so the probabilities are `[0.0952, 0.0273, 0.4267, 0.4059, 0.0450]`.
 
 $$
 p_i = \frac{\exp(z_i / \tau)}{\sum_j \exp(z_j / \tau)}
 $$
 
-Read it aloud: divide each score by $\tau$, exponentiate, and take its share of the total. As $\tau$ shrinks toward 0 the leader's share goes to 1, which is greedy decoding, and as $\tau$ grows every share goes to $1/5$. Code defines $\tau = 0$ as greedy, because dividing by zero fails. In numpy:
+Read it aloud: divide each score by $\tau$, exponentiate, and take its share of the total. As $\tau$ shrinks the leader's share goes to 1, which is greedy decoding, and as $\tau$ grows every share goes to $1/5$. Code defines $\tau = 0$ as greedy. In numpy:
 
 ```python
 s = logits / temperature
@@ -299,25 +299,45 @@ probs = probs / probs.sum()
 > [!WARNING]
 > Keep the subtraction of `s.max()`. At $\tau = 0.001$ the largest scaled score is 3500, and `np.exp(3500)` overflows to `inf`, which turns the result into `nan`.
 
-Temperature shrinks the tail but never removes it, so a filter sets the unlikely tokens to zero and divides by what remains. Top-k keeps the $k$ largest probabilities. At $\tau = 2$ with $k = 2$, tokens 2 and 3 hold 0.4267 and 0.4059, which total 0.8326, so they become 0.5125 and 0.4875. A fixed $k$ ignores the shape of the distribution: on a confident one it keeps tokens the model barely believes in, and on an unsure one it cuts fair answers.
+Temperature shrinks the tail but never removes it, so a filter sets the unlikely tokens to zero and divides by what remains. Top-k keeps the $k$ largest probabilities. At $\tau = 2$ with $k = 2$, tokens 2 and 3 hold 0.4267 and 0.4059, which total 0.8326, so they become 0.5125 and 0.4875. A fixed $k$ ignores the shape of the distribution: it keeps barely believed tokens when the model is confident and cuts fair answers when it is unsure.
 
-Top-p, or nucleus sampling, makes the count adapt. Sort the tokens from most to least likely and keep the shortest prefix whose total reaches $p$. At $\tau = 2$ and $p = 0.9$ the sorted probabilities are 0.4267 (token 2), 0.4059 (token 3), 0.0952 (token 0), 0.0450, and 0.0273, with running totals 0.4267, 0.8325, 0.9278, and so on. The total first reaches 0.9 at the third token, so keep tokens 2, 3, and 0 and divide by 0.9278 to get `[0.1026, 0, 0.4599, 0.4375, 0]`. The token that crosses $p$ must be kept: stopping just before it leaves less than $p$ of the mass, and with $p = 0.3$ it would keep nothing. In numpy, use `np.argsort(-probs)`, then `np.cumsum`, then `np.searchsorted(cumulative, p, side="left")`. Ten tokens of 0.1 add to 0.9999999999999999, so `p = 1.0` returns index 10. Clamp the position to `len(probs) - 1`.
+Top-p, or nucleus sampling, makes the count adapt. Sort the tokens from most to least likely and keep the shortest prefix whose total reaches $p$. At $\tau = 2$ and $p = 0.9$ the sorted probabilities are 0.4267 (token 2), 0.4059 (token 3), 0.0952 (token 0), and so on, with running totals 0.4267, 0.8325, 0.9278. The total first reaches 0.9 at the third token, so keep tokens 2, 3, and 0 and divide by 0.9278 to get `[0.1026, 0, 0.4599, 0.4375, 0]`. The token that crosses $p$ must be kept: stopping just before it leaves less than $p$ of the mass, and with $p = 0.3$ it would keep nothing. In numpy, use `np.argsort(-probs)`, `np.cumsum`, and `np.searchsorted(cumulative, p, side="left")`. Ten tokens of 0.1 add to 0.9999999999999999, so `p = 1.0` returns index 10: clamp it to `len(probs) - 1`.
 
 The whole step runs in order: temperature and softmax, top-k, top-p on the renormalised result, then one draw with `rng.choice` on the generator you were given, so that a seed reproduces the text.
 
 > [!KEY]
-> Greedy decoding is dull, and drawing from raw probabilities lets the junk tail through. Temperature controls how much weight the tail gets, and a filter removes it. Top-p keeps the smallest set that reaches $p$, so the survivors adapt to how sure the model is, which a fixed $k$ cannot do.
+> Greedy decoding is dull, and drawing from raw probabilities lets the junk tail through. Temperature sets how much weight the tail gets, and a filter removes it. Top-p adapts to how sure the model is, which a fixed $k$ cannot.
+
+## Beam search: keeping several candidates
+
+Greedy decoding takes the best token at each step, but that can lead to a worse sequence. Take tokens `a`, `b`, and an end-of-sequence token `eos`. After the start token, a toy model gives `a` 0.5, `b` 0.4, and `eos` 0.1. After `a` it gives `a` 0.3, `b` 0.3, and `eos` 0.4. After `b` it gives `a` 0.05, `b` 0.05, and `eos` 0.9. Greedy takes `a` and then `eos`, a sequence with probability $0.5 \times 0.4 = 0.20$. The path through `b` has probability $0.4 \times 0.9 = 0.36$, and greedy never looks at it.
+
+Beam search keeps $B$ prefixes alive, where $B$ is the beam width. At each step, extend every kept prefix with every token, score all the extensions, and keep the $B$ best of them together. A prefix scores the sum of the log-probabilities of its tokens, so a long product becomes a sum that cannot underflow:
+
+$$
+\text{score}(y_{1:t}) = \sum_{i=1}^{t} \log p(y_i \mid y_{<i})
+$$
+
+Read it aloud: add the log-probability of each token given the ones before it, and a sum closer to 0 is better. With $B = 2$ on the toy model, step 1 scores `a` at $-0.693$, `b` at $-0.916$, and `eos` at $-2.303$, so `a` and `b` stay. Step 2 scores `b eos` at $-1.022$, `a eos` at $-1.609$, and `a a` and `a b` at $-1.897$. The top two are `b eos` and `a eos`, so the best sequence is `b eos`, with probability 0.36. A beam of 1 is greedy.
+
+The cut is global: keep the $B$ best of all $B \times V$ extensions, not $B$ per prefix, so a prefix with two strong children can take two slots. A kept extension that ends in `eos` is finished: it leaves the beam and joins a finished list, and the search continues with the rest until `max_len`. The answer is the best finished hypothesis.
+
+Every log-probability is at most 0, so each added token lowers the score, and without a correction beam search favors short outputs. Wu et al. (2016, section 7) divide the score by a length penalty $\mathrm{lp}(Y) = \bigl((5 + |Y|)/6\bigr)^{\alpha}$, where $\alpha = 0$ is plain beam search and 0.6 to 0.7 usually worked best. In a second model, `a eos` has probability 0.30 and length 2, and `b c eos` has 0.27 and length 3. Raw scores are $\ln 0.30 = -1.204$ and $\ln 0.27 = -1.309$, so the short one wins. With $\alpha = 1$ the penalties are $7/6$ and $8/6$, giving $-1.032$ and $-0.982$, and the long one wins.
+
+Beam search is not the default for open-ended writing. Holtzman et al. (2020, section 4.3) show that human text does not stay in a high-probability zone, so the most probable text is generic and repetitive. Sampling with top-p avoids that, and beam search suits translation, where the input scopes the output.
+
+> [!KEY]
+> Greedy can miss the most probable sequence, and beam search keeps the $B$ best prefixes by summed log-probability to find it. Finished hypotheses leave the beam, and a length penalty stops short outputs from winning on length alone.
 
 ## Speculative decoding: guess fast, verify once
 
-Decode leaves the chip idle more than 99 percent of the time, so suppose a model a tenth the cost guessed the next few tokens. Call the large model the target, with next-token distribution $p$, and the small one the draft, with $q$. The draft writes $k$ tokens, say $k = 3$. Then the target reads the last written token plus all three drafted ones in a single pass. Four tokens share one read of the weights, so the pass costs about the same as one. Because of the causal mask, that pass gives the target's own distribution after each position. Compare from left to right: keep each draft token the target agrees with, and at the first one it rejects, write the target's own pick and discard the rest. If all are kept, the last position gives a bonus token. A round yields at least one token and at most $k + 1$.
+Decode leaves the chip idle, so suppose a model a tenth the cost guessed the next few tokens. Call the large model the target, with next-token distribution $p$, and the small one the draft, with $q$. The draft writes $k = 3$ tokens. Then the target reads the last written token plus all three in a single pass, so four tokens share one read of the weights. Because of the causal mask, that pass gives the target's own distribution after each position. Compare from left to right: keep each draft token the target agrees with, and at the first rejection write the target's own pick and discard the rest. If all are kept, the last position gives a bonus token, so a round yields between 1 and $k + 1$ tokens.
 
-"Agrees with" needs care. Accepting every draft token makes the output follow $q$. Accepting only the target's top choice suits greedy decoding but not sampling, since a token the target would draw 20 percent of the time is never accepted. We want the output distributed exactly as if sampled from $p$.
+"Agrees with" needs care. Accepting every draft token makes the output follow $q$, and accepting only the target's top choice never keeps a token the target would draw 20 percent of the time. We want the output distributed exactly as if sampled from $p$.
 
 Take $p = [0.7, 0.2, 0.1]$ and a deliberately bad draft $q = [0.1, 0.1, 0.8]$. The draft proposes $x$ with probability $q(x)$, and we accept it with probability $\min(1, p(x)/q(x))$:
 
-- $x = 0$ comes up with probability 0.1, the ratio is 7, so it is always accepted and adds 0.1 to token 0.
-- $x = 1$ comes up with probability 0.1, the ratio is 2, so it is always accepted and adds 0.1 to token 1.
+- $x = 0$ and $x = 1$ each come up with probability 0.1, the ratios are 7 and 2, so both are always accepted and add 0.1 to tokens 0 and 1.
 - $x = 2$ comes up with probability 0.8, the ratio is $0.1/0.8 = 0.125$, so it is accepted 12.5 percent of the time. That adds $0.8 \times 0.125 = 0.1$ to token 2, and the other 0.7 is rejected.
 
 A rejection takes a replacement from what the target wants and the draft did not supply, $\max(p - q, 0) = [0.6, 0.1, 0]$. It sums to 0.7, so dividing gives the replacement distribution $[0.857, 0.143, 0]$. Multiply by the rejection chance 0.7 to get $[0.6, 0.1, 0]$, and add the two sources:
@@ -368,7 +388,7 @@ $$
 Figure 4. Green is the part of each token that both models agree on, and it adds up to 0.3. The orange leftover is what the target wants and the draft did not supply, and it adds up to 0.7. Green plus orange gives p for every token.
 ```
 
-The output is exactly $p$ even though the draft was badly wrong. In Figure 4, for every token the green overlap $\min(p, q)$ is what the draft supplies and the target accepts, and the orange leftover $\max(p - q, 0)$ is what the replacement supplies. This holds for any $p$ and $q$ in four steps. Token $x$ comes out by acceptance with probability $q(x)\min(1, p(x)/q(x)) = \min(p(x), q(x))$. The target still wants $\max(p(x) - q(x), 0)$ more of it. The rejection chance is $1 - \sum_x \min(p, q)$, which equals $\sum_x \max(p - q, 0)$ because $p = \min(p, q) + \max(p - q, 0)$ for every token, so it is exactly the total that normalises the leftover. Rejection times the normalised leftover is therefore $\max(p(x) - q(x), 0)$, and adding the acceptance part gives $p(x)$. In code, use the generator for both draws:
+The output is exactly $p$ even though the draft was badly wrong. In Figure 4, the green overlap $\min(p, q)$ is what the draft supplies and the orange leftover $\max(p - q, 0)$ is what the replacement supplies. This holds for any $p$ and $q$. Token $x$ comes out by acceptance with probability $q(x)\min(1, p(x)/q(x)) = \min(p(x), q(x))$. The rejection chance $1 - \sum_x \min(p, q)$ equals $\sum_x \max(p - q, 0)$, the total that normalises the leftover, so rejection times the normalised leftover is $\max(p(x) - q(x), 0)$. Adding the acceptance part gives $p(x)$. In code, use the generator for both draws:
 
 ```python
 accept = rng.uniform() < min(1.0, p[x] / q[x])
@@ -384,38 +404,47 @@ $$
 \text{tokens per pass} = 1 + \alpha + \dots + \alpha^k = \frac{1 - \alpha^{k+1}}{1 - \alpha}
 $$
 
-Read it aloud: one guaranteed token, plus the chance of each further one surviving. At $\alpha = 1$ the sum is $k + 1$. With $k = 3$ and $\alpha = 0.8$ you get $1 + 0.8 + 0.64 + 0.512 = 2.952$, and with $\alpha = 0.3$ you get 1.417. The draft also costs time. If a draft step is 0.1 of a target step, a round with $k = 3$ takes 1.3 target steps, so the speedup is $2.952/1.3 = 2.27$ at $\alpha = 0.8$ and $1.417/1.3 = 1.09$ at $\alpha = 0.3$.
+Read it aloud: one guaranteed token, plus the chance of each further one surviving. At $\alpha = 1$ the sum is $k + 1$. With $k = 3$ and $\alpha = 0.8$ you get $1 + 0.8 + 0.64 + 0.512 = 2.952$, and with $\alpha = 0.3$ you get 1.417. A draft step at 0.1 of a target step makes a round take 1.3 target steps, so the speedup is $2.952/1.3 = 2.27$ at $\alpha = 0.8$ and $1.417/1.3 = 1.09$ at $\alpha = 0.3$.
 
 > [!KEY]
-> Decoding waits on memory, so a big model can check several drafted tokens for about the price of one. Accepting with probability $\min(1, p/q)$ and replacing from $\max(p - q, 0)$ makes the output follow $p$ exactly, whatever the draft is, so a bad draft costs only speed, never correctness.
+> Decoding waits on memory, so a big model can check several drafted tokens for about the price of one. Accepting with probability $\min(1, p/q)$ and replacing from $\max(p - q, 0)$ makes the output follow $p$ exactly, so a bad draft costs only speed.
 
 > [!RECAP]
-> - Arithmetic intensity is $2B/b$, the ridge point is peak flops over bandwidth, and one decode step at batch 1 takes parameters times bytes per weight over bandwidth.
-> - The cache holds two copies for every layer, key-value head, head width, and token, and a cached step scores the query against all stored keys and blends the stored values.
+> - Arithmetic intensity is $2B/b$, the ridge point is peak flops over bandwidth, and a batch-1 decode step takes weight bytes over bandwidth.
+> - The cache holds two copies for every layer, key-value head, head width, and token.
 > - Temperature divides the logits before a stable softmax, top-k then top-p filter and renormalise, and the crossing token is kept.
+> - Beam search keeps the $B$ best prefixes by summed log-probability, drops finished ones from the beam, and divides by a length penalty.
 > - A draft token is kept with probability $\min(1, p/q)$, a rejection draws from $\max(p - q, 0)$ normalised, and a round yields $(1 - \alpha^{k+1})/(1 - \alpha)$ tokens on average.
 
 ## Build it step by step
 
-You write twelve functions, and the checks call them in this order.
+You write thirteen functions, and the checks call them in this order.
 
-1. `arithmetic_intensity(batch, bytes_per_elt)` returns twice the batch over the bytes per weight. Batch 1 with 2 bytes gives 1. The width cancels.
+1. `arithmetic_intensity(batch, bytes_per_elt)` returns twice the batch over the bytes per weight. Batch 1 with 2 bytes gives 1.
 2. `decode_seconds_per_token(n_params, bytes_per_elt, bandwidth)` returns the bytes of weights over the bandwidth in bytes per second.
-3. `min_batch_to_saturate(bytes_per_elt, peak_flops, bandwidth)` computes the ridge point, solves $2B/b \ge$ ridge, and rounds up with `math.ceil`, returning an `int`. The usual mistake is to round down, landing just under the ridge.
-4. `kv_cache_bytes(n_layer, n_kv, d_head, seq_len, bytes_per_elt=2)` returns the byte count as an int. The usual mistake is to forget the two copies.
-5. `KVCache` keeps one list of keys and one of values per layer. `append(layer, k, v)` adds one `(n_kv, d_head)` array. `get(layer)` stacks each list on axis 0 with `np.stack` and returns `(K, V)`, or zero rows of shape `(0, n_kv, d_head)` for an empty layer, because `np.stack` fails on an empty list. The usual mistake is `np.concatenate`, which merges the token axis into the head axis.
-6. `cached_attention_step(q, K, V)` takes `q` of shape `(d_head,)` and `K`, `V` of shape `(T, d_head)`. Score, divide by the square root of the width, softmax with the maximum subtracted, and blend the value rows. The usual mistake is to forget the square root.
-7. `apply_temperature(logits, temperature)` divides, subtracts the maximum, exponentiates, and divides by the sum. Temperature 2 gives `[0.0952, 0.0273, 0.4267, 0.4059, 0.0450]`. The usual mistake is to skip the maximum.
-8. `filter_probs(probs, top_k=None, top_p=None)` returns a copy and never changes its input. Run top-k first, then top-p with `np.cumsum` and a clamped `np.searchsorted`. The usual mistake is to stop before the crossing token.
-9. `sample_token(logits, rng, temperature=1.0, top_k=None, top_p=None)` returns `int(np.argmax(logits))` at temperature 0, and otherwise chains `apply_temperature`, `filter_probs`, and `rng.choice(len(probs), p=probs)`, returning a plain `int`. The usual mistake is `np.random.choice`, which ignores your seed.
-10. `expected_accept_rate(p, q)` returns the sum of the elementwise minimum as a float, 0.3 on the worked example. The usual mistake is to take the maximum.
-11. `residual_distribution(p, q)` returns `np.maximum(p - q, 0)` over its sum, or a copy of `p` when the sum is 0. The worked example gives `[0.857, 0.143, 0]`.
-12. `speculative_accept(p, q, draft_token, rng)` draws `rng.uniform()` and compares it with `min(1, p[draft_token] / q[draft_token])`. If smaller it returns `int(draft_token)`, otherwise a draw from the residual with `rng.choice`. The usual mistake is to draw the replacement from `p`.
+3. `min_batch_to_saturate(bytes_per_elt, peak_flops, bandwidth)` computes the ridge point, solves $2B/b \ge$ ridge, and rounds up with `math.ceil`, returning an `int`.
+4. `kv_cache_bytes(n_layer, n_kv, d_head, seq_len, bytes_per_elt=2)` returns the byte count as an int.
+5. `KVCache` keeps one list of keys and one of values per layer. `append(layer, k, v)` adds one `(n_kv, d_head)` array. `get(layer)` stacks each list on axis 0 with `np.stack` and returns `(K, V)`, or zero rows of shape `(0, n_kv, d_head)` for an empty layer.
+6. `cached_attention_step(q, K, V)` takes `q` of shape `(d_head,)` and `K`, `V` of shape `(T, d_head)`. Score, divide by the square root of the width, softmax, and blend the value rows.
+7. `apply_temperature(logits, temperature)` divides, subtracts the maximum, exponentiates, and divides by the sum.
+8. `filter_probs(probs, top_k=None, top_p=None)` returns a copy and never changes its input. Run top-k first, then top-p with `np.cumsum` and a clamped `np.searchsorted`.
+9. `sample_token(logits, rng, temperature=1.0, top_k=None, top_p=None)` returns `int(np.argmax(logits))` at temperature 0, and otherwise chains `apply_temperature`, `filter_probs`, and `rng.choice(len(probs), p=probs)`, returning a plain `int`. Use `rng.choice`, not `np.random.choice`, which ignores your seed.
+10. `expected_accept_rate(p, q)` returns the sum of the elementwise minimum as a float, 0.3 on the worked example.
+11. `residual_distribution(p, q)` returns `np.maximum(p - q, 0)` over its sum, or a copy of `p` when the sum is 0.
+12. `speculative_accept(p, q, draft_token, rng)` draws `rng.uniform()` and compares it with `min(1, p[draft_token] / q[draft_token])`. If smaller it returns `int(draft_token)`, otherwise a draw from the residual with `rng.choice`.
+13. `beam_search(log_probs, bos, eos, beam_width, max_len, alpha=0.0)` takes a transition matrix whose entry `[i, j]` is the log-probability of token `j` after token `i`. Extend every live hypothesis with every token, sort all extensions by score with a stable sort, and keep the first `beam_width`. Move kept extensions that end in `eos` to a finished list, and rank finished hypotheses by the score over `((5 + L) / 6) ** alpha`. The usual mistake is to keep finished hypotheses in the beam.
 
 ## Where this breaks
 
-The cache grows with every token, so a long conversation eventually does not fit beside the weights. Servers drop old entries, store the cache in fewer bits, or cap the context length. None of the sampling dials repairs a model that is wrong: a low temperature pulls toward greedy and loops return, a high temperature with no filter lets the tail through, and since temperature runs first, a hotter distribution is flatter, so the same $p$ keeps more tokens. Speculation depends on three things: the chip must be memory bound, because at a large batch checking extra positions is no longer free, the draft must agree with the target often, and $k$ cannot grow forever, because the $j$-th draft token survives with chance about $\alpha^j$. The draft must also share the target's vocabulary.
+The cache grows with every token, so a long conversation eventually does not fit beside the weights, and servers drop old entries, store the cache in fewer bits, or cap the context length. No sampling dial repairs a wrong model. Speculation needs a memory-bound chip, because at a large batch checking extra positions is no longer free, a draft that agrees with the target often, and the target's vocabulary. It also cannot use a large $k$, because the $j$-th draft token survives with chance about $\alpha^j$.
 
 ## The exercise
 
-You write `arithmetic_intensity`, `decode_seconds_per_token`, `min_batch_to_saturate`, `kv_cache_bytes`, `KVCache`, `cached_attention_step`, `apply_temperature`, `filter_probs`, `sample_token`, `expected_accept_rate`, `residual_distribution`, and `speculative_accept`. The checks confirm the hand counts for flops per byte, 7 ms per token, a batch of 156, and 96 MiB, the cache shapes and that decoding six tokens through it matches a full causal recompute, the hand-worked temperature probabilities and the top-k and top-p cases, that `sample_token` matches the filtered distribution over seeded draws, and that accept-or-replace over 20,000 seeded rounds gives exactly the target distribution.
+You write `arithmetic_intensity`, `decode_seconds_per_token`, `min_batch_to_saturate`, `kv_cache_bytes`, `KVCache`, `cached_attention_step`, `apply_temperature`, `filter_probs`, `sample_token`, `expected_accept_rate`, `residual_distribution`, `speculative_accept`, and `beam_search`. The checks confirm 7 ms per token, a batch of 156, and 96 MiB, that decoding six tokens through the cache matches a full recompute, the hand-worked temperature, top-k, and top-p values, that seeded draws match the filtered distribution, and that 20,000 seeded accept-or-replace rounds give the target distribution. For `beam_search`, a wide beam must equal exhaustive enumeration, a beam of 1 must equal greedy decoding, a beam of 2 must find `b eos` where greedy does not, length normalization must flip the winner on a planted case, and finished hypotheses must leave the beam.
+
+## Further reading
+
+The beam search section follows these two papers:
+
+- For length normalization, the length penalty, and the report that $\alpha$ of 0.6 to 0.7 usually worked best, see section 7, "Decoder", of [Google's Neural Machine Translation System: Bridging the Gap between Human and Machine Translation](https://arxiv.org/abs/1609.08144) (Wu et al., 2016). The paper also adds a coverage penalty, which this chapter leaves out.
+- For why high-probability text is degenerate in open-ended generation, see section 4.3, "Natural language does not maximize probability", of [The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751) (Holtzman et al., ICLR 2020). Section 2 separates directed generation from open-ended generation.

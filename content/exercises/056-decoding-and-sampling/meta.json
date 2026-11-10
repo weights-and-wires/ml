@@ -1,7 +1,7 @@
 {
   "id": "056-decoding-and-sampling",
-  "title": "Cache keys and values, sample a token, and verify a draft",
-  "brief": "Count flops against bytes for decoding, size and build a KV cache, turn scores into a token with temperature, top-k, and top-p, and write the accept-or-replace rule of speculative decoding.",
+  "title": "Cache keys and values, sample a token, search a beam, and verify a draft",
+  "brief": "Count flops against bytes for decoding, size and build a KV cache, turn scores into a token with temperature, top-k, and top-p, search with a beam, and write the accept-or-replace rule of speculative decoding.",
   "needs_gpu": false,
   "timeout": 60,
   "packages": ["numpy"],
@@ -13,6 +13,7 @@
     "apply_temperature divides the logits by the temperature, subtracts the maximum, exponentiates, and divides by the sum. The subtraction keeps a temperature of 0.001 from overflowing.",
     "For top-k, np.argsort(-probs)[:k] lists the k largest. For top-p, sort descending, take np.cumsum, and keep up to and including the index np.searchsorted(cumulative, p, side='left') returns. Clamp that index to len(probs) - 1. sample_token at temperature 0 returns int(np.argmax(logits)), and otherwise draws with rng.choice(len(probs), p=probs) from the rng you are given.",
     "A draft token x is drawn with probability q(x) and kept with probability min(1, p(x) / q(x)), so the chance that x survives is min(p(x), q(x)). The residual is np.maximum(p - q, 0) divided by its sum, and when p equals q the sum is 0, so return p.",
-    "speculative_accept: draw u = rng.uniform(). If u is below min(1, p[x] / q[x]) return x. Otherwise draw a replacement with rng.choice(len(p), p=residual_distribution(p, q)). Use rng for both draws."
+    "speculative_accept: draw u = rng.uniform(). If u is below min(1, p[x] / q[x]) return x. Otherwise draw a replacement with rng.choice(len(p), p=residual_distribution(p, q)). Use rng for both draws.",
+    "beam_search: keep a list of (tokens, raw_score) pairs. For every pair and every token j with a finite log_probs[tokens[-1], j], build an extension, sort all extensions together by -score (a stable sort), and keep the first beam_width. Extensions that end in eos go to a finished list instead of the beam. Rank finished hypotheses by raw / ((5 + L) / 6) ** alpha, where L counts the generated tokens and not bos."
   ]
 }

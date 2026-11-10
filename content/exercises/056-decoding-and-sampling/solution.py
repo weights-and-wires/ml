@@ -133,6 +133,46 @@ def speculative_accept(
     return int(rng.choice(len(p), p=residual))
 
 
+def beam_search(
+    log_probs: np.ndarray,
+    bos: int,
+    eos: int,
+    beam_width: int,
+    max_len: int,
+    alpha: float = 0.0,
+) -> tuple:
+    log_probs = np.asarray(log_probs, dtype=float)
+    vocab = log_probs.shape[0]
+
+    def normalised(raw: float, n_tokens: int) -> float:
+        # n_tokens counts the generated tokens, so it excludes bos.
+        return raw / ((5 + n_tokens) / 6) ** alpha
+
+    beam = [([bos], 0.0)]
+    finished = []
+    for _ in range(max_len):
+        candidates = []
+        for tokens, raw in beam:
+            for j in range(vocab):
+                step = log_probs[tokens[-1], j]
+                if step != -np.inf:
+                    candidates.append((tokens + [j], raw + step))
+        # A stable sort keeps beam order, then token order, among ties.
+        candidates.sort(key=lambda c: -c[1])
+        beam = []
+        for tokens, raw in candidates[:beam_width]:
+            if tokens[-1] == eos:
+                finished.append((tokens, normalised(raw, len(tokens) - 1)))
+            else:
+                beam.append((tokens, raw))
+        if not beam:
+            break
+    for tokens, raw in beam:
+        finished.append((tokens, normalised(raw, len(tokens) - 1)))
+    best = max(finished, key=lambda f: f[1])  # max keeps the first of equal scores
+    return best[0], best[1]
+
+
 if __name__ == "__main__":
     b, peak, bw = 2, 312e12, 2e12
     print(f"intensity at batch 1: {arithmetic_intensity(1, b):.1f} flops per byte")
@@ -165,3 +205,13 @@ if __name__ == "__main__":
     print(f"residual: {np.round(residual_distribution(p, q), 4)}")
     out = [speculative_accept(p, q, int(rng.choice(3, p=q)), rng) for _ in range(20_000)]
     print(f"output frequencies: {np.round(np.bincount(out, minlength=3) / len(out), 3)} (target {p})")
+
+    ln = np.log
+    trap = np.full((4, 4), -np.inf)
+    trap[0, 1:] = ln([0.5, 0.4, 0.1])
+    trap[1, 1:] = ln([0.3, 0.3, 0.4])
+    trap[2, 1:] = ln([0.05, 0.05, 0.9])
+    trap[3, 3] = 0.0
+    for width in (1, 2):
+        tokens, score = beam_search(trap, bos=0, eos=3, beam_width=width, max_len=4)
+        print(f"beam {width}: {tokens} with probability {np.exp(score):.2f}")

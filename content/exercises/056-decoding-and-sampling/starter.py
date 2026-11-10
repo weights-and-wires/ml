@@ -1,11 +1,12 @@
-"""Decoding: flops against bytes, a key-value cache, sampling, and speculation.
+"""Decoding: flops against bytes, a key-value cache, sampling, speculation, and beam search.
 
-Fill in the twelve items below. For the first three, all quantities are plain
+Fill in the thirteen items below. For the first three, all quantities are plain
 numbers: flops and bytes are counts, `bandwidth` is bytes per second, and
 `peak_flops` is flops per second. For the cache, one layer holds, for every
 token so far, one key and one value per key-value head. Then turn scores into a
 token with temperature, top-k, and top-p, and write the accept-or-replace rule
-that lets a draft model speed up a target model.
+that lets a draft model speed up a target model. Last, search for the most
+probable whole sequence with a beam.
 """
 
 import math
@@ -251,6 +252,48 @@ def speculative_accept(
         The token id to keep, as a plain Python int.
     """
     raise NotImplementedError("speculative_accept")
+
+
+def beam_search(
+    log_probs: np.ndarray,
+    bos: int,
+    eos: int,
+    beam_width: int,
+    max_len: int,
+    alpha: float = 0.0,
+) -> tuple:
+    """Beam search over a Markov model given as a transition log-probability matrix.
+
+    `log_probs[i, j]` is the log-probability that token `j` follows token `i`;
+    `-inf` means impossible. A hypothesis is the tokens after `bos`, and its
+    raw score is the sum of the log-probabilities of its steps.
+
+    At each of at most `max_len` steps, extend every live hypothesis with every
+    token, skipping extensions whose score is `-inf`. Keep the `beam_width`
+    best extensions over all of them together, not per hypothesis, and
+    break ties by the order of the extension: live hypotheses in beam order,
+    then tokens in id order. A kept extension that ends in `eos` is finished:
+    it leaves the beam and is never extended again. After step `max_len`, the
+    hypotheses still live are finished as they stand.
+
+    A finished hypothesis of length `L` (counting `eos`, not `bos`) is ranked
+    by `raw_score / ((5 + L) / 6) ** alpha`, the length penalty of Wu et al.
+    (2016). With `alpha=0` that is the raw score.
+
+    Args:
+        log_probs: Transition log-probabilities, shape `(V, V)`.
+        bos: Id of the start token.
+        eos: Id of the end token.
+        beam_width: Number of hypotheses kept at each step.
+        max_len: Most tokens a hypothesis may have after `bos`.
+        alpha: Length-penalty strength, 0 or larger.
+
+    Returns:
+        A pair `(tokens, score)`: the best finished hypothesis as a list of
+        token ids that starts with `bos`, and its normalised score. When two
+        finished hypotheses tie, the one that finished first wins.
+    """
+    raise NotImplementedError("beam_search")
 
 
 if __name__ == "__main__":
