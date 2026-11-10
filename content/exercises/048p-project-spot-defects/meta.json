@@ -1,0 +1,16 @@
+{
+  "id": "048p-project-spot-defects",
+  "title": "Build a defect detector from a residual CNN",
+  "brief": "Write im2col convolution and its backward pass, a residual block, global average pooling, and Adam. Train the network on noisy part photos and check that it beats a flat MLP.",
+  "needs_gpu": false,
+  "timeout": 120,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "im2col loops over the k * k kernel offsets only. For offset (dh, dw), xp[:, :, dh:dh + stride * h_out:stride, dw:dw + stride * w_out:stride] holds that offset's value for every output position.",
+    "conv_backward: db = dY_mat.sum(axis=(0, 2)); dw = einsum('nol,ncl->oc', dY_mat, col); dcol = einsum('oc,nol->ncl', w_mat, dY_mat); dx = col2im(dcol, ...).",
+    "res_block_backward: dx = dY + (the gradient that flows back through conv2, the mask h1 > 0, and conv1). Forget the dY and the finite-difference check fails.",
+    "cnn_backward: the bias of the head gets np.array([dlogits.sum()]). Mask the ReLU after the block with y > 0 and the ReLU after the stem with z0 > 0, using the pre-activation values."
+  ]
+}
