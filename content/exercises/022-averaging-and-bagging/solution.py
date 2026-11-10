@@ -4,7 +4,8 @@ Each model's prediction at one spot is a shared part plus a private part.
 Averaging B models cancels the private parts and leaves the shared part, so the
 variance of the average has a floor. The bootstrap then supplies the different
 training sets, and the rows each draw misses score the ensemble without holding
-any data back. You write nine functions, in this order:
+any data back. A random forest then hides some columns from each split, which
+lowers the correlation between trees. You write thirteen functions, in this order:
 
 1. `bagging_variance`: the variance of an average of B models.
 2. `correlated_estimators`: simulate models with a chosen variance and correlation.
@@ -15,6 +16,10 @@ any data back. You write nine functions, in this order:
 7. `oob_mask`: which rows one draw left out.
 8. `oob_predictions`: for each row, the mean over the stumps that missed it.
 9. `out_of_bag_error`: the mean squared error on those held-out predictions.
+10. `random_subspace_split`: the best stump split among a few randomly chosen columns.
+11. `fit_random_subspace_stumps`: bagged stumps that use that split.
+12. `oob_permutation_importance`: how much shuffling a column raises the out-of-bag error.
+13. `mean_tree_correlation`: the measured rho between the stumps' predictions.
 
 `_fit_stump`, `_predict_stump`, and `in_bag_fraction` are written for you.
 """
@@ -287,6 +292,133 @@ def out_of_bag_error(
     return float(np.mean((pred[covered] - y[covered]) ** 2))
 
 
+def random_subspace_split(
+    X: np.ndarray, y: np.ndarray, max_features: int, rng: np.random.Generator
+) -> dict:
+    """Find the best stump split among `max_features` randomly chosen columns.
+
+    Pick `max_features` distinct columns with `rng.choice(d, size=max_features,
+    replace=False)`, then search only those columns with `_fit_stump`. The
+    returned stump must name the column in the full `X`, not the position in the
+    chosen subset.
+
+    Args:
+        X: Features, shape (n, d).
+        y: Targets, shape (n,).
+        max_features: How many columns the split may look at, from 1 to d.
+        rng: A numpy random Generator, used once to choose the columns.
+
+    Returns:
+        A stump dict in the format of `_fit_stump`, with "feature" an index into
+        the columns of `X`, or `None` when no chosen column admits a split.
+
+    Raises:
+        ValueError: If `max_features` is below 1 or above d.
+    """
+    d = X.shape[1]
+    if not 1 <= max_features <= d:
+        raise ValueError(f"max_features must be between 1 and {d}, got {max_features}")
+    columns = np.sort(rng.choice(d, size=max_features, replace=False))
+    stump = _fit_stump(X[:, columns], y)
+    if stump["feature"] is not None:
+        stump["feature"] = int(columns[stump["feature"]])
+    return stump
+
+
+def fit_random_subspace_stumps(
+    X: np.ndarray,
+    y: np.ndarray,
+    n_estimators: int,
+    max_features: int,
+    rng: np.random.Generator,
+) -> tuple[list[dict], list[np.ndarray]]:
+    """Fit one random-subspace stump on each of n_estimators bootstrap samples.
+
+    This is `fit_bagged_stumps` with `random_subspace_split` in place of
+    `_fit_stump`. For each estimator, draw `idx` with `bootstrap_indices`, then
+    call `random_subspace_split(X[idx], y[idx], max_features, rng)`.
+
+    Args:
+        X: Features, shape (n, d).
+        y: Targets, shape (n,).
+        n_estimators: Number of stumps to fit.
+        max_features: Columns each split may look at.
+        rng: A numpy random Generator, used for every draw and every column choice.
+
+    Returns:
+        A tuple `(stumps, in_bag_indices)` in the format of `fit_bagged_stumps`.
+    """
+    n = X.shape[0]
+    stumps = []
+    in_bag_indices = []
+    for _ in range(n_estimators):
+        idx = bootstrap_indices(n, rng)
+        stumps.append(random_subspace_split(X[idx], y[idx], max_features, rng))
+        in_bag_indices.append(idx)
+    return stumps, in_bag_indices
+
+
+def oob_permutation_importance(
+    X: np.ndarray,
+    y: np.ndarray,
+    stumps: list[dict],
+    in_bag_indices: list[np.ndarray],
+    rng: np.random.Generator,
+    n_repeats: int = 5,
+) -> np.ndarray:
+    """Measure how much shuffling each column raises the out-of-bag error.
+
+    First compute the out-of-bag error with `out_of_bag_error`. Then, for each
+    column j and each of `n_repeats` repeats, copy `X`, replace column j with
+    `X[rng.permutation(n), j]`, and recompute the out-of-bag error on the copy.
+    The importance of column j is the mean rise over the repeats.
+
+    Args:
+        X: Features, shape (n, d).
+        y: Targets, shape (n,).
+        stumps: Stumps from `fit_random_subspace_stumps`.
+        in_bag_indices: The matching draws.
+        rng: A numpy random Generator, used for the shuffles.
+        n_repeats: Shuffles per column.
+
+    Returns:
+        An array of shape (d,). A column no stump uses has importance 0.
+    """
+    n, d = X.shape
+    baseline = out_of_bag_error(X, y, stumps, in_bag_indices)
+    importance = np.zeros(d)
+    for j in range(d):
+        for _ in range(n_repeats):
+            shuffled = X.copy()
+            shuffled[:, j] = X[rng.permutation(n), j]
+            importance[j] += out_of_bag_error(shuffled, y, stumps, in_bag_indices) - baseline
+    return importance / n_repeats
+
+
+def mean_tree_correlation(stumps: list[dict], X: np.ndarray) -> float:
+    """Measure rho: the mean correlation between two stumps' predictions.
+
+    Stack `_predict_stump(stump, X)` for every stump into an array of shape
+    (B, n). Compute the correlation of every pair of stumps across the n rows,
+    and average the pairs. A stump that predicts one value for every row has no
+    correlation with anything, so leave its pairs out.
+
+    Args:
+        stumps: At least two stumps.
+        X: Features, shape (n, d).
+
+    Returns:
+        The mean pairwise correlation, a float from -1 to 1.
+    """
+    predictions = np.array([_predict_stump(stump, X) for stump in stumps])
+    varies = predictions.std(axis=1) > 0
+    kept = predictions[varies]
+    if len(kept) < 2:
+        raise ValueError("need at least two stumps that predict different values")
+    corr = np.corrcoef(kept)
+    return float(corr[~np.eye(len(kept), dtype=bool)].mean())
+
+
 if __name__ == "__main__":
     print(f"sigma2=4, rho=0.5: B=1 gives {bagging_variance(0.5, 4.0, 1):.2f}, B=2 gives {bagging_variance(0.5, 4.0, 2):.2f}")
     print(f"rho=0.3, sigma2=1: B=50 gives {bagging_variance(0.3, 1.0, 50):.4f}, B=5000 gives {bagging_variance(0.3, 1.0, 5000):.5f}")
@@ -325,3 +457,15 @@ if __name__ == "__main__":
     print(f"training error (all stumps, every row): {np.mean((bagged_predict(stumps, X) - y) ** 2):.4f}")
     print(f"out-of-bag error: {out_of_bag_error(X, y, stumps, in_bag):.4f}")
     print(f"test error on {n} fresh rows: {np.mean((bagged_predict(stumps, X_test) - y_test) ** 2):.4f}")
+
+    d = 6
+    X = rng.normal(size=(300, d))
+    y = 3 * X[:, 0] + X[:, 1] + X[:, 2] + 0.5 * rng.normal(size=300)
+    for max_features in (6, 3, 1):
+        stumps, in_bag = fit_random_subspace_stumps(X, y, 40, max_features, rng)
+        importance = oob_permutation_importance(X, y, stumps, in_bag, rng)
+        print(
+            f"max_features={max_features}: tree correlation {mean_tree_correlation(stumps, X):.3f}, "
+            f"OOB error {out_of_bag_error(X, y, stumps, in_bag):.2f}, "
+            f"most important column {int(np.argmax(importance))}"
+        )

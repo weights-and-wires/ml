@@ -311,3 +311,171 @@ def test_oob_error_hand_and_oob_error_uncovered_and_oob_tracks_test(sub):
     _part_oob_error_hand(sub)
     _part_oob_error_uncovered(sub)
     _part_oob_tracks_test(sub)
+
+
+# Hand example for the random-subspace split: column 0 separates the targets
+# cleanly (sum of squares 1), column 1 is worse (38), column 2 is worst (48.67).
+X_SPLIT = np.array([[1.0, 4.0, 2.0], [2.0, 1.0, 4.0], [3.0, 3.0, 1.0], [4.0, 2.0, 3.0]])
+
+Y_SPLIT = np.array([1.0, 2.0, 9.0, 10.0])
+
+
+def _forest_data(seed=0, n=300, d=6):
+    """Column 0 carries most of the signal, columns 1 and 2 a little, the rest none."""
+    rng = np.random.default_rng(seed)
+    X = rng.normal(size=(n, d))
+    y = 3 * X[:, 0] + X[:, 1] + X[:, 2] + 0.5 * rng.normal(size=n)
+    return X, y
+
+
+@check("random_subspace_split uses every column when max_features is d, reports full-X column numbers, and sees only max_features columns otherwise")
+def test_random_subspace_split(sub):
+    split = has(sub, "random_subspace_split")
+    rng = np.random.default_rng(0)
+    full = split(X_SPLIT, Y_SPLIT, 3, rng)
+    if full["feature"] != 0:
+        fail(f"with all 3 columns the best split is on column 0, got column {full['feature']}")
+    close(
+        [full["threshold"], full["left_value"], full["right_value"]],
+        [2.5, 1.5, 9.5],
+        atol=1e-9,
+        label="threshold and leaf values of the column 0 split",
+    )
+    for bad in (0, 4):
+        try:
+            split(X_SPLIT, Y_SPLIT, bad, rng)
+        except ValueError:
+            continue
+        fail(f"max_features={bad} is outside 1 to 3 and should raise ValueError")
+    # Plausible wrong implementation: search all columns and ignore max_features.
+    # It always picks column 0, so the column 1 share is 0, not 1/3.
+    # Another: return the position inside the chosen subset instead of the column
+    # in X. Column 1 then shows up as column 0 and the shares change the same way.
+    # Two of three columns: {0, 1} and {0, 2} pick column 0, and {1, 2} picks
+    # column 1 (38 beats 48.67). Column 2 can never win. Each pair has chance 1/3.
+    rng = np.random.default_rng(1)
+    features = [split(X_SPLIT, Y_SPLIT, 2, rng)["feature"] for _ in range(300)]
+    share0 = features.count(0) / 300
+    share1 = features.count(1) / 300
+    if features.count(2) > 0:
+        fail(f"column 2 won {features.count(2)} of 300 splits, expected 0 because column 1 always beats it")
+    almost(share1, 1 / 3, tol=0.08, label="share of splits on column 1, which wins only when column 0 is hidden")
+    almost(share0, 2 / 3, tol=0.08, label="share of splits on column 0")
+    # One column at a time: each column is the only candidate in 1/3 of the calls.
+    rng = np.random.default_rng(2)
+    features = [split(X_SPLIT, Y_SPLIT, 1, rng)["feature"] for _ in range(300)]
+    for j in range(3):
+        almost(features.count(j) / 300, 1 / 3, tol=0.08, label=f"share of splits on column {j} when each split sees one column")
+
+
+@check("fit_random_subspace_stumps keeps one draw per stump, matches a full search on each draw when max_features is d, and hides the strong column when it is 1")
+def test_fit_random_subspace(sub):
+    fit = has(sub, "fit_random_subspace_stumps")
+    fit_stump = has(sub, "_fit_stump")
+    X, y = _forest_data()
+    rng = np.random.default_rng(3)
+    stumps, in_bag = fit(X, y, 20, 6, rng)
+    if len(stumps) != 20 or len(in_bag) != 20:
+        fail(f"expected 20 stumps and 20 index arrays, got {len(stumps)} and {len(in_bag)}")
+    for b, (stump, idx) in enumerate(zip(stumps, in_bag)):
+        shape(np.asarray(idx), (300,), label="one bootstrap index array")
+        want = fit_stump(X[idx], y[idx])
+        if stump["feature"] != want["feature"]:
+            fail(f"stump {b} with max_features=6 splits on column {stump['feature']}, a full search on its draw splits on {want['feature']}")
+        close(
+            [stump["threshold"], stump["left_value"], stump["right_value"]],
+            [want["threshold"], want["left_value"], want["right_value"]],
+            atol=1e-9,
+            label=f"stump {b} threshold and leaf values",
+        )
+    stumps, _ = fit(X, y, 60, 1, np.random.default_rng(4))
+    share0 = float(np.mean([s["feature"] == 0 for s in stumps]))
+    # With one column per split, column 0 is the only candidate in 1 of 6 stumps.
+    almost(share0, 1 / 6, tol=0.12, label="share of stumps that split on the strong column 0 when max_features=1")
+    used = {s["feature"] for s in stumps}
+    if len(used) < 4:
+        fail(f"60 stumps with max_features=1 used only columns {sorted(used)}, expected at least 4 different columns")
+
+
+@check("oob_permutation_importance gives 0 to a column no stump uses and ranks a planted informative column first")
+def test_oob_permutation_importance(sub):
+    imp = has(sub, "oob_permutation_importance")
+    fit = has(sub, "fit_random_subspace_stumps")
+    # Hand example: two stumps that both use column 0 only, so column 1 must score exactly 0.
+    X = np.array([[1.0, 5.0], [2.0, 6.0], [3.0, 5.0], [4.0, 6.0]])
+    y = np.array([0.0, 0.0, 10.0, 10.0])
+    stumps = [
+        {"feature": 0, "threshold": 2.5, "left_value": 0.0, "right_value": 10.0},
+        {"feature": 0, "threshold": 2.5, "left_value": 0.0, "right_value": 10.0},
+    ]
+    draws = [np.array([0, 1, 0, 1]), np.array([2, 3, 2, 3])]
+    got = np.asarray(imp(X, y, stumps, draws, np.random.default_rng(0)), dtype=float)
+    shape(got, (2,), label="importance")
+    if got[1] != 0.0:
+        fail(f"column 1 is never used, so shuffling it cannot change the error; expected importance 0.0, got {got[1]}")
+    # Plausible wrong implementation: return the error after the shuffle without
+    # subtracting the baseline error. Every column then carries the baseline (about
+    # 2.9), and the planted column's lead drops below 5 times. Another: shuffle y
+    # instead of the column, which gives the unused column a rise of 50, not 0.
+    # Planted feature: only column 2 of 6 drives y, and each split sees 2 columns.
+    rng = np.random.default_rng(2)
+    X = rng.normal(size=(300, 6))
+    y = 2 * X[:, 2] + 0.5 * rng.normal(size=300)
+    stumps, in_bag = fit(X, y, 40, 2, rng)
+    got = np.asarray(imp(X, y, stumps, in_bag, np.random.default_rng(5)), dtype=float)
+    shape(got, (6,), label="importance")
+    if int(np.argmax(got)) != 2:
+        fail(f"column 2 carries all the signal, so it should have the highest importance; got {np.round(got, 3)}")
+    others = np.delete(got, 2)
+    if got[2] < 5 * np.max(np.abs(others)):
+        fail(
+            f"expected the planted column's importance {got[2]:.3f} to be at least 5 times every "
+            f"other column's (largest is {np.max(np.abs(others)):.3f}); all values {np.round(got, 3)}"
+        )
+
+
+@check("mean_tree_correlation matches the pairwise correlations of the stumps' predictions and skips stumps that predict one value")
+def test_mean_tree_correlation(sub):
+    corr = has(sub, "mean_tree_correlation")
+    same = {"feature": 0, "threshold": 2.5, "left_value": 0.0, "right_value": 1.0}
+    almost(corr([same, dict(same)], X_HAND), 1.0, tol=1e-9, label="two identical stumps")
+    flipped = {"feature": 0, "threshold": 2.5, "left_value": 1.0, "right_value": 0.0}
+    almost(corr([same, flipped], X_HAND), -1.0, tol=1e-9, label="two stumps with opposite predictions")
+    P = np.array([[0.0, 10.0, 10.0, 10.0], [10.0, 10.0, 10.0, 0.0]])
+    p01 = np.corrcoef(P)[0, 1]
+    almost(corr(STUMPS_HAND, X_HAND), p01, tol=1e-9, label="the two hand-example stumps")
+    third = {"feature": 0, "threshold": 1.5, "left_value": 0.0, "right_value": 4.0}
+    preds = np.array(
+        [[0.0, 0.0, 1.0, 1.0], [1.0, 1.0, 0.0, 0.0], [0.0, 4.0, 4.0, 4.0]]
+    )
+    c = np.corrcoef(preds)
+    want = (c[0, 1] + c[0, 2] + c[1, 2]) / 3
+    almost(corr([same, flipped, third], X_HAND), want, tol=1e-9, label="mean over the 3 pairs of 3 stumps")
+    almost(corr([same, constant_stump(2.0), flipped], X_HAND), -1.0, tol=1e-9, label="a constant stump is left out")
+
+
+@check("the measured correlation between trees falls as max_features falls")
+def test_correlation_falls_with_max_features(sub):
+    fit = has(sub, "fit_random_subspace_stumps")
+    corr = has(sub, "mean_tree_correlation")
+    var_avg = has(sub, "bagging_variance")
+    X, y = _forest_data()
+    measured = {}
+    for max_features in (6, 3, 1):
+        stumps, _ = fit(X, y, 40, max_features, np.random.default_rng(1))
+        measured[max_features] = corr(stumps, X)
+    # Plausible wrong implementation: a random_subspace_split that ignores
+    # max_features, so every stump sees every column and rho stays near 0.85.
+    rho6, rho3, rho1 = measured[6], measured[3], measured[1]
+    if not (rho6 > rho3 > rho1):
+        fail(f"expected correlation to fall as max_features falls 6, 3, 1; got {rho6:.3f}, {rho3:.3f}, {rho1:.3f}")
+    if rho6 < 0.7:
+        fail(f"with every column visible nearly every stump splits on column 0, so rho should exceed 0.7, got {rho6:.3f}")
+    if rho1 > 0.3:
+        fail(f"with one column per split rho should fall below 0.3, got {rho1:.3f}")
+    # The measured rho feeds the variance formula: the floor falls with it.
+    floor6 = var_avg(rho6, 1.0, 10**6)
+    floor1 = var_avg(rho1, 1.0, 10**6)
+    almost(floor6, rho6, tol=1e-4, label="variance floor at max_features=6")
+    if not floor1 < floor6 - 0.4:
+        fail(f"expected the variance floor to drop by more than 0.4, got {floor6:.3f} then {floor1:.3f}")
