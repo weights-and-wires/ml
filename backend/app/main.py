@@ -31,6 +31,29 @@ def startup() -> None:
     db.carry_progress(curriculum.renames())
 
 
+# The hub CORS allowance ---------------------------------------------------
+
+HUB_ORIGIN = "https://courses.ifkash.dev"
+SUMMARY_PATH = "/api/progress/summary"
+
+
+@app.middleware("http")
+async def hub_cors(request: Request, call_next: Any) -> Any:
+    """Let the hub read the progress summary from its own origin, and no other.
+
+    This is a middleware rather than `CORSMiddleware` so that it covers one
+    path only, and so that a 401 from `current_user` carries the headers too.
+    The hub makes a simple GET, so there is no preflight to answer.
+    """
+    response = await call_next(request)
+    if request.url.path == SUMMARY_PATH:
+        response.headers.append("Vary", "Origin")
+        if request.headers.get("origin") == HUB_ORIGIN:
+            response.headers["Access-Control-Allow-Origin"] = HUB_ORIGIN
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+
 # Models -----------------------------------------------------------------
 
 
@@ -167,6 +190,19 @@ def put_draft(
 def drop_draft(exercise_id: str, user: str = Depends(current_user)) -> dict[str, Any]:
     db.delete_draft(user, exercise_id)
     return {"saved": False}
+
+
+@app.get(SUMMARY_PATH)
+def progress_summary(user: str = Depends(current_user)) -> dict[str, Any]:
+    """Counts for the hub: lessons solved, lessons served, and the latest one touched."""
+    lessons = {lesson["slug"]: lesson for lesson in curriculum.lesson_list()}
+    rows = {slug: row for slug, row in db.get_progress(user).items() if slug in lessons}
+    done = sum(1 for row in rows.values() if row["status"] == "solved")
+    last = None
+    if rows:
+        slug = max(rows, key=lambda key: rows[key]["updated_at"])
+        last = {"slug": slug, "title": lessons[slug]["title"]}
+    return {"done": done, "total": len(lessons), "last": last}
 
 
 @app.put("/api/progress/{slug}")
