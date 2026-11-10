@@ -10,6 +10,7 @@ objectives:
   - Take SGD and momentum steps, and explain why momentum adds up gradients that agree and cancels gradients that flip.
   - Build an exponential moving average, correct it for starting at zero, and take an Adam step.
   - Show why an L2 penalty inside Adam shrinks weights unevenly, and fix it with AdamW.
+  - Measure the gradient noise scale from per-row gradients, and use it with the linear scaling rule to pair a batch size with a learning rate.
   - Compute a linear warmup and a cosine decay, and measure how much lower Adam settles with them.
 prereqs:
   - 005-gradient-descent-and-momentum
@@ -20,11 +21,9 @@ exercise: 031-sgd-adam-and-schedules
 
 # SGD, Adam, and learning-rate schedules
 
-You fit a model to 200 rows of data, and the loss is the long narrow valley from earlier in the course: it bends 1 unit along one direction and 100 units along the other. The exact gradient needs every row. With 200 million rows, a normal size for a network, one step costs a full pass over the data, and you need hundreds of steps. The obvious shortcut is to compute the gradient from eight rows. That gradient is wrong, so why does it still lead downhill, and what does its error do to the walk?
+You fit a model to 200 rows of data, and the loss is the long narrow valley from earlier in the course: it bends 1 unit along one direction and 100 units along the other. The exact gradient needs every row. With 200 million rows, one step costs a full pass over the data, and you need hundreds of steps. The obvious shortcut is to compute the gradient from eight rows. That gradient is wrong, so why does it still lead downhill, and what does its error do to the walk?
 
-Two more problems follow. A bias might see a gradient of 3 while a weight on a huge feature sees 3000, and one learning rate fits at most one of them. The loss curve also has two ugly ends: it jumps in the first few steps, and it wiggles on a plateau at the end.
-
-This chapter builds one training recipe, in the order the problems appear: mini-batches for cheap steps, momentum for faster ones, Adam for a ruler per weight, AdamW for a weight penalty that respects that ruler, and a schedule that changes the rate over time.
+Two more problems follow. A bias might see a gradient of 3 while a weight on a huge feature sees 3000, and one learning rate fits at most one of them. The loss curve also jumps in the first few steps and wiggles on a plateau at the end.
 
 ## What you already know
 
@@ -36,11 +35,11 @@ Three ideas carry this chapter:
 
 ## Use a few rows per step
 
-Here is the valley as a real fitting problem. The data has 200 rows and two input columns, with spread 1 and spread 10. The loss is half the mean squared miss, with curvature 1 along $w_1$ and $10 \times 10 = 100$ along $w_2$. The bottom sits at $(1.04,\ 0.09)$, and you start at $(-1,\ 0.3)$. Subtract the bottom's loss and call the rest the **excess loss**: it is 4.33 at the start. With the exact gradient, the steep axis needs $\text{lr} < 0.02$, and at $\text{lr} = 0.0095$ the flat axis shrinks by only 0.9905 per step, so cutting its distance to a hundredth takes 482 steps.
+Here is the valley as a real fitting problem. The data has 200 rows and two input columns, with spreads 1 and 10. The loss is half the mean squared miss, with curvature 1 along $w_1$ and $10 \times 10 = 100$ along $w_2$. The bottom sits at $(1.04,\ 0.09)$, and you start at $(-1,\ 0.3)$. Subtract the bottom's loss and call the rest the **excess loss**: it is 4.33 at the start. With the exact gradient, the steep axis needs $\text{lr} < 0.02$, and at $\text{lr} = 0.0095$ the flat axis shrinks by only 0.9905 per step, so it crawls.
 
 The loss is an average over rows, so the gradient is too. Row $i$ has its own gradient $g_i$, which says how the loss on that row alone changes when you nudge the weights. A **mini-batch** is a small set of rows, picked at random. Its gradient averages only those rows, and a step with it is **stochastic gradient descent** (SGD), where stochastic means random.
 
-Take one weight and four rows whose gradients are 2, −1, 4, and 3. The full gradient is $(2 - 1 + 4 + 3)/4 = 2$. Draw batches of two rows. There are six pairs, and their averages are 0.5, 3, 2.5, 1.5, 1, and 3.5. Each batch is off by as much as 1.5, yet the six averages themselves average 2. A batch gradient is wrong by a random amount with no preferred direction, which statisticians call **unbiased**. For a batch $B$ of $b$ rows:
+Take one weight and four rows whose gradients are 2, −1, 4, and 3. The full gradient is $(2 - 1 + 4 + 3)/4 = 2$. Draw batches of two rows. There are six pairs, and their averages are 0.5, 3, 2.5, 1.5, 1, and 3.5. The six averages themselves average 2, though each is off by up to 1.5. A batch gradient is wrong by a random amount with no preferred direction, which statisticians call **unbiased**. For a batch $B$ of $b$ rows:
 
 $$
 g_B = \frac{1}{b} \sum_{i \in B} g_i
@@ -53,14 +52,14 @@ resid = X[idx] @ w - y[idx]
 grad = X[idx].T @ resid / len(idx)
 ```
 
-At the bottom the exact gradient is zero, but a batch gradient is not, because eight rows disagree about where the bottom is. Each step still moves by the learning rate times that disagreement, so the walk hovers around the bottom. Why not shrink the learning rate until the hovering vanishes? Averaged over 20 runs, a rate of 0.0025 puts the floor about eight times lower than 0.0095, but reaching an excess loss of 0.5 takes 290 steps instead of 77. A large rate jitters, and a small rate crawls.
+At the bottom the exact gradient is zero, but a batch gradient is not, because eight rows disagree about where the bottom is. Each step still moves by the learning rate times that disagreement, so the walk hovers around the bottom. Why not shrink the learning rate until the hovering vanishes? Averaged over 20 runs, a rate of 0.0025 lowers the floor eightfold, but reaching an excess loss of 0.5 takes 290 steps instead of 77. A large rate jitters, and a small rate crawls.
 
 > [!KEY]
 > A mini-batch gradient is right on average and wrong at each step. The wrongness keeps the walk from settling, and a smaller learning rate lowers that floor at the cost of speed.
 
 ## Let a ball add the steps up
 
-A rolling ball does not restart at every bump. It keeps its speed, so pushes in the same direction add up and pushes that flip cancel. That is **momentum**. It keeps a velocity $v$, a running sum of past gradients with weights $1, \beta, \beta^2, \ldots$, and steps along it. Storing the velocity gives the same steps as the gradient-plus-last-step form from [gradient descent and momentum](/lessons/005-gradient-descent-and-momentum), and it is easier to carry between calls:
+A rolling ball keeps its speed past every bump, so pushes in the same direction add up and pushes that flip cancel. That is **momentum**. It keeps a velocity $v$, a running sum of past gradients with weights $1, \beta, \beta^2, \ldots$, and steps along it. Storing the velocity gives the same steps as the form in [gradient descent and momentum](/lessons/005-gradient-descent-and-momentum), and it is easier to carry between calls:
 
 $$
 v \leftarrow \beta\, v + g, \qquad w \leftarrow w - \text{lr}\cdot v
@@ -83,11 +82,11 @@ v = beta * state.get("v", np.zeros_like(w)) + grad
 new_w = w - lr * v
 ```
 
-Batch noise acts like the flipping gradient: it partly cancels in $v$, while the true slope keeps its sign and adds up. Independent noise of size $\sigma$ grows in $v$ only to $\sigma/\sqrt{1 - \beta^2} = 2.3\,\sigma$, while the slope grows tenfold.
+Batch noise acts like the flipping gradient: it partly cancels in $v$, while the slope adds up. Noise of size $\sigma$ grows only to $2.3\,\sigma$, while the slope grows tenfold.
 
-Why not raise the plain learning rate tenfold, to 0.095? On the steep axis a plain step multiplies the distance by $1 - 100 \times 0.095 = -8.5$, so the walk explodes. Momentum takes long steps only where the gradient keeps its sign, which is the flat floor, and on the steep axis the flips cancel in $v$. It stays stable while $\text{lr} \times \text{curvature} < 2(1 + \beta) = 3.8$, which is $\text{lr} < 0.038$ here, against 0.02 for a plain step. The price is that steady steps are $1/(1 - \beta) = 10$ times longer than the learning rate suggests, so you lower the rate when you raise $\beta$.
+Why not raise the plain learning rate tenfold, to 0.095? On the steep axis a plain step multiplies the distance by $1 - 100 \times 0.095 = -8.5$, so the walk explodes. Momentum takes long steps only where the gradient keeps its sign. The price is that steady steps are $1/(1 - \beta) = 10$ times longer than the learning rate suggests, so you lower the rate when you raise $\beta$.
 
-Race plain SGD at 0.0095 against momentum at $\text{lr} = 0.0025$ with $\beta = 0.9$. Averaged over 20 runs with batches of eight rows, SGD reaches an excess loss of 0.5 in 77 steps and momentum in 37. Figure 1 shows one run of each. Momentum's floor is higher, about 0.13 against 0.07, because its steps are longer. Give it SGD's effective step, with $\text{lr} = 0.00095$, and it needs 82 steps but its floor falls to 0.03. Momentum does not remove the trade-off between jitter and speed.
+Race plain SGD at 0.0095 against momentum at $\text{lr} = 0.0025$ with $\beta = 0.9$. Averaged over 20 runs with batches of eight rows, SGD reaches an excess loss of 0.5 in 77 steps and momentum in 37. Figure 1 shows one run of each. Momentum's floor is higher, about 0.13 against 0.07, because its steps are longer.
 
 ```figure
 <svg viewBox="0 0 600 350" role="img" aria-label="Excess loss against step for SGD and for momentum on mini-batches of eight rows">
@@ -133,7 +132,7 @@ Figure 1. One run of each, with the same kind of batch. Momentum reaches the tar
 
 ## Give each weight its own ruler
 
-Take a learning rate of 0.1. A bias with gradient 3 moves 0.3, which is sensible, but a weight with gradient 3000 moves 300. Lower the rate to suit the second weight and the first moves 0.0003 per step. The cure is to measure each gradient in units of its own typical size, so 3 and 3000 both read "about 1". Why not divide each gradient by its own absolute value? A weight whose gradient flips between +3 and −3 would move a full step each time, although it has no direction. A better ruler divides the *average* gradient by the *typical size* of the gradient: a steady slope gives a long step, and noise that flips sign gives a short one.
+Take a learning rate of 0.1. A bias with gradient 3 moves 0.3, which is sensible, but a weight with gradient 3000 moves 300. The cure is to measure each gradient in units of its own typical size, so 3 and 3000 both read "about 1". Why not divide each gradient by its own absolute value? A weight whose gradient flips between +3 and −3 would move a full step each time, although it has no direction. A better ruler divides the *average* gradient by the *typical size* of the gradient: a steady slope gives a long step, and noise that flips sign gives a short one.
 
 An **exponential moving average** keeps a running value and, at each step, blends in the newest number. With decay $\beta$:
 
@@ -145,7 +144,7 @@ Read it aloud: keep a fraction $\beta$ of the old average and take $1 - \beta$ o
 
 Adam keeps two of these for every weight. The first, $m$, averages the gradient $g$, so it is the typical direction, with $\beta_1 = 0.9$ and a window of 10 steps. The second, $v$, averages $g^2$ entry by entry, so $\sqrt{v}$ is the typical size, a root-mean-square. Squaring stops +3 and −3 from cancelling. It uses $\beta_2 = 0.999$, a window of 1,000 steps, because a size needs a longer memory than a direction.
 
-Both averages start at 0, and 0 is a bad guess. With a steady gradient of 3, one step gives $m = 0.3$, because the unseen numbers count as zeros. For a constant gradient $g$ the raw average is exactly $(1 - \beta_1^{\,t})\,g$. **Bias correction** divides that fraction out. Count $t$ from 1, the number of updates so far including this one:
+Both averages start at 0, and 0 is a bad guess. With a steady gradient of 3, one step gives $m = 0.3$, because the unseen numbers count as zeros. For a constant gradient $g$ the raw average is exactly $(1 - \beta_1^{\,t})\,g$. **Bias correction** divides that fraction out. Count $t$ from 1, the number of updates so far:
 
 $$
 \hat{m} = \frac{m}{1 - \beta_1^{\,t}}, \qquad \hat{v} = \frac{v}{1 - \beta_2^{\,t}}
@@ -154,7 +153,7 @@ $$
 Read it aloud: divide each average by the share of the window that has filled so far. For the gradient 3 at $t = 1$, $\hat{m} = 0.3 / 0.1 = 3$ and $\hat{v} = 0.009 / 0.001 = 9$. Later the divisor drifts toward 1 and the correction fades.
 
 > [!WARNING]
-> Start $t$ at 1, not 0. At $t = 0$ the divisor $1 - \beta_1^{\,0}$ is zero, and the first step divides by zero. Also store the raw $m$ and $v$, never the corrected copies, or the next step corrects an average that is already corrected.
+> Start $t$ at 1, not 0. At $t = 0$ the divisor $1 - \beta_1^{\,0}$ is zero, and the first step divides by zero. Store the raw $m$ and $v$, never the corrected copies.
 
 Divide the corrected direction by the corrected size. A small $\epsilon$, such as $10^{-8}$, keeps the denominator off zero for a weight whose gradient has always been zero:
 
@@ -162,7 +161,7 @@ $$
 w \leftarrow w - \text{lr}\cdot\frac{\hat{m}}{\sqrt{\hat{v}} + \epsilon}
 $$
 
-Read it aloud: the learning rate times the average direction measured in typical sizes. At $t = 1$ with $\text{lr} = 0.1$, the gradient 3 gives $\hat{m} = 3$ and $\sqrt{\hat{v}} = 3$, so the step is $0.1 \times 3/3 = 0.1$. The gradient 3000 gives $\hat{m} = 3000$ and $\sqrt{\hat{v}} = 3000$, so the step is again 0.1, where plain SGD moved 0.3 and 300. At $t = 1$ the ratio is exactly $g/|g| = \pm 1$, so Adam's first step is one full learning rate in every coordinate. Figure 2 shows the same effect in the valley, and the step in numpy is:
+Read it aloud: the learning rate times the average direction measured in typical sizes. At $t = 1$ with $\text{lr} = 0.1$, the gradient 3 gives $\hat{m} = 3$ and $\sqrt{\hat{v}} = 3$, so the step is $0.1 \times 3/3 = 0.1$. The gradient 3000 gives $\hat{m} = 3000$ and $\sqrt{\hat{v}} = 3000$, so the step is again 0.1. So Adam's first step is one full learning rate in every coordinate. Figure 2 shows the same effect in the valley, and the step in numpy is:
 
 ```python
 new_w = w - lr * m_hat / (np.sqrt(v_hat) + eps)
@@ -204,16 +203,14 @@ new_w = w - lr * m_hat / (np.sqrt(v_hat) + eps)
 Figure 2. At the point (1, 1) of the valley the gradients are 1 on the flat axis and 100 on the steep axis. SGD's first steps differ by a factor of 100, since a step is learning rate times gradient. Adam divides each average gradient by its own typical size, so both steps are the learning rate, 0.05. Bars start at 1e-3.
 ```
 
-On a valley with curvatures 1 and 10,000, settling below $10^{-4}$ takes SGD 21,837 steps, momentum 2,630, and Adam 167.
-
 > [!KEY]
 > Adam keeps an average gradient and an average squared gradient for every weight, corrects both for starting at zero, and divides one by the other. Each weight then moves about one learning rate per step, whatever its gradient size.
 
 ## Decay the weights after Adam
 
-**Weight decay** takes a small fraction of every weight away at each step. With learning rate $\eta$ and decay rate $\lambda$, $w \leftarrow w - \eta\,\lambda\,w$. With $w = 1$, $\eta = 0.1$, and $\lambda = 0.01$ the weight loses 0.001, and every weight loses the same fraction. That rule is what an L2 penalty $\tfrac{\lambda}{2}\lVert w\rVert^2$ produces in plain SGD, because the penalty's gradient is $\lambda w$. With $g = 0.5$, the penalised gradient 0.51 gives $1 - 0.051 = 0.949$, and the plain step followed by the decay gives $0.95 - 0.001 = 0.949$ too.
+**Weight decay** takes a small fraction of every weight away at each step. With learning rate $\eta$ and decay rate $\lambda$, $w \leftarrow w - \eta\,\lambda\,w$. With $w = 1$, $\eta = 0.1$, and $\lambda = 0.01$ the weight loses 0.001, and every weight loses the same fraction. That rule is what an L2 penalty $\tfrac{\lambda}{2}\lVert w\rVert^2$ produces in plain SGD, because the penalty's gradient is $\lambda w$.
 
-Adam does something to the gradient: it divides by $\sqrt{\hat{v}}$. Put the penalty into the gradient and the sum $g + \lambda w$ goes through that division. Take a quiet weight with typical gradient size 0.01 and a noisy weight with typical size 10, both equal to 1. The pull $\lambda w = 0.01$ is as big as the quiet weight's whole gradient, so Adam takes a long step, but it is a thousandth of the noisy weight's gradient, so Adam sees almost nothing. Freeze both weights at 1, feed Adam 200 noisy gradients of those sizes, and compare the next step with and without decay. Decay should shrink each weight by 0.001. With the penalty inside Adam, the quiet weight shrinks by 0.074, about 74 times too much, and the noisy weight by 0.00010, about ten times too little.
+Adam does something to the gradient: it divides by $\sqrt{\hat{v}}$. Put the penalty into the gradient and the sum $g + \lambda w$ goes through that division. Take two weights, both equal to 1: a quiet one with typical gradient size 0.01 and a noisy one with size 10. The pull $\lambda w = 0.01$ equals the quiet weight's whole gradient, so Adam takes a long step, but it is a thousandth of the noisy weight's gradient, so Adam barely sees it. Freeze both weights at 1, feed Adam 200 noisy gradients of those sizes, and compare the next step with and without decay. Decay should shrink each weight by 0.001. With the penalty inside Adam, the quiet weight shrinks by 0.074, about 74 times too much, and the noisy weight by 0.00010, about ten times too little.
 
 The fix keeps the decay out of the pipeline. Run Adam on the raw gradient, so the averages see only the loss, and then subtract the decay:
 
@@ -233,9 +230,31 @@ In the frozen test, both weights shrink by exactly 0.001 under AdamW, because th
 > [!KEY]
 > Adam divides everything in the gradient by the weight's typical gradient size, including an L2 pull. AdamW subtracts $\eta\lambda w$ after the Adam step instead, so every weight shrinks by the same fraction.
 
+## Match the rate to the batch size
+
+Go back to the row gradients 2, −1, 4, and 3. Their mean, 2, is the **signal**, the direction a full pass follows. Their spread around it is the **noise**, with variance $(0 + 9 + 4 + 1)/4 = 3.5$. An average of $b$ independent draws has $1/b$ of the variance of one draw, so a batch of two rows has variance $3.5/2 = 1.75$. (Two different rows give 1.17, smaller by $(n - b)/(n - 1)$.)
+
+A network has many weights, so add up the variance of every weight's gradient. That sum is the **trace** of the covariance matrix $\Sigma$ of the per-row gradients:
+
+$$
+\text{total noise of } g_B = \frac{\operatorname{tr}\Sigma}{b}
+$$
+
+Read it aloud: batch noise is one row's noise divided by the batch size.
+
+How large should a batch be? Large enough that the noise stops dominating the signal, so that $\operatorname{tr}\Sigma / b = |G|^2$, where $G$ is the mean gradient. Solving for $b$ gives the **simple gradient noise scale**:
+
+$$
+B_{\text{simple}} = \frac{\operatorname{tr}\Sigma}{|G|^2}
+$$
+
+For the four rows it is $3.5 / 2^2 = 0.875$. Far below it, doubling the batch nearly halves the steps you need. Far above it, extra rows buy little. McCandlish and colleagues (2018) found that this number predicts the largest useful batch. In the valley the scale is 4.2 at the start and about 9,000 at a point 0.01 from the bottom. As $|G|$ shrinks the scale climbs, so the eight-row walks in Figure 1 hover near the bottom.
+
+Now grow the batch by a factor $k$. One step on $kb$ rows replaces $k$ steps on $b$ rows. If those steps roughly agree, they add up to $k\,\eta$ times the gradient, so the big batch should use the rate $k\,\eta$. This is the **linear scaling rule** of Goyal and colleagues (2017). It holds while $kb$ stays well below $B_{\text{simple}}$, and it fails in the first steps, because the weights move fast and the small steps do not agree. Goyal and colleagues raise the rate from a small value over the first epochs, which is the warmup you build next.
+
 ## Change the rate over time
 
-At step 1, Adam has seen one batch of eight rows, yet it moves every weight by a full learning rate. Early steps should be short until the averages fill. At the end the problem flips: batch noise keeps the loss at a floor that grows with the rate, and only shorter steps settle it.
+At step 1, Adam has seen one batch yet moves every weight by a full learning rate, so early steps should be short. At the end, batch noise keeps the loss at a floor that grows with the rate, and only shorter steps settle it.
 
 So the rate should rise from near zero, hold a good value in the middle, and fall back to zero. A **learning-rate schedule** is a rule that gives the rate for each step number. Figure 3 shows the one this chapter builds.
 
@@ -311,14 +330,14 @@ Figure 3. The exact schedule from the worked example, drawn from computed values
 
 Clamp $p$ to $[0, 1]$ so that later steps stay at 0.
 
-Why cosine and not a straight line down? Cosine stays near the peak early, when a high rate pays off, falls fastest in the middle, and flattens near 0, so the last steps are tiny and the weights settle. At $p = 0.9$ cosine has fallen to 0.024 of the peak, while a line still holds 0.1. Many shapes work, and cosine has no extra setting to tune.
+Why cosine and not a straight line down? Cosine stays near the peak early, when a high rate pays off, falls fastest in the middle, and flattens near 0, so the last steps are tiny and the weights settle.
 
 > [!TIP]
 > Check four points before you trust a schedule: step 0 gives 0, the end of warmup gives the peak, the middle of the decay gives half the peak, and the last step gives 0.
 
 If `warmup >= total`, there is no decay phase, so rise through warmup and hold the peak instead of dividing by `total - warmup`.
 
-Run Adam with peak rate 0.1 on batches of eight rows from the same valley, once with a constant rate and once with 20 warmup steps and cosine decay over 400 steps. Figure 4 shows both runs. Over the last 50 steps the constant rate hovers at an excess loss of 0.147, averaged over 10 runs, and the schedule reaches 0.003, about fifty times lower. In the right panel the walk starts only 0.014 from the bottom along the steep axis, yet Adam's first step lurches by 0.1 and the loss jumps from 0.01 to 0.46. With warmup the loss stays below 0.07 for the first 10 steps.
+Run Adam with peak rate 0.1 on batches of eight rows from the same valley, once with a constant rate and once with 20 warmup steps and cosine decay over 400 steps. Figure 4 shows both. Over the last 50 steps the constant rate hovers at an excess loss of 0.147, averaged over 10 runs, and the schedule reaches 0.003, about fifty times lower. The right panel shows why warmup helps: from a start 0.014 from the bottom, the first full-size step raises the loss from 0.01 to 0.46.
 
 ```figure
 <svg viewBox="0 0 600 360" role="img" aria-label="Excess loss for Adam with a constant rate and with warmup plus cosine decay, over the whole run and over the first 40 steps">
@@ -388,16 +407,17 @@ Figure 4. Adam with peak rate 0.1 on mini-batches of eight rows from the same va
 > [!RECAP]
 > Hold these points before you write code:
 >
-> - A mini-batch gradient divides by `len(idx)`, and momentum keeps `v = beta * v + grad`, with no $(1 - \beta)$ on the gradient.
-> - `ema_update(prev, x, beta)` is `beta * prev + (1 - beta) * x`, and `bias_correct(avg, beta, t)` divides by `1 - beta**t`, with `t` counted from 1.
+> - A mini-batch gradient divides by `len(idx)`, and momentum keeps `v = beta * v + grad`.
+> - `ema_update` is `beta * prev + (1 - beta) * x`, and `bias_correct` divides by `1 - beta**t`, with `t` from 1.
+> - The noise scale is `tr(Sigma) / |G|**2`, and the batch-mean variance is `tr(Sigma) / b`.
 > - Adam's step is `lr * m_hat / (sqrt(v_hat) + eps)`, and the state holds the raw `m`, the raw `v`, and `t`. AdamW runs Adam on the raw gradient, then subtracts `lr * weight_decay * w` using the incoming `w`.
 > - The schedule is `peak * step / warmup` in warmup, then `peak * 0.5 * (1 + cos(pi * p))` with `p` clamped to `[0, 1]`.
 
 ## Build it step by step
 
-You write ten functions, in the order the checks test them:
+You write twelve functions, in the order the checks test them:
 
-1. **`batch_gradient(X, y, w, idx)`.** It takes `X` of shape `(n, d)`, `y` of shape `(n,)`, `w` of shape `(d,)`, and an integer array `idx`. It returns the `(d,)` gradient of half the mean squared miss over those rows, from `X[idx]`, `y[idx]`, and a transposed matrix product. The usual mistake is dividing by `n`.
+1. **`batch_gradient(X, y, w, idx)`.** It takes `X` `(n, d)`, `y` `(n,)`, `w` `(d,)`, and an integer array `idx`, and returns the `(d,)` gradient of half the mean squared miss over those rows, from `X[idx]`, `y[idx]`, and a transposed matrix product. The usual mistake is dividing by `n`.
 2. **`sgd_step(w, grad, state, lr)`.** It returns `(new_w, new_state)`. Subtract `lr * grad` and hand back `state` unchanged. The usual mistake is returning only `new_w`.
 3. **`momentum_step(w, grad, state, lr, beta)`.** A missing `"v"` in `state` means zeros. Set `v = beta * v + grad`, subtract `lr * v`, and return `{"v": v}`. The usual mistake is multiplying `grad` by `(1 - beta)`.
 4. **`ema_update(prev, x, beta)`** returns `beta * prev + (1 - beta) * x`. The usual mistake is swapping the two weights.
@@ -407,6 +427,8 @@ You write ten functions, in the order the checks test them:
 8. **`linear_warmup(step, warmup, peak)`.** Return `peak * step / warmup` for `step < warmup`, and `peak` otherwise, including when `warmup` is 0. Raise `ValueError` for a negative `step`. The usual mistake is dividing by a `warmup` of 0.
 9. **`cosine_decay_fraction(p)`.** Clamp `p` to `[0, 1]` and return `0.5 * (1 + np.cos(np.pi * p))`. The usual mistake is skipping the clamp, so late steps bounce back up.
 10. **`cosine_schedule(step, warmup, total, peak)`.** Use `linear_warmup` while `step < warmup`. Otherwise compute `p` and return `peak * cosine_decay_fraction(p)`. When `warmup >= total`, return `linear_warmup(step, warmup, peak)`. The usual mistake is measuring `p` from step 0 instead of from the end of warmup.
+11. **`minibatch_gradient_variance(per_example_grads, batch_size)`** takes an `(n, d)` array of per-row gradients and returns `tr(Sigma) / batch_size`, with `Sigma` divided by `n`. Raise `ValueError` below 1. The usual mistake is dividing by `n - 1`.
+12. **`gradient_noise_scale(per_example_grads)`** returns `tr(Sigma) / |G|**2`, with `G` the column mean and `Sigma` as in step 11. Return `inf` when `G` is zero. The usual mistake is dividing by `|G|` instead of `|G|**2`.
 
 ## Where this breaks
 
@@ -414,10 +436,18 @@ Each of these has a direct remedy:
 
 - Batches that are not random, such as data sorted by class, give biased gradients. Shuffle the rows each epoch.
 - A learning rate over the stability limit sends the loss to infinity. Cut it by three to ten, and lower it when you raise $\beta$.
-- Some libraries name the coupled L2 penalty `weight_decay` on a plain Adam, so read the documentation before trusting the name.
+- Some libraries call the coupled L2 penalty `weight_decay`, so read the documentation.
 
 ## The exercise
 
-You implement the ten functions above. The starter supplies `make_valley`, which builds the 200-row valley with curvatures 1 and 100, and `run_with_schedule`.
+You implement the twelve functions above. The starter supplies `make_valley`, which builds the 200-row valley with curvatures 1 and 100, and `run_with_schedule`.
 
-The checks compare your batch gradient with finite differences, then test SGD's stability limit and momentum's tenfold steady-state step. They verify the moving average, Adam's first step for gradients 3 and 3000, and that AdamW shrinks a quiet and a noisy weight equally. They check the schedule's table, race momentum against SGD, and run Adam with and without the schedule.
+The checks compare your batch gradient with finite differences, test SGD's stability limit and momentum's tenfold step, and verify the moving average and Adam's first step. They check that AdamW shrinks a quiet and a noisy weight equally, then the schedule's table, and then race momentum against SGD and Adam against its scheduled self.
+Three more checks cover the noise scale: hand-computed arrays, a measured $1/b$ fall in the variance of the batch mean, and the scale growing near the valley's bottom.
+
+## Further reading
+
+- [An Empirical Model of Large-Batch Training](https://arxiv.org/abs/1812.06162) (McCandlish, Kaplan, Amodei, and the OpenAI Dota Team, 2018) defines the gradient noise scale.
+- [Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour](https://arxiv.org/abs/1706.02677) (Goyal and colleagues, 2017) gives the linear scaling rule and warmup.
+- [CS231n Lecture 3: Regularization and Optimization](https://cs231n.stanford.edu/schedule.html) covers SGD, momentum, Adam, and learning-rate schedules.
+- The [6.S898 schedule](https://phillipi.github.io/6.s898/) lists "How to train a neural net" (12 September) and "Scaling rules for optimisation" (26 September). It does not number its lectures.

@@ -1,6 +1,6 @@
 """SGD, momentum, Adam, AdamW, and a cosine schedule.
 
-Fill in the ten functions marked `NotImplementedError`, in order. `make_valley`
+Fill in the twelve functions marked `NotImplementedError`, in order. `make_valley`
 and `run_with_schedule` are given. Every step function shares the signature
 
     new_w, new_state = step_fn(w, grad, state, **hyperparameters)
@@ -193,6 +193,42 @@ def cosine_schedule(step: int, warmup: int, total: int, peak: float) -> float:
     raise NotImplementedError("cosine_schedule")
 
 
+def minibatch_gradient_variance(per_example_grads: np.ndarray, batch_size: int) -> float:
+    """Return the total variance of a mini-batch mean gradient, `tr(Sigma) / batch_size`.
+
+    `Sigma` is the covariance matrix of the per-example gradients, taken over the
+    rows you are given (divide by `n`, not `n - 1`). The total variance is the sum
+    of the variances of the `d` coordinates, which is the trace of `Sigma`.
+
+    Args:
+        per_example_grads: One gradient per row, shape (n, d). A 1-D array of
+            length n counts as d = 1.
+        batch_size: Rows per mini-batch, drawn with replacement. Raises
+            `ValueError` when it is below 1.
+
+    Returns:
+        The trace of the covariance of the batch mean, as a float.
+    """
+    raise NotImplementedError("minibatch_gradient_variance")
+
+
+def gradient_noise_scale(per_example_grads: np.ndarray) -> float:
+    """Return the simple gradient noise scale `tr(Sigma) / |G|^2`.
+
+    `G` is the mean of the per-example gradients and `Sigma` is their covariance
+    matrix, taken over the rows you are given (divide by `n`). It is the batch size
+    at which the noise in a batch gradient equals the squared size of the signal.
+
+    Args:
+        per_example_grads: One gradient per row, shape (n, d). A 1-D array of
+            length n counts as d = 1.
+
+    Returns:
+        A float. When `G` is exactly zero, return `float("inf")`.
+    """
+    raise NotImplementedError("gradient_noise_scale")
+
+
 if __name__ == "__main__":
     import functools
 
@@ -249,3 +285,8 @@ if __name__ == "__main__":
     constant = noisy_run(adam_step, steps, lambda k: peak)
     scheduled = noisy_run(adam_step, steps, functools.partial(cosine_schedule, warmup=20, total=steps, peak=peak))
     print(f"Adam, last 50 steps: constant {constant[-50:].mean():.4f}, scheduled {scheduled[-50:].mean():.4f}")
+
+    # 5. Noise scale of the per-row gradients at the start and near the bottom.
+    for label, w in [("start", init), ("near the bottom", best + np.array([0.01, 0.001]))]:
+        per_row = X * (X @ w - y)[:, None]
+        print(f"gradient noise scale {label:>15}: {gradient_noise_scale(per_row):,.1f}")
