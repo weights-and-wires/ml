@@ -19,7 +19,7 @@ exercise: 037-from-the-engine-to-pytorch
 
 # From your engine to PyTorch
 
-You trained [a digit reader](/lessons/036p-project-read-digits) by writing every slope yourself. That project stays in numpy, because the point was to see the arithmetic. The convolution and recurrent chapters still ask you to derive a slope when the slope is the idea. Later, [the training step](/lessons/056-training-loop-and-cost) stops writing slopes and calls PyTorch.
+You trained [a digit reader](/lessons/036p-project-read-digits) by writing every slope yourself. That project stays in numpy, because the point was to see the arithmetic. The convolution and recurrent chapters still ask you to derive a slope when the slope is the idea. Later, [the training step](/lessons/057-training-loop-and-cost) stops writing slopes and calls PyTorch.
 
 PyTorch records the same tape as the tensor in [backpropagation](/lessons/029-backpropagation). It stores a value, it stores a slope, and it walks that slope back through every operation. The names differ, and a few defaults differ with them. This chapter is the map from your names to those calls, plus a training loop small enough to check by hand.
 
@@ -194,7 +194,7 @@ The eval pass also belongs inside `torch.no_grad()`. You want a number, and you 
 
 ## Write the blend with einsum
 
-[Attention as a soft lookup](/lessons/047-attention-as-soft-lookup) scores each source position with a dot product, turns the scores into weights, and blends the values. This chapter does not derive that blend again. The loop, for one query $q$, one key $k_s$, and one value row $v_s$, is:
+[Attention as a soft lookup](/lessons/048-attention-as-soft-lookup) scores each source position with a dot product, turns the scores into weights, and blends the values. This chapter does not derive that blend again. The loop, for one query $q$, one key $k_s$, and one value row $v_s$, is:
 
 $$
 z_s = q \cdot k_s, \qquad
