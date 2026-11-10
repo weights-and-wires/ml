@@ -197,3 +197,96 @@ def test_em(sub):
     eigs = np.sort(np.linalg.eigvalsh(Xc.T @ Xc / len(X)))[::-1]
     want = float(np.mean(eigs[k:]))
     almost(float(sigma2), want, tol=0.01 * want, label="sigma2 vs the mean of the dropped variances (divisor n)")
+
+
+# Factor analysis: the same model with a diagonal noise covariance psi in place of sigma2 * I.
+X2 = np.array([[2.0, 1.0], [-2.0, -1.0]])
+W2 = np.array([[1.0], [1.0]])
+PSI2 = np.array([1.0, 0.5])
+
+
+@check("fa_e_step gives Ez = (1, -1) and Ezz = 2.5 on the two-column example, and equals ppca_e_step when psi is sigma2 times ones")
+def test_fa_e_step(sub):
+    got = has(sub, "fa_e_step")
+    Ez, Ezz = got(X2, W2, PSI2)
+    shape(Ez, (2, 1), label="Ez")
+    shape(Ezz, (1, 1), label="Ezz_sum")
+    close(Ez, np.array([[1.0], [-1.0]]), atol=1e-10, label="Ez")
+    # A plausible wrong implementation leaves n * inv(M) out of Ezz_sum, which gives Ezz = 2.0 here.
+    close(Ezz, np.array([[2.5]]), atol=1e-10, label="Ezz_sum")
+    rng = np.random.default_rng(3)
+    n, d, k = 12, 5, 2
+    Xc = rng.normal(size=(n, d))
+    Xc -= Xc.mean(axis=0)
+    W = rng.normal(size=(d, k))
+    ppca = has(sub, "ppca_e_step")
+    for want, have in zip(ppca(Xc, W, 0.7), got(Xc, W, 0.7 * np.ones(d))):
+        close(have, want, atol=1e-9, label="fa_e_step with psi = 0.7 * ones against ppca_e_step")
+    psi = np.array([0.3, 1.5, 0.8, 0.2, 2.0])
+    Pi = np.diag(1.0 / psi)
+    M_inv = np.linalg.inv(np.eye(k) + W.T @ Pi @ W)
+    Ez_want = np.array([M_inv @ W.T @ Pi @ x for x in Xc])
+    Ezz_want = sum(M_inv + np.outer(z, z) for z in Ez_want)
+    Ez, Ezz = got(Xc, W, psi)
+    close(Ez, Ez_want, atol=1e-9, label="Ez against the per-point posterior mean")
+    close(Ezz, Ezz_want, atol=1e-9, label="Ezz_sum against the per-point sum")
+
+
+@check("fa_m_step gives W = (1.6, 0.8) and psi = (0.8, 0.2), and fa_loglik gives -6.37 and -5.20 and matches the direct density")
+def test_fa_m_step_and_loglik(sub):
+    m_step = has(sub, "fa_m_step")
+    loglik = has(sub, "fa_loglik")
+    W, psi = m_step(X2, np.array([[1.0], [-1.0]]), np.array([[2.5]]))
+    shape(W, (2, 1), label="W_new")
+    shape(psi, (2,), label="psi_new")
+    close(W, np.array([[1.6], [0.8]]), atol=1e-10, label="W_new")
+    # A plausible wrong implementation averages the leftover over the columns, as ppca_m_step does,
+    # and returns (0.5, 0.5) here instead of (0.8, 0.2).
+    close(np.asarray(psi), np.array([0.8, 0.2]), atol=1e-10, label="psi_new")
+    before = float(loglik(X2, W2, PSI2))
+    after = float(loglik(X2, np.array([[1.6], [0.8]]), np.array([0.8, 0.2])))
+    want_before = -(2 * np.log(2 * np.pi) + np.log(2.0) + 2.0)  # C = [[2, 1], [1, 1.5]], det 2, trace term 2
+    almost(before, want_before, tol=1e-9, label="log-likelihood before")
+    almost(after, -5.196004020631856, tol=1e-9, label="log-likelihood after")
+    rng = np.random.default_rng(4)
+    n, d, k = 9, 3, 1
+    Xc = rng.normal(size=(n, d))
+    Xc -= Xc.mean(axis=0)
+    W = rng.normal(size=(d, k))
+    psi = np.array([0.4, 1.2, 0.2])
+    C = W @ W.T + np.diag(psi)
+    Ci = np.linalg.inv(C)
+    det = np.linalg.det(C)
+    total = sum(-0.5 * (d * np.log(2 * np.pi) + np.log(det) + x @ Ci @ x) for x in Xc)
+    almost(float(loglik(Xc, W, psi)), float(total), tol=1e-8, label="fa_loglik against the direct density")
+    ppca_loglik = has(sub, "ppca_loglik")
+    almost(float(loglik(Xc, W, 0.4 * np.ones(d))), float(ppca_loglik(Xc, W, 0.4)), tol=1e-9, label="fa_loglik with psi = 0.4 * ones against ppca_loglik")
+
+
+@check("fa_em never lowers the log-likelihood over 50 rounds, recovers planted per-column noise variances, and ppca_em cannot")
+def test_fa_em(sub):
+    em = has(sub, "fa_em")
+    rng = np.random.default_rng(11)
+    n, d, k = 4000, 6, 2
+    psi_true = np.array([0.1, 0.1, 2.0, 0.1, 0.5, 0.1])
+    W_true = rng.normal(size=(d, k)) * 1.5
+    X = rng.normal(size=(n, k)) @ W_true.T + rng.normal(size=(n, d)) * np.sqrt(psi_true)
+    _, _, history = em(X, k, 50)
+    if len(history) != 50:
+        fail(f"expected a history of length 50, got {len(history)}")
+    for m in range(len(history) - 1):
+        if history[m + 1] < history[m] - 1e-6:
+            fail(f"log-likelihood fell from {history[m]:.6f} at round {m + 1} to {history[m + 1]:.6f} at round {m + 2}")
+    W, psi, _ = em(X, k, 500)
+    shape(psi, (d,), label="psi")
+    # With one pooled variance instead of a diagonal, every entry lands near the mean, about 0.5.
+    worst = float(np.max(np.abs(psi - psi_true)))
+    if worst > 0.05:
+        fail(f"psi should be within 0.05 of the planted {psi_true}, got {np.round(psi, 3)} (largest gap {worst:.3f})")
+    W_p, sigma2, _ = has(sub, "ppca_em")(X, k, 500)
+    if not (psi_true.min() + 0.3 < sigma2 < psi_true.max() - 0.3):
+        fail(f"the single sigma2 of probabilistic PCA should sit between 0.1 and 2.0, got {sigma2:.3f}")
+    Xc = X - X.mean(axis=0)
+    gain = float(has(sub, "fa_loglik")(Xc, W, psi)) - float(has(sub, "ppca_loglik")(Xc, W_p, sigma2))
+    if gain < 1000.0:
+        fail(f"factor analysis should beat probabilistic PCA by over 1000 in log-likelihood here, got a gain of {gain:.1f}")

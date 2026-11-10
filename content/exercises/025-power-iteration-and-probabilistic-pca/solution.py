@@ -6,13 +6,15 @@ quotient reads the eigenvalue, and subtracting the found part (deflation)
 exposes the next eigenvector. Probabilistic PCA then adds Gaussian fuzz to the
 sheet. Each centred point is `W z` plus fuzz of variance sigma2, where the
 hidden coordinate z is never seen, and EM alternates an E-step (guess the
-hidden coordinates) with an M-step (refit W and sigma2 from the guesses). You
-write six functions, in this order:
+hidden coordinates) with an M-step (refit W and sigma2 from the guesses).
+Factor analysis then gives each column its own noise variance, so sigma2 * I
+becomes a diagonal `psi`. You write nine functions, in this order:
 
 1. `rayleigh_quotient`, 2. `power_iteration`, 3. `deflate`,
-4. `ppca_e_step`, 5. `ppca_m_step`, 6. `ppca_loglik`.
+4. `ppca_e_step`, 5. `ppca_m_step`, 6. `ppca_loglik`,
+7. `fa_e_step`, 8. `fa_m_step`, 9. `fa_loglik`.
 
-The loop `ppca_em` that joins the last three is given.
+The loops `ppca_em` and `fa_em` that join each trio are given.
 """
 
 from __future__ import annotations
@@ -151,6 +153,68 @@ def ppca_loglik(Xc: np.ndarray, W: np.ndarray, sigma2: float) -> float:
     return float(-0.5 * n * (d * np.log(2.0 * np.pi) + logdet + trace_term))
 
 
+def fa_e_step(Xc: np.ndarray, W: np.ndarray, psi: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Guess the hidden coordinates when each column has its own noise variance.
+
+    Args:
+        Xc: Centred data, shape (n, d).
+        W: Loading matrix, shape (d, k).
+        psi: Noise variance of each column, shape (d,), all positive.
+
+    Returns:
+        A tuple `(Ez, Ezz_sum)`. With `P = W / psi[:, None]` (each row of `W`
+        divided by its noise variance) and `M = I + W.T @ P` of shape (k, k),
+        `Ez = Xc @ P @ inv(M)` has shape (n, k), and
+        `Ezz_sum = n * inv(M) + Ez.T @ Ez` has shape (k, k).
+    """
+    n, k = Xc.shape[0], W.shape[1]
+    P = W / psi[:, None]
+    M_inv = np.linalg.inv(np.eye(k) + W.T @ P)
+    Ez = Xc @ P @ M_inv
+    Ezz_sum = n * M_inv + Ez.T @ Ez
+    return Ez, Ezz_sum
+
+
+def fa_m_step(Xc: np.ndarray, Ez: np.ndarray, Ezz_sum: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Refit W and the per-column noise variances from the guesses.
+
+    Args:
+        Xc: Centred data, shape (n, d).
+        Ez: Guessed hidden coordinates, shape (n, k).
+        Ezz_sum: The summed second moments, shape (k, k).
+
+    Returns:
+        A tuple `(W_new, psi_new)`. `W_new = Xc.T @ Ez @ inv(Ezz_sum)` has
+        shape (d, k). `psi_new[j]` is
+        `(sum(Xc[:, j]**2) - W_new[j] @ (Xc.T @ Ez)[j]) / n`, which is the
+        diagonal of the leftover covariance. Clip it below at `1e-6`.
+    """
+    n = Xc.shape[0]
+    cross = Xc.T @ Ez
+    W_new = cross @ np.linalg.inv(Ezz_sum)
+    psi_new = (np.sum(Xc**2, axis=0) - np.sum(W_new * cross, axis=1)) / n
+    return W_new, np.maximum(psi_new, 1e-6)
+
+
+def fa_loglik(Xc: np.ndarray, W: np.ndarray, psi: np.ndarray) -> float:
+    """Log-likelihood of centred data under factor analysis.
+
+    Args:
+        Xc: Centred data, shape (n, d).
+        W: Loading matrix, shape (d, k).
+        psi: Noise variance of each column, shape (d,).
+
+    Returns:
+        The same formula as `ppca_loglik`, with `C = W @ W.T + np.diag(psi)`.
+    """
+    n, d = Xc.shape
+    C = W @ W.T + np.diag(psi)
+    S = (Xc.T @ Xc) / n
+    _, logdet = np.linalg.slogdet(C)
+    trace_term = np.trace(np.linalg.solve(C, S))
+    return float(-0.5 * n * (d * np.log(2.0 * np.pi) + logdet + trace_term))
+
+
 # Given: this loop calls your three functions. Read it once they work.
 def ppca_em(X: np.ndarray, k: int, iters: int) -> tuple[np.ndarray, float, list[float]]:
     """Fit probabilistic PCA by EM.
@@ -174,6 +238,31 @@ def ppca_em(X: np.ndarray, k: int, iters: int) -> tuple[np.ndarray, float, list[
         W, sigma2 = ppca_m_step(Xc, Ez, Ezz_sum)
         history.append(float(ppca_loglik(Xc, W, sigma2)))
     return W, sigma2, history
+
+
+# Given: the same loop with a diagonal noise covariance. Read it once the three work.
+def fa_em(X: np.ndarray, k: int, iters: int) -> tuple[np.ndarray, np.ndarray, list[float]]:
+    """Fit factor analysis by EM.
+
+    Args:
+        X: Data matrix, shape (n, d).
+        k: Hidden dimension.
+        iters: Number of EM rounds.
+
+    Returns:
+        A tuple `(W, psi, history)`: the loading matrix (d, k), the per-column
+        noise variances (d,), and the log-likelihood after each round.
+    """
+    Xc, _ = center(X)
+    d = Xc.shape[1]
+    W = np.random.default_rng(0).normal(scale=0.1, size=(d, k))
+    psi = np.ones(d)
+    history = []
+    for _ in range(iters):
+        Ez, Ezz_sum = fa_e_step(Xc, W, psi)
+        W, psi = fa_m_step(Xc, Ez, Ezz_sum)
+        history.append(float(fa_loglik(Xc, W, psi)))
+    return W, psi, history
 
 
 if __name__ == "__main__":
