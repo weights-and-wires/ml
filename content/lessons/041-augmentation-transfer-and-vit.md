@@ -144,7 +144,7 @@ Freezing is bookkeeping in the update step: a frozen parameter keeps its value, 
 > [!KEY]
 > A frozen extractor turns "train a network" into "fit a small linear model on fixed features". Fine-tuning then lets the features adjust, at a small learning rate, after the head has stopped being random.
 
-[Fine-tuning and LoRA](/lessons/060-fine-tuning-and-lora) takes the same idea to language models.
+[Fine-tuning and LoRA](/lessons/061-fine-tuning-and-lora) takes the same idea to language models.
 
 ## Make a layer cheaper without making it weaker
 
@@ -197,7 +197,7 @@ The separable layer is not the same function as a full layer in general. It equa
 
 ## Cut the image into tiles
 
-Convolution slides a small filter over the image. A **vision transformer** (ViT) takes a different route: it cuts the image into non-overlapping square tiles called **patches**, flattens each tile into a vector, and treats the vectors as a sequence of tokens, like words in a sentence. A transformer then reads the sequence the way it reads text, using [attention](/lessons/047-attention-as-soft-lookup) and the [transformer block](/lessons/053-the-transformer-block).
+Convolution slides a small filter over the image. A **vision transformer** (ViT) takes a different route: it cuts the image into non-overlapping square tiles called **patches**, flattens each tile into a vector, and treats the vectors as a sequence of tokens, like words in a sentence. A transformer then reads the sequence the way it reads text, using [attention](/lessons/048-attention-as-soft-lookup) and the [transformer block](/lessons/054-the-transformer-block).
 
 The cutting step is `patchify`. For an image of shape `(C, H, W)` and patch side $p$, it returns one row per patch, in reading order: left to right, then top to bottom. Each row holds the $C p^2$ numbers of one patch. Figure 3 shows it on a 6 by 6 image with $p = 2$, where the pixel numbers 0 to 35 make the order visible.
 
@@ -333,7 +333,7 @@ The `kernel.reshape(D, -1)` flattens each filter in $(C, p, p)$ order, so `patch
 > [!WARNING]
 > Check `patchify` on an image with at least two channels. A one-channel test passes both orders, and the bug shows up only when the embedding disagrees with the strided convolution.
 
-The model also adds a position embedding, so it knows which tile is where ([position encodings](/lessons/052-position-encodings)), and a learned class token that collects the answer.
+The model also adds a position embedding, so it knows which tile is where ([position encodings](/lessons/053-position-encodings)), and a learned class token that collects the answer.
 
 > [!KEY]
 > Patch embedding is a convolution with filter size equal to stride, so a vision transformer begins with one convolutional layer and then replaces the rest of the sliding with attention between tiles.
