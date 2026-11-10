@@ -8,11 +8,11 @@ lists every direction in order of spread, and the covariance table has the
 same directions. Keeping the top k directions rebuilds each row as the mean
 plus a mix of k directions. The total squared error of that rebuild is the sum
 of the squared singular values you dropped, and no other k directions do
-better. You write nine functions, in this order:
+better. You write ten functions, in this order:
 
 1. `center`, 2. `variance_along`, 3. `shadow_split`, 4. `pca_svd`,
 5. `covariance_eigh`, 6. `explained_variance_ratio`, 7. `reconstruct`,
-8. `reconstruction_error`, 9. `standardise`.
+8. `reconstruction_error`, 9. `standardise`, 10. `whiten`.
 
 `sweep_directions` is already written, because it only calls `variance_along`.
 """
@@ -189,6 +189,39 @@ def standardise(X: np.ndarray) -> np.ndarray:
     return Xc / std
 
 
+def whiten(X: np.ndarray, eps: float = 1e-5, method: str = "pca") -> tuple[np.ndarray, np.ndarray]:
+    """Rotate and rescale X so its covariance is the identity.
+
+    Centre X, take the eigenvalues `lam` and eigenvectors `U` of its sample
+    covariance (divide by `n - 1`), and build a whitening matrix `W` with
+    `scale = 1 / sqrt(lam + eps)`:
+
+    - `"pca"`: `W = diag(scale) @ U.T`.
+    - `"zca"`: `W = U @ diag(scale) @ U.T`.
+
+    Args:
+        X: Data matrix, shape (n, d).
+        eps: Added to every eigenvalue before the square root, so a direction
+            with almost no variance is not blown up.
+        method: `"pca"` or `"zca"`. Any other value raises `ValueError`.
+
+    Returns:
+        A tuple `(Z, W)`. `Z` is the centred data times `W.T`, shape (n, d).
+        `W` is the whitening matrix, shape (d, d).
+    """
+    if method not in ("pca", "zca"):
+        raise ValueError(f"method must be 'pca' or 'zca', got {method!r}")
+    Xc, _ = center(X)
+    d = X.shape[1]
+    lam, U = covariance_eigh(X, d)
+    scale = 1.0 / np.sqrt(np.maximum(lam, 0.0) + eps)
+    W = scale[:, None] * U.T
+    if method == "zca":
+        W = U @ W
+    return Xc @ W.T, W
+
+
+
 if __name__ == "__main__":
     X = np.array([[2.0, 0.0], [0.0, 2.0], [4.0, 4.0]])
     Xc, mean = center(X)
@@ -233,3 +266,9 @@ if __name__ == "__main__":
     grams = np.array([[2.0, 0.0], [0.0, 200.0], [4.0, 400.0]])
     print("first direction, raw:", pca_svd(grams, 1)[0][:, 0])
     print("first direction, standardised:", pca_svd(standardise(grams), 1)[0][:, 0])
+
+    Z, W = whiten(X, eps=0.0, method="pca")
+    print("PCA-whitened points:\n", np.round(Z, 2))
+    Z, W = whiten(X, eps=0.0, method="zca")
+    print("ZCA matrix:\n", np.round(W, 3))
+    print("ZCA-whitened points:\n", np.round(Z, 2))
