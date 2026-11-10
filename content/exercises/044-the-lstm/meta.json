@@ -1,0 +1,17 @@
+{
+  "id": "044-the-lstm",
+  "title": "Measure a belt's gradient, then build a gate and one LSTM step",
+  "brief": "Compute the gradient left after many steps for a plain net and for a belt, build the running product of forget gates, write the gate that decides how much to let through, and write the full forward step of an LSTM cell.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "gradient_after_steps needs the powers factor**1, factor**2, up to factor**steps. np.arange(1, steps + 1) gives the exponents, and factor ** exponents gives all the powers at once.",
+    "forget_gate_gradient_product is a cumulative product along the time axis: np.cumprod(forget_gates, axis=0). It keeps every row, where np.prod keeps only the last.",
+    "A gate is sigmoid(x @ W + h @ U + b). Use the provided _sigmoid, and do not transpose W: it is already shaped (d_x, d_h).",
+    "carry_cell repeats c = f * c + i * g, `steps` times, with the same f, i, and g every time. A for loop is the clearest way to write it.",
+    "In lstm_cell_forward, f, i, and o are gates, and the candidate g is np.tanh(x @ Wg + h @ Ug + bg). Then c_new = f * c + i * g and h_new = o * np.tanh(c_new). Save tanh(c_new) in the cache, because the backward pass reuses it."
+  ]
+}
