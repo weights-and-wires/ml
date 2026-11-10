@@ -303,7 +303,7 @@ Dao, Fu, Ermon, Rudra, and Ré, in [FlashAttention](https://arxiv.org/abs/2205.1
 
 ## Where this breaks
 
-The quadratic table is the main limit. At tens of thousands of tokens it dominates both time and memory. **Tiled attention** computes the table one block at a time with a running softmax, so the full $T \times T$ table is never stored, and recomputes blocks in the backward pass. That brings memory down, but the flop count stays quadratic. Separately, a single layer reads each token's neighbours once. A chain of lookups, where the answer to one is the question for the next, needs stacked layers.
+The quadratic table is the main limit. At tens of thousands of tokens it dominates both time and memory. **Tiled attention** ([the next chapter](/lessons/049-online-softmax-and-tiled-attention)) computes the table one block at a time with a running softmax, so the full $T \times T$ table is never stored, and recomputes blocks in the backward pass. That brings memory down, but the flop count stays quadratic. Separately, a single layer reads each token's neighbours once. A chain of lookups, where the answer to one is the question for the next, needs stacked layers.
 
 ## The exercise
 
