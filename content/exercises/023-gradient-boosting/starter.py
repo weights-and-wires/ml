@@ -3,11 +3,13 @@
 Start from a model that predicts 0 everywhere. Each round, fit a stump to what
 the current model still gets wrong, and add a fraction of it. What is wrong is
 the negative gradient of the loss with respect to the predictions. You write
-three functions, in this order:
+five functions, in this order:
 
 1. `squared_error_neg_grad`: the negative gradient of 0.5 * (y - F) ** 2.
 2. `absolute_error_neg_grad`: the negative gradient of |y - F|.
 3. `gradient_boost`: the loop that adds one stump per round.
+4. `newton_leaf_value`: the Newton leaf, minus the total slope over the total bend plus lam.
+5. `split_gain`: the regularised gain of sending some rows left and the rest right.
 
 `_fit_stump` and `_predict_stump` are already written.
 """
@@ -130,6 +132,55 @@ def gradient_boost(
     raise NotImplementedError("gradient_boost")
 
 
+def newton_leaf_value(g: np.ndarray, h: np.ndarray, lam: float) -> float:
+    """Return the Newton leaf value for one group of rows.
+
+    `g` is the slope of the loss in the prediction, shape (n,), and it points
+    uphill. For squared error that slope is `F - y`, not the residual.
+    `h` is the bend, the second derivative, shape (n,). `lam` is the penalty
+    on a large leaf, and it belongs in the denominator.
+
+    The value is `-sum(g) / (sum(h) + lam)`.
+
+    Args:
+        g: Slopes, shape (n,).
+        h: Bends, shape (n,).
+        lam: Penalty on the leaf value. Use 0 for an unpenalised leaf.
+
+    Returns:
+        One float, the number added to every prediction in the leaf.
+    """
+    raise NotImplementedError("newton_leaf_value")
+
+
+def split_gain(
+    g: np.ndarray,
+    h: np.ndarray,
+    left: np.ndarray,
+    lam: float,
+    gamma: float,
+) -> float:
+    """Return the regularised gain of a split.
+
+    `left` is a boolean mask of shape (n,): True sends the row left, False
+    sends it right. Sum the slopes `g` and the bends `h` on each side. A
+    group's score is the square of its total slope, divided by its total bend
+    plus `lam`. The gain is half of (left score + right score - parent score),
+    then minus `gamma`.
+
+    Args:
+        g: Slopes, shape (n,). Same convention as `newton_leaf_value`.
+        h: Bends, shape (n,).
+        left: Boolean mask, shape (n,).
+        lam: Penalty in every denominator.
+        gamma: Cost subtracted once for the extra leaf.
+
+    Returns:
+        One float. A positive gain is a split worth making.
+    """
+    raise NotImplementedError("split_gain")
+
+
 if __name__ == "__main__":
     X = np.array([[1.0], [2.0], [3.0], [4.0]])
     y = np.array([1.0, 3.0, 8.0, 10.0])
@@ -137,6 +188,14 @@ if __name__ == "__main__":
     for m, step in enumerate(history, start=1):
         loss = 0.5 * np.mean((y - step["prediction"]) ** 2)
         print(f"round {m}: target {step['target']}, F {step['prediction']}, loss {loss:.4f}")
+
+    # Slopes of the squared loss at F = 0 are -y. Bends are 1.
+    g = -y
+    h = np.ones_like(y)
+    left = np.array([True, True, False, False])
+    print("left Newton leaf, lam 0:", newton_leaf_value(g[left], h[left], 0.0))
+    print("left Newton leaf, lam 1:", newton_leaf_value(g[left], h[left], 1.0))
+    print("split gain, lam 0, gamma 0:", split_gain(g, h, left, 0.0, 0.0))
 
     rng = np.random.default_rng(0)
     X = rng.uniform(0, 1, size=(200, 1))

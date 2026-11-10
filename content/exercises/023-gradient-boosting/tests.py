@@ -146,3 +146,79 @@ def test_hook(sub):
     after = float(np.mean(np.abs(y - F)))
     if after > 0.8 * before:
         fail(f"40 rounds of absolute-error boosting should cut the mean |y - F| from {before:.4f} well below, got {after:.4f}")
+
+
+def _mean_log_loss(y, F):
+    """Mean of log(1 + exp(F)) - y F, for labels y in {0, 1}."""
+    return float(np.mean(np.log1p(np.exp(F)) - y * F))
+
+
+# Dropping lam from the denominator still matches the squared-loss leaf at
+# lam = 0, and it returns 2 instead of 4/3 on the left leaf when lam is 1.
+@check("newton_leaf_value matches the gradient step on squared loss, and lambda stays in the denominator")
+def test_newton_leaf_squared(sub):
+    leaf = has(sub, "newton_leaf_value")
+    g = -Y_HAND  # slope of 0.5 * (y - F) ** 2 at F = 0
+    h = np.ones(4)
+    left = np.array([True, True, False, False])
+    got0 = leaf(g[left], h[left], 0.0)
+    almost(got0, 2.0, tol=1e-12, label="left Newton leaf at lam=0")
+    almost(
+        got0,
+        float((-g[left]).mean()),
+        tol=1e-12,
+        label="at lam=0 the Newton leaf equals the mean of the downhill steps",
+    )
+    almost(leaf(g[left], h[left], 1.0), 4.0 / 3.0, tol=1e-12, label="left Newton leaf at lam=1")
+    almost(leaf(g, h, 0.0), 5.5, tol=1e-12, label="one leaf over all four rows at lam=0")
+
+    rng = np.random.default_rng(3)
+    g = rng.normal(size=7)
+    h = np.ones(7)
+    almost(
+        leaf(g, h, 0.0),
+        float(-g.mean()),
+        tol=1e-12,
+        label="squared loss, lam=0, Newton step equals the gradient step",
+    )
+    want = float(-g.sum() / (h.sum() + 0.8))
+    almost(leaf(g, h, 0.8), want, tol=1e-12, label="squared loss, lam=0.8")
+
+
+# Using the gradient step -mean(g) as the Newton leaf leaves the two losses
+# equal on this logistic example, so the comparison fails. Forgetting the 1/2
+# in split_gain returns 49 instead of 24.5.
+@check("one Newton step on logistic loss lowers the loss more than a gradient step, and split_gain uses the regularised formula")
+def test_logistic_newton_and_gain(sub):
+    leaf = has(sub, "newton_leaf_value")
+    gain = has(sub, "split_gain")
+    y = np.array([1.0, 1.0, 0.0])
+    F = np.zeros(3)
+    p = 1.0 / (1.0 + np.exp(-F))
+    g = p - y
+    h = p * (1.0 - p)
+    w_newton = float(leaf(g, h, 0.0))
+    w_grad = float(-g.mean())
+    almost(w_newton, 2.0 / 3.0, tol=1e-12, label="Newton leaf on labels [1, 1, 0] at F = 0")
+    loss_start = _mean_log_loss(y, F)
+    loss_grad = _mean_log_loss(y, F + w_grad)
+    loss_newton = _mean_log_loss(y, F + w_newton)
+    if not (loss_newton < loss_grad < loss_start):
+        fail(
+            f"expected Newton loss < gradient loss < start loss; "
+            f"got Newton loss {loss_newton:.6f} from leaf {w_newton:.6f}, "
+            f"gradient loss {loss_grad:.6f} from leaf {w_grad:.6f}, "
+            f"start loss {loss_start:.6f}"
+        )
+
+    g4 = np.array([-1.0, -3.0, -8.0, -10.0])
+    h4 = np.ones(4)
+    left = np.array([True, True, False, False])
+    almost(gain(g4, h4, left, 0.0, 0.0), 24.5, tol=1e-12, label="gain at lam=0, gamma=0")
+    almost(gain(g4, h4, left, 1.0, 0.0), 124.0 / 15.0, tol=1e-9, label="gain at lam=1, gamma=0")
+    almost(
+        gain(g4, h4, left, 1.0, 0.1),
+        124.0 / 15.0 - 0.1,
+        tol=1e-9,
+        label="gain at lam=1, gamma=0.1",
+    )

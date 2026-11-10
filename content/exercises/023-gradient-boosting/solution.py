@@ -80,6 +80,28 @@ def gradient_boost(
     return F, history
 
 
+def newton_leaf_value(g: np.ndarray, h: np.ndarray, lam: float) -> float:
+    return float(-np.sum(g) / (np.sum(h) + lam))
+
+
+def split_gain(
+    g: np.ndarray,
+    h: np.ndarray,
+    left: np.ndarray,
+    lam: float,
+    gamma: float,
+) -> float:
+    g = np.asarray(g, dtype=float)
+    h = np.asarray(h, dtype=float)
+    left = np.asarray(left, dtype=bool)
+
+    def score(mask: np.ndarray) -> float:
+        return float(np.sum(g[mask]) ** 2 / (np.sum(h[mask]) + lam))
+
+    parent = float(np.sum(g) ** 2 / (np.sum(h) + lam))
+    return 0.5 * (score(left) + score(~left) - parent) - float(gamma)
+
+
 if __name__ == "__main__":
     X = np.array([[1.0], [2.0], [3.0], [4.0]])
     y = np.array([1.0, 3.0, 8.0, 10.0])
@@ -87,6 +109,13 @@ if __name__ == "__main__":
     for m, step in enumerate(history, start=1):
         loss = 0.5 * np.mean((y - step["prediction"]) ** 2)
         print(f"round {m}: target {step['target']}, F {step['prediction']}, loss {loss:.4f}")
+
+    g = -y
+    h = np.ones_like(y)
+    left = np.array([True, True, False, False])
+    print("left Newton leaf, lam 0:", newton_leaf_value(g[left], h[left], 0.0))
+    print("left Newton leaf, lam 1:", newton_leaf_value(g[left], h[left], 1.0))
+    print("split gain, lam 0, gamma 0:", split_gain(g, h, left, 0.0, 0.0))
 
     rng = np.random.default_rng(0)
     X = rng.uniform(0, 1, size=(200, 1))
