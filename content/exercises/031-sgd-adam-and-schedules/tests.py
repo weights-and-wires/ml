@@ -284,3 +284,63 @@ def test_schedule_settles(sub):
         tails[name] = float(np.mean(values))
     if not tails["scheduled"] < tails["constant"] / 5:
         fail(f"expected the scheduled run to end at least 5 times lower, got {tails}")
+
+
+@check("gradient_noise_scale matches hand values, ignores the gradient's units, and is infinite at zero signal")
+def test_noise_scale_hand_values(sub):
+    gradient_noise_scale = has(sub, "gradient_noise_scale")
+    # One weight, gradients 2, -1, 4, 3: G = 2, tr(Sigma) = 14 / 4 = 3.5, so 3.5 / 2**2 = 0.875.
+    one = np.array([2.0, -1.0, 4.0, 3.0])
+    almost(gradient_noise_scale(one), 0.875, 1e-9, label="noise scale of gradients 2, -1, 4, 3")
+    # Two weights: G = (2, 2), Sigma = diag(0.5, 2), so 2.5 / 8 = 0.3125.
+    two = np.array([[1.0, 2.0], [3.0, 0.0], [2.0, 4.0], [2.0, 2.0]])
+    almost(gradient_noise_scale(two), 0.3125, 1e-9, label="noise scale of the four two-weight gradients")
+    # Wrong implementation caught here: dividing by |G| instead of |G|^2 gives 3.5 / 2 = 1.75 for the
+    # first array and 2.5 / sqrt(8) = 0.884 for the second. Taking the trace of the covariance of the
+    # batch mean (tr(Sigma) / n) gives 0.0781 for the second.
+    almost(gradient_noise_scale(5.0 * two), 0.3125, 1e-9, label="noise scale after multiplying every gradient by 5")
+    got = gradient_noise_scale(np.array([[1.0, -1.0], [-1.0, 1.0]]))
+    if got != float("inf"):
+        fail(f"expected inf when the mean gradient is zero, got {got}")
+
+
+@check("The variance of a mini-batch mean, measured over 4000 draws, falls as 1 / B and equals tr(Sigma) / B")
+def test_minibatch_variance_measured(sub):
+    minibatch_gradient_variance = has(sub, "minibatch_gradient_variance")
+    rng = np.random.default_rng(0)
+    g = rng.normal(size=(500, 3)) * np.array([1.0, 2.0, 3.0]) + 0.5
+    almost(minibatch_gradient_variance(np.array([2.0, -1.0, 4.0, 3.0]), 2), 1.75, 1e-9, label="tr(Sigma) / 2 for gradients 2, -1, 4, 3")
+    draw = np.random.default_rng(1)
+    measured = {}
+    for b in (1, 4, 16, 64):
+        means = np.array([g[draw.integers(0, 500, b)].mean(axis=0) for _ in range(4000)])
+        measured[b] = float(means.var(axis=0).sum())
+        want = measured[b]
+        got = minibatch_gradient_variance(g, b)
+        if not abs(got - want) < 0.1 * want:
+            fail(f"batch size {b}: measured variance of the mean {want:.4f}, but minibatch_gradient_variance returned {got:.4f}")
+    ratio = measured[1] / measured[16]
+    if not 12.0 < ratio < 20.0:
+        fail(f"expected the measured variance to fall 16-fold from B = 1 to B = 16, got a ratio of {ratio:.2f}")
+    try:
+        minibatch_gradient_variance(g, 0)
+    except ValueError:
+        return
+    fail("expected ValueError for batch_size 0")
+
+
+@check("On the valley's per-row gradients, the noise scale is a few units at the start and over 50 times larger near the bottom")
+def test_noise_scale_valley(sub):
+    gradient_noise_scale = has(sub, "gradient_noise_scale")
+    X, y = valley()
+    best = np.linalg.solve(X.T @ X, X.T @ y)
+
+    def scale_at(w):
+        return gradient_noise_scale(X * (X @ w - y)[:, None])
+
+    start = scale_at(np.array([-1.0, 0.3]))
+    near = scale_at(best + np.array([0.01, 0.001]))
+    if not 2.0 < start < 8.0:
+        fail(f"expected a noise scale between 2 and 8 at the start, got {start:.3f}")
+    if not near > 50.0 * start:
+        fail(f"expected the noise scale near the bottom to exceed 50 times {start:.3f}, got {near:.1f}")
