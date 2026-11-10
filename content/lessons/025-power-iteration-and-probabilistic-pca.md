@@ -2,8 +2,8 @@
 title: "Power iteration and probabilistic PCA"
 slug: 025-power-iteration-and-probabilistic-pca
 part: "Part 3 — Trees, ensembles, and unsupervised learning"
-summary: Find the top eigenvector from repeated products alone, then add Gaussian fuzz to PCA and fit it by guess-and-refit EM.
-minutes: 75
+summary: Find the top eigenvector from products alone, fit PCA with Gaussian fuzz by EM, then give each column its own fuzz (factor analysis).
+minutes: 80
 gpu: false
 objectives:
   - Explain why repeated multiplication turns a vector toward the eigenvector with the largest eigenvalue, and read the eigenvalue from the Rayleigh quotient.
@@ -11,6 +11,7 @@ objectives:
   - Describe probabilistic PCA as a hidden coordinate pushed through a matrix W, plus Gaussian fuzz.
   - Run one E-step and one M-step by hand on a two-point example, and compute the log-likelihood with a log-determinant and a solve.
   - Explain why the fitted W is known only up to a rotation, and compare the fitted plane with the PCA plane.
+  - Describe factor analysis as probabilistic PCA with a separate noise variance per column, and fit it with the same E-step and M-step.
 prereqs:
   - 024-principal-components
 exercise: 025-power-iteration-and-probabilistic-pca
@@ -18,11 +19,11 @@ exercise: 025-power-iteration-and-probabilistic-pca
 
 # Power iteration and probabilistic PCA
 
-Suppose your table has 50,000 columns. Its covariance table has $50{,}000^2 = 2.5$ billion entries, which is 20 GB in double precision, and a full eigendecomposition takes about $50{,}000^3 \approx 10^{14}$ steps. You cannot afford either, but you still want the top direction. Multiplying the covariance table by one vector is cheap, because $X_c^{\top}(X_c v)$ never builds the table at all. So can the top direction come from nothing but such products?
+Suppose your table has 50,000 columns. Its covariance table has $50{,}000^2 = 2.5$ billion entries, and a full eigendecomposition takes about $50{,}000^3 \approx 10^{14}$ steps. You cannot afford either, but you still want the top direction. Multiplying the covariance table by one vector is cheap, because $X_c^{\top}(X_c v)$ never builds the table at all. So can the top direction come from nothing but such products?
 
 It can. Multiply a vector by the matrix, then multiply the result by it again, and the vector turns toward the top eigenvector by itself. The first half of this chapter shows why, how fast, and what can go wrong.
 
-The second half asks a different question about the same sheet. PCA draws a perfectly flat sheet through the data, but real data never lies exactly on it: dust grains on a flour pancake each wobble a little off it. If the sheet is the whole truth, any real table has probability zero. You put the wobble into the model, which gives every table a likelihood, and then you fit it with a loop that guesses the hidden positions on the sheet and refits from the guesses.
+The second half asks a different question about the same sheet. Real data never lies exactly on the flat sheet that PCA draws: dust grains on a flour pancake each wobble a little off it. You put the wobble into the model, which gives every table a likelihood, and then fit it with a loop that guesses the hidden positions on the sheet and refits from the guesses.
 
 ## What you already know
 
@@ -34,8 +35,6 @@ The second half asks a different question about the same sheet. PCA draws a perf
 ## Stretch, and the vector turns
 
 Take the matrix $A$ with rows $(2, 0)$ and $(0, 1)$. Its eigenvectors are the two axes, with eigenvalues 2 and 1. It stretches the x direction twice as much as the y direction. Start from $v = (1, 1)/\sqrt{2} = (0.71, 0.71)$ and multiply: $Av = (1.41, 0.71)$. The x part doubled and the y part stayed, so the vector leans toward the x axis. Multiply again and it leans further, as Figure 1 shows.
-
-Why not sweep an angle, as in [principal components](/lessons/024-principal-components)? In 50,000 dimensions the sweep is hopeless. Why not call an eigen-solver? That is the $10^{14}$ steps above. Repeated multiplication costs one product per step.
 
 ```figure
 <svg viewBox="0 0 600 310" role="img" aria-label="The vector (0.71, 0.71) swinging toward the x axis in three steps, each step closing about half of the remaining gap">
@@ -69,7 +68,7 @@ $$
 
 Read it aloud as "each part of the mix has been stretched by its eigenvalue, once for every step". On the example the start has equal parts, so after $t$ steps the parts are in the ratio $2^t : 1$, which is $1:1$, $2:1$, $4:1$, $16:1$, and $256:1$ at $t = 0, 1, 2, 4, 8$. The share of the second part falls by a factor $\lambda_2 / \lambda_1 = 1/2$ each step.
 
-Two conditions are hiding in that argument. If $c_1 = 0$, the top part is missing and no amount of stretching creates it. And the part with the largest $|\lambda|$ wins, so a big negative eigenvalue would beat a smaller positive one. A covariance table has no negative eigenvalues, so the second condition is harmless there.
+Two conditions are hiding in that argument. If $c_1 = 0$, the top part is missing and no amount of stretching creates it. And the part with the largest $|\lambda|$ wins, so a big negative eigenvalue would beat a smaller positive one.
 
 ## Rescale, and read off the eigenvalue
 
@@ -204,8 +203,6 @@ $$
 
 Read it aloud as "the spread of the sheet, plus the same fuzz in every direction". The first term comes from $z$ having variance 1, so $Wz$ has covariance $WW^{\top}$. The second is the fuzz, which adds its own variance independently. The best fit is known in closed form: the columns of $W$ span the top $k$ PCA directions, and $\sigma^2$ is the average of the variances you dropped, computed with divisor $n$. $W$ itself is not unique, because a rotation $R$ of the hidden coordinates gives $(WR)(WR)^{\top} = WW^{\top}$ and the same model. So you compare the plane that $W$ spans with the PCA plane, not $W$ with the components.
 
-If the closed form exists, why fit it by a loop? Because the loop is the standard way to fit models with hidden quantities, and this is the smallest place to see it.
-
 ## Guess, then refit
 
 Fitting has a chicken-and-egg problem. If you knew each point's hidden $z$, fitting $W$ would be an ordinary regression of $x$ on $z$, and $\sigma^2$ would be the average squared leftover. If you knew $W$ and $\sigma^2$, you could guess each $z$. You know neither.
@@ -259,7 +256,7 @@ $$
 \ell = -\frac{n}{2}\Big( d \log(2\pi) + \log\det C + \operatorname{tr}(C^{-1} S) \Big) .
 $$
 
-Read it aloud. $d\log(2\pi)$ is a constant. The **determinant** $\det C$ measures how much volume $C$ spreads over, so $\log \det C$ grows when the model is wide, and the trace term grows when the data sit where $C$ says they should not. A good model is wide enough to cover the data and no wider. In numpy, `np.linalg.slogdet` returns the log of the determinant without overflow, and `np.linalg.solve(C, S)` gives $C^{-1}S$ without forming the inverse.
+Read it aloud. $d\log(2\pi)$ is a constant. The **determinant** $\det C$ measures how much volume $C$ spreads over, so $\log \det C$ grows when the model is wide, and the trace term grows when the data sit where $C$ says they should not. In numpy, `np.linalg.slogdet` returns the log of the determinant without overflow, and `np.linalg.solve(C, S)` gives $C^{-1}S$ without forming the inverse.
 
 On the two-point table before the round, $C = \operatorname{diag}(2, 1)$, so $\log\det C = 0.693$, the trace term is $4/2 = 2$, and $d\log 2\pi = 3.676$. They sum to 6.369, and since $n/2 = 1$, $\ell = -6.37$. After the round, $C = \operatorname{diag}(22/9,\ 2/3)$ with $\det C = 44/27$, so $\log\det C = 0.488$ and the trace term is $18/11 = 1.636$. They sum with 3.676 to 5.800, and $\ell = -5.80$. The likelihood rose.
 
@@ -310,27 +307,52 @@ On the six-dimensional data from [principal components](/lessons/024-principal-c
 Figure 4. EM on the six-dimensional data from the principal components chapter. The fitted plane lands on the PCA plane within five rounds (the flat bottom is rounding error), and σ² settles on the average of the dropped variances almost at once. The log-likelihood climbs steeply, then creeps up for a few hundred rounds while the columns of W grow to their final lengths (too small a change to see at this scale), and it never falls.
 ```
 
-There are three ways to find the same plane:
+## Let each column keep its own noise
 
-| Route | What it gives | When it earns its place |
-|---|---|---|
-| SVD | Every direction at once, exactly | The default, when the table fits in memory |
-| Power iteration | One direction per run, from products only | Huge or sparse tables |
-| EM for probabilistic PCA | The plane, the fuzz level $\sigma^2$, and a likelihood | When you want a model, not only a plane |
+Probabilistic PCA gives every column the same fuzz. Suppose one column is a noisy price and another is a width read with calipers. A single $\sigma^2$ must split the difference, so it is too small for the price and too large for the width. **Factor analysis** keeps the model $x = Wz + \text{fuzz}$ and gives column $j$ its own variance $\psi_j$. The fuzz covariance $\sigma^2 I$ becomes the diagonal matrix $\Psi = \operatorname{diag}(\psi_1, \dots, \psi_d)$, so $C = WW^{\top} + \Psi$.
+
+The loop stays the same. Divide each row of $W$ by its own variance, $P = \Psi^{-1}W$, and let $M = I + W^{\top}P$:
+
+$$
+E_z = X_c P M^{-1}, \qquad E_{zz} = n\,M^{-1} + E_z^{\top} E_z .
+$$
+
+The M-step finds $W_{\text{new}} = X_c^{\top} E_z E_{zz}^{-1}$ as before, and then sets
+
+$$
+\psi_j = \frac{1}{n}\Big( \sum_i x_{ij}^2 - W_{\text{new}}[j]\cdot (X_c^{\top} E_z)[j] \Big) .
+$$
+
+It is the diagonal of the leftover covariance, because the model says the fuzz is independent between columns, so the off-diagonal entries are dropped. The $n M^{-1}$ term plays the role of $n\sigma^2 M^{-1}$ in the E-step, and with $\Psi = \sigma^2 I$ the two E-steps agree. Unlike probabilistic PCA, there is no closed form, and the fitted plane is no longer the PCA plane, because PCA reads a noisy column as signal.
+
+Take rows $(2, 1)$ and $(-2, -1)$, $W = (1, 1)^{\top}$, and $\psi = (1, 0.5)$. Then $M = 1 + 1/1 + 1/0.5 = 4$. The first point gives $E_z = (2/1 + 1/0.5)/4 = 1$, so $E_z = (1, -1)$ and $E_{zz} = 2/4 + 2 = 2.5$. Next, $W_{\text{new}} = (4, 2)/2.5 = (1.6, 0.8)$. Column 1 gives $\psi_1 = (8 - 1.6 \cdot 4)/2 = 0.8$, and column 2 gives $\psi_2 = (2 - 0.8 \cdot 2)/2 = 0.2$. The log-likelihood rises from $-6.37$ to $-5.20$. Pooling the two leftovers into one number, as probabilistic PCA does, would give 0.5 for both.
+
+```python
+P = W / psi[:, None]
+M_inv = np.linalg.inv(np.eye(k) + W.T @ P)
+Ez = Xc @ P @ M_inv
+Ezz_sum = n * M_inv + Ez.T @ Ez
+cross = Xc.T @ Ez
+W_new = cross @ np.linalg.inv(Ezz_sum)
+psi_new = (np.sum(Xc**2, axis=0) - np.sum(W_new * cross, axis=1)) / n
+```
+
+The likelihood is the same formula with $C = WW^{\top} + \Psi$. Independent, non-Gaussian sources (ICA) are a later topic.
 
 > [!KEY]
-> PCA can carry fuzz inside it. The model says each point is a hidden coordinate on a sheet, pushed through $W$, plus Gaussian fuzz of variance $\sigma^2$. You cannot see the coordinates, so EM guesses them (E-step) and refits $W$ and $\sigma^2$ from the guesses (M-step), and the log-likelihood rises every round until the plane matches the one that power iteration and the SVD find.
+> PCA can carry fuzz inside it, and factor analysis lets each column have its own. The model says each point is a hidden coordinate on a sheet, pushed through $W$, plus Gaussian fuzz of variance $\sigma^2$. You cannot see the coordinates, so EM guesses them (E-step) and refits $W$ and $\sigma^2$ from the guesses (M-step), and the log-likelihood rises every round until the plane matches the one that power iteration and the SVD find.
 
 > [!RECAP]
 > - Each product stretches each eigenvector part by its eigenvalue, so the largest one takes over. Rescale to length 1 at every step, or the numbers overflow.
 > - The Rayleigh quotient `v @ A @ v / (v @ v)` reads the eigenvalue. The direction error shrinks by $\lambda_2/\lambda_1$ per step, and deflation, `A - eigenvalue * np.outer(v, v)`, exposes the next direction.
 > - The model is $x = Wz + \text{fuzz}$, with covariance $C = WW^{\top} + \sigma^2 I$.
 > - The E-step computes $E_z$ and $E_{zz}$, and the M-step computes $W_{\text{new}}$, then $\sigma^2$ from $W_{\text{new}}$.
+> - Factor analysis swaps $\sigma^2 I$ for a diagonal $\Psi$, so each column keeps its own noise, and the same two steps fit it.
 > - Record $\ell$ with `slogdet` and `solve`. It never falls, so a drop means a bug. $W$ is known only up to a rotation, so compare planes.
 
 ## Build it step by step
 
-`center` and `pca_svd` are written for you, and so is the loop `ppca_em`, which calls your last three functions. Read `ppca_em` after you finish. Build six functions, in this order.
+`center` and `pca_svd` are written for you, and so are the loops `ppca_em` and `fa_em`, which call your last six functions. Read them after you finish. Build nine functions, in this order.
 
 1. **`rayleigh_quotient(A, v)`** takes a symmetric matrix `(d, d)` and a vector `(d,)`, and returns the float `v @ A @ v / (v @ v)`. The usual mistake is to forget the division when `v` is not unit length.
 2. **`power_iteration(A, iters)`** returns `(v, eigenvalue)`. Start from `np.ones(d) / np.sqrt(d)`, multiply and rescale `iters` times, and finish with your `rayleigh_quotient`. The usual mistake is to rescale only after the loop, which overflows for large `iters`.
@@ -338,19 +360,26 @@ There are three ways to find the same plane:
 4. **`ppca_e_step(Xc, W, sigma2)`** takes centred data `(n, d)`, `W` `(d, k)`, and a float, and returns `(Ez, Ezz_sum)` with shapes `(n, k)` and `(k, k)`. Build $M$, invert it once, and use two matrix products. The usual mistake is to leave the $n\sigma^2M^{-1}$ term out of `Ezz_sum`.
 5. **`ppca_m_step(Xc, Ez, Ezz_sum)`** returns `(W_new, sigma2_new)` with shapes `(d, k)` and a float. Compute `W_new` first, then the three terms of $\sigma^2$ from `W_new`. Clip `sigma2_new` at `1e-8`. The usual mistake is to use the old $W$ in the cross term.
 6. **`ppca_loglik(Xc, W, sigma2)`** returns $\ell$ as a float. Build $C$ and $S$, then use `slogdet` and `solve`. The usual mistake is to drop the factor $n/2$.
+7. **`fa_e_step(Xc, W, psi)`** takes `psi` of shape `(d,)` and returns `(Ez, Ezz_sum)`. Divide the rows of `W` by `psi`, and invert $I + W^{\top}P$ once. The usual mistake is to leave the $nM^{-1}$ term out of `Ezz_sum`.
+8. **`fa_m_step(Xc, Ez, Ezz_sum)`** returns `(W_new, psi_new)`, with `psi_new` of shape `(d,)`. Compute each column's leftover from `W_new`, and clip at `1e-6`. The usual mistake is to average the leftovers into one number.
+9. **`fa_loglik(Xc, W, psi)`** returns $\ell$ with $C = WW^{\top} + \operatorname{diag}(\psi)$.
 
 ## Cost and scaling
 
-One power-iteration step costs about $d^2$ operations for a dense $A$, and about the number of nonzero entries for a sparse one. For a covariance table, skip building it: `Xc.T @ (Xc @ v) / (n - 1)` costs about $2nd$ per step and needs no $d \times d$ storage. Running $t$ steps costs $t$ times that, against about $d^3$ for a full eigendecomposition. Each EM round costs about $n\,d\,k$, because the only matrices that get inverted are $k \times k$.
+One power-iteration step costs about $d^2$ operations for a dense $A$, and about the number of nonzero entries for a sparse one. For a covariance table, skip building it: `Xc.T @ (Xc @ v) / (n - 1)` costs about $2nd$ per step and needs no $d \times d$ storage. Each EM round costs about $n\,d\,k$, because the only matrices that get inverted are $k \times k$.
 
 ## Where this breaks
 
 - If the start has no part along the top eigenvector, in exact arithmetic power iteration never finds it. The fixed start `np.ones(d) / np.sqrt(d)` is orthogonal to the top eigenvector for some matrices.
-- Deflation inherits any error in $v_1$ and $\lambda_1$. A little of the first direction survives in $A'$, so run the first search to a tight tolerance.
 - If $\lambda_1 = \lambda_2$, nothing prefers one direction over the other, so the result depends on the start. If they are close, convergence crawls.
-- If the data lie exactly on a sheet, $\sigma^2$ heads to 0 and $C$ becomes singular. The clip at `1e-8` keeps it finite.
 - In EM the plane settles in a few rounds, but the lengths of the columns of $W$ can take hundreds more. Judge convergence by the log-likelihood flattening, not by $W$ stopping.
 
 ## The exercise
 
-You write `rayleigh_quotient`, `power_iteration`, `deflate`, `ppca_e_step`, `ppca_m_step`, and `ppca_loglik`. The checks confirm the hand numbers: a quotient of 2 at an eigenvector and 1.5 at $(1,1)/\sqrt{2}$, and steps 1 and 2 of the trace to $(0.8944, 0.4472)$ with 1.8, and $(0.9701, 0.2425)$ with $33/17$. They run thousands of steps to confirm there is no overflow, measure the direction error against $\lambda_2/\lambda_1$ and the eigenvalue error against its square, and check that deflation plus power iteration matches the first two SVD components up to sign. For the model they confirm $E_z = (1, -1)$ and $E_{zz} = 3$, then $W_{\text{new}} = 4/3$ and $\sigma^2_{\text{new}} = 2/3$, then log-likelihoods of $-6.37$ and $-5.80$, against a point-by-point posterior and a direct Gaussian density. Finally they run `ppca_em` and confirm that the log-likelihood never decreases, that the fitted plane matches the PCA plane, and that $\sigma^2$ matches the average of the dropped variances.
+You write `rayleigh_quotient`, `power_iteration`, `deflate`, `ppca_e_step`, `ppca_m_step`, `ppca_loglik`, `fa_e_step`, `fa_m_step`, and `fa_loglik`. The checks confirm the hand numbers: a quotient of 2 at an eigenvector and 1.5 at $(1,1)/\sqrt{2}$, then $(0.8944, 0.4472)$ with 1.8, and $(0.9701, 0.2425)$ with $33/17$. They run thousands of steps to confirm there is no overflow, and check that deflation plus power iteration matches the first two SVD components up to sign. For probabilistic PCA they confirm $E_z = (1, -1)$ and $E_{zz} = 3$, then $W_{\text{new}} = 4/3$ and $\sigma^2_{\text{new}} = 2/3$, then log-likelihoods of $-6.37$ and $-5.80$, and that the log-likelihood never decreases and the fit lands on the PCA plane.
+
+For factor analysis they confirm $E_z = (1, -1)$ with $E_{zz} = 2.5$, and that the E-step equals `ppca_e_step` when $\psi = \sigma^2 \mathbf{1}$. They confirm $W_{\text{new}} = (1.6, 0.8)$ with $\psi = (0.8, 0.2)$, and log-likelihoods of $-6.37$ and $-5.20$ against a direct density. Then they run `fa_em` for 50 rounds on data with planted noise variances, confirm the log-likelihood never decreases, and confirm that $\psi$ lands within 0.05 of the planted values while the single $\sigma^2$ of `ppca_em` sits between the smallest and largest.
+
+## Further reading
+
+- For the factor analysis model, the E-step posterior of $z$, the M-step for $\Lambda$ that keeps the posterior covariance, and the diagonal update of $\Psi$, see Andrew Ng's [CS229 Lecture notes, Part X: Factor analysis](https://cs229.stanford.edu/summer2019/cs229-notes9.pdf). The notes write the E-step with $(\Lambda\Lambda^{\top} + \Psi)^{-1}$. This chapter uses the equivalent $k \times k$ form $M^{-1}$ with $M = I + W^{\top}\Psi^{-1}W$.
