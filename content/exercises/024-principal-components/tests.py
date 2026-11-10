@@ -249,3 +249,66 @@ def test_standardise(sub):
     a = pca_svd(np.asarray(got(A)), 1)[0][:, 0]
     b = pca_svd(np.asarray(got(scaled)), 1)[0][:, 0]
     almost(abs(float(a @ b)), 1.0, tol=1e-8, label="|first direction (kg) . first direction (g)| after standardising")
+
+
+@check("whiten gives the hand numbers on the three points: ZCA matrix [[0.558, -0.149], [-0.149, 0.558]], PCA scores 1.15 on the long axis")
+def test_whiten_hand(sub):
+    got = has(sub, "whiten")
+    Xc = HAND - np.array([2.0, 2.0])
+    a, b = 0.5 / np.sqrt(6.0), 0.5 / np.sqrt(2.0)
+    want_zca = np.array([[a + b, a - b], [a - b, a + b]])
+    Z, W = got(HAND, eps=0.0, method="zca")
+    shape(Z, (3, 2), label="whitened points")
+    shape(W, (2, 2), label="whitening matrix")
+    close(W, want_zca, atol=1e-9, label="ZCA matrix")
+    close(Z, Xc @ want_zca.T, atol=1e-9, label="ZCA whitened points")
+    Z, W = got(HAND, eps=0.0, method="pca")
+    shape(Z, (3, 2), label="whitened points")
+    # PCA scores are fixed up to the sign of each column. The columns are the
+    # scores on (1,1)/sqrt2 over sqrt(6), then on (1,-1)/sqrt2 over sqrt(2).
+    close(np.abs(Z), np.array([[np.sqrt(1 / 3), 1.0], [np.sqrt(1 / 3), 1.0], [2 * np.sqrt(1 / 3), 0.0]]), atol=1e-9, label="size of the PCA-whitened scores")
+    close(Z, Xc @ W.T, atol=1e-9, label="Z vs Xc @ W.T")
+    almost(float(np.sum(np.abs(W @ W.T - np.diag(np.diag(W @ W.T))))), 0.0, tol=1e-9, label="off-diagonal of W W^T (rows of W are orthogonal)")
+    # A wrong method name must be refused, not guessed.
+    try:
+        got(HAND, eps=0.0, method="cholesky")
+    except ValueError:
+        pass
+    else:
+        fail("method='cholesky' should raise ValueError, but it returned")
+
+
+@check("whiten gives identity covariance and zero mean for both methods, ZCA is symmetric and closer to the input, and eps tames a flat direction")
+def test_whiten(sub):
+    got = has(sub, "whiten")
+    # Wrong implementations this check is built to catch, each run against it:
+    #  1. divide by the eigenvalue instead of its square root: the covariance
+    #     comes out as diag(1 / lambda) instead of the identity.
+    #  2. forget to centre: the whitened columns keep a non-zero mean.
+    X = _gapped(seed=8, n=300, d=5) * 1.0
+    Xc = X - X.mean(axis=0)
+    outputs = {}
+    for method in ("pca", "zca"):
+        Z, W = got(X, eps=0.0, method=method)
+        Z, W = np.asarray(Z), np.asarray(W)
+        shape(Z, X.shape, label=f"{method} whitened data")
+        shape(W, (5, 5), label=f"{method} matrix")
+        close(Z.mean(axis=0), np.zeros(5), atol=1e-8, label=f"{method} column means")
+        close(np.cov(Z, rowvar=False), np.eye(5), atol=1e-8, label=f"{method} covariance of the whitened data")
+        close(Z, Xc @ W.T, atol=1e-8, label=f"{method} Z vs Xc @ W.T")
+        outputs[method] = (Z, W)
+    Zz, Wz = outputs["zca"]
+    close(Wz, Wz.T, atol=1e-8, label="ZCA matrix vs its transpose")
+    C = np.cov(Xc, rowvar=False)
+    close(Wz @ C @ Wz.T, np.eye(5), atol=1e-8, label="W C W^T for ZCA")
+    dist_zca = float(np.sum((Xc - Zz) ** 2))
+    dist_pca = float(np.sum((Xc - outputs["pca"][0]) ** 2))
+    if not dist_zca < dist_pca:
+        fail(f"ZCA should stay closer to the centred input than PCA whitening; squared distance ZCA {dist_zca:.4f}, PCA {dist_pca:.4f}")
+    # eps: a direction with variance about 1e-12 must not be scaled by about 1e6.
+    rng = np.random.default_rng(9)
+    flat = np.column_stack([rng.normal(size=100), rng.normal(size=100) * 1e-6])
+    Z, W = got(flat, eps=1e-2, method="zca")
+    if not np.all(np.isfinite(Z)) or float(np.max(np.abs(Z))) > 10.0:
+        fail(f"with eps = 0.01 no whitened entry should be large, got max |Z| = {float(np.max(np.abs(Z))):.3g}")
+    almost(float(np.linalg.norm(W, 2)), 10.0, tol=1e-3, label="largest gain of W with eps = 0.01 (1 / sqrt(eps), not 1e6)")

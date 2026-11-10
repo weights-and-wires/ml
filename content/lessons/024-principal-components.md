@@ -2,8 +2,8 @@
 title: "Principal components: compress and know what you lost"
 slug: 024-principal-components
 part: "Part 3 — Trees, ensembles, and unsupervised learning"
-summary: The SVD of centred data lists every direction of spread, and keeping the top k loses exactly the squared singular values you drop.
-minutes: 75
+summary: The SVD of centred data lists every direction of spread. Keeping the top k loses the squared singular values you drop; whitening evens the rest.
+minutes: 80
 gpu: false
 objectives:
   - Centre a cloud, turn a line into one score per point (a shadow), and compute the variance of those scores.
@@ -11,6 +11,7 @@ objectives:
   - Read components, scores, and explained variances from the SVD of the centred data, and from the covariance table.
   - Rebuild data from k components, and show that the error equals the sum of the squared singular values you dropped.
   - Pick k from the explained variance ratios or an error budget, and standardise columns when units differ.
+  - Whiten data with PCA and ZCA, and say what `eps` does for tiny eigenvalues.
 prereqs:
   - 003-least-squares-and-projection
   - 023-gradient-boosting
@@ -20,7 +21,7 @@ exercise: 024-principal-components
 
 # Principal components: compress and know what you lost
 
-Every model so far had an answer to learn from. This chapter has none. You hold a table of points and nothing else, and you want to describe it with fewer numbers. Picture thousands of dust grains lying in a thin pancake of flour on a tilted tray. Each grain has three coordinates, but the pancake is almost flat, so two numbers (where on the pancake) say nearly everything. Fewer numbers means smaller files, plots you can look at, less noise, and faster models.
+Every model so far had an answer to learn from. This chapter has none. You hold a table of points and want to describe it with fewer numbers. Picture thousands of dust grains lying in a thin pancake of flour on a tilted tray. Each grain has three coordinates, but the pancake is almost flat, so two numbers (where on the pancake) say nearly everything. Fewer numbers means smaller files, plots you can look at, less noise, and faster models.
 
 Which two numbers? Dropping a coordinate fails: on a tilted tray every axis cuts across the pancake, so dropping one throws away real information. You want the pancake's own sheet. And once you squeeze, a second question follows: the rebuilt rows are not the originals, so how wrong are they, and could a different choice of directions have done better?
 
@@ -35,9 +36,9 @@ You build the sheet one line at a time. First you find the best single line, and
 
 ## Centre the cloud
 
-The running example has three points with two readings each: $(2, 0)$, $(0, 2)$, and $(4, 4)$. Spread means how far points sit from the middle of the cloud, so the middle is our reference. The column means are $(2+0+4)/3 = 2$ and $(0+2+4)/3 = 2$, so the middle is $(2, 2)$. Subtract it from every row and the points become $(0, -2)$, $(-2, 0)$, and $(2, 2)$. That shift is called **centring**. It moves the middle of the cloud to the origin, so a line through the origin is a line through the middle.
+The running example has three points with two readings each: $(2, 0)$, $(0, 2)$, and $(4, 4)$. Spread means how far points sit from the middle of the cloud. The column means are $(2+0+4)/3 = 2$ and $(0+2+4)/3 = 2$, so the middle is $(2, 2)$. Subtract it from every row and the points become $(0, -2)$, $(-2, 0)$, and $(2, 2)$. That shift is called **centring**. It moves the middle of the cloud to the origin, so a line through the origin is a line through the middle.
 
-Without it, the measurement goes wrong. Along $(1,1)/\sqrt{2}$ the raw points give squared readings of 2, 2, and 32, summing to 36, and most of that records how far the cloud sits from the origin. After centring, the sum is 12.
+Without it, the measurement goes wrong. Along $(1,1)/\sqrt{2}$ the raw squared readings are 2, 2, and 32, summing to 36, mostly the cloud's distance from the origin. After centring, the sum is 12.
 
 ```python
 mean = X.mean(axis=0)
@@ -46,7 +47,7 @@ Xc = X - mean
 
 ## A score is a shadow
 
-Shine a light at right angles onto a line through the middle, and each point casts a shadow on it. Its **score** is the signed distance of that shadow from the middle, positive on one side and negative on the other. For a unit vector $u$ pointing along the line, the score of a point is its dot product with $u$. Figure 1 shows two lines through the middle of the example.
+Shine a light at right angles onto a line through the middle, and each point casts a shadow on it. Its **score** is the signed distance of that shadow from the middle. For a unit vector $u$ pointing along the line, the score of a point is its dot product with $u$. Figure 1 shows two lines through the middle of the example.
 
 ```figure
 <svg viewBox="0 0 600 316" role="img" aria-label="Three points with their shadows on two lines through the mean: line u gets long shadows and short gaps, line w the reverse">
@@ -124,20 +125,20 @@ Figure 1. The same three points and two lines through the middle (dark dot). The
 
 Take $u = (1, 1)/\sqrt{2}$. The scores of the three centred points are $-2/\sqrt{2} = -1.41$, $-1.41$, and $4/\sqrt{2} = 2.83$. Take $w = (1, -1)/\sqrt{2}$, at right angles to $u$. The scores are $1.41$, $-1.41$, and $0$. Line $u$ spreads the shadows far apart, and line $w$ bunches them together.
 
-The **variance** of the scores puts a number on that. The scores average to zero because the data is centred, so the variance is the sum of squared scores divided by $n-1$. For $u$ the squares are 2, 2, and 8, which sum to 12, and $12/2 = 6$. For $w$ they are 2, 2, and 0, so the variance is $4/2 = 2$. You divide by $n-1$ rather than $n$ because the mean came from the same points, which makes the gaps look a little small.
+The **variance** of the scores puts a number on that. The scores average to zero because the data is centred, so the variance is the sum of squared scores over $n-1$. For $u$ the squares are 2, 2, and 8, which sum to 12, and $12/2 = 6$. For $w$ they are 2, 2, and 0, so the variance is $4/2 = 2$. You divide by $n-1$ because the mean came from the same points, which makes the gaps look a little small.
 
 $$
 \operatorname{var}(u) = \frac{1}{n-1} \sum_{i=1}^{n} (x_i \cdot u)^2
 $$
 
-Read it aloud as "square each centred point's score on $u$, add them up, and divide by $n-1$":
+Read it aloud as "square each score on $u$, add them up, and divide by $n-1$":
 
 ```python
 scores = Xc @ u                 # shape (n,), one shadow per point
 variance = scores @ scores / (n - 1)
 ```
 
-Try every direction to see which line wins. A line at angle $\theta$ has unit vector $(\cos\theta, \sin\theta)$, so the centred points have scores $-2\sin\theta$, $-2\cos\theta$, and $2\cos\theta + 2\sin\theta$, and the variance works out to $4 + 2\sin 2\theta$. It peaks at 6 when $\theta = 45^\circ$ and dips to 2 at $135^\circ$, so the best and worst lines sit at right angles. Dropping a coordinate keeps the line at $0^\circ$ or $90^\circ$, where the variance is only 4, because the cloud leans. The total is the same at every angle, $6 + 2 = 4 + 4 = 8$: turning the line only moves variance between a line and the one at right angles to it.
+Sweep every direction to see which line wins. A line at angle $\theta$ has unit vector $(\cos\theta, \sin\theta)$, so the centred points have scores $-2\sin\theta$, $-2\cos\theta$, and $2\cos\theta + 2\sin\theta$, and the variance works out to $4 + 2\sin 2\theta$. It peaks at 6 when $\theta = 45^\circ$ and dips to 2 at $135^\circ$, so the best and worst lines sit at right angles. Dropping a coordinate keeps the line at $0^\circ$ or $90^\circ$, where the variance is only 4, because the cloud leans.
 
 > [!KEY]
 > The **first principal component** is the direction whose scores have the largest variance. On the example it is $(1,1)/\sqrt{2}$, with variance 6.
@@ -150,11 +151,11 @@ $$
 \underbrace{\lVert x_i \rVert^2}_{\text{squared length}} = \underbrace{(x_i \cdot u)^2}_{\text{shadow squared}} + \underbrace{\lVert x_i - (x_i \cdot u)\,u \rVert^2}_{\text{gap squared}} .
 $$
 
-Read it aloud as "the squared distance from the middle is the squared shadow plus the squared gap". On the example the squared lengths are 4, 4, and 8, which total 16. For line $u$ the squared shadows are 2, 2, and 8, so 12 are kept, and the squared gaps are 2, 2, and 0, so 4 are lost. The squared lengths do not depend on the line, so the total stays 16 whatever you choose. A line that keeps more must lose less, so the line with the longest shadows has the shortest gaps. Line $w$ confirms it: it keeps 4 and loses 12.
+Read it aloud as "the squared distance from the middle is the squared shadow plus the squared gap". On the example the squared lengths are 4, 4, and 8, which total 16. For line $u$ the squared shadows are 2, 2, and 8, so 12 are kept, and the squared gaps are 2, 2, and 0, so 4 are lost. The total stays 16 whatever line you choose, so a line that keeps more must lose less. Line $w$ confirms it: it keeps 4 and loses 12.
 
 ## Let the SVD do the searching
 
-Suppose each row has 100 readings. A direction in 100 dimensions needs 99 angles, so a grid with 180 steps per angle has about $10^{223}$ points. You do not have to search.
+With 100 readings per row, a direction needs 99 angles, and a grid of 180 steps per angle has about $10^{223}$ points. You do not have to search.
 
 Multiply the centred data matrix $X_c$ by a unit direction $u$ and you get the scores. Their sum of squares is $(n-1)$ times the variance along $u$, so "how far does $X_c$ stretch $u$?" and "how spread out are the shadows on $u$?" are the same question. Feed every unit direction through $X_c$ and the outputs trace an ellipse, which Figure 2 draws, and the long axis is the direction of greatest spread. The SVD finds the axes. The stretchiest direction is $v_1$, with stretch $s_1$. Among directions at right angles to $v_1$, the stretchiest is $v_2$, with stretch $s_2$, and so on down the list.
 
@@ -213,7 +214,7 @@ The SVD is not the only route. The covariance table $C = X_c^{\top} X_c/(n-1)$ h
 
 Substitute $X_c = U S V^{\top}$ into $X_c^{\top} X_c$. The middle $U^{\top} U$ is the identity, because the columns of $U$ are orthonormal, and what remains is $X_c^{\top} X_c = V S^2 V^{\top}$. An **eigenvector** of a matrix is a direction it only stretches, never turns, and the stretch factor is the **eigenvalue**. So the columns of $V$ are the eigenvectors of $C$, with eigenvalues $s_i^2/(n-1)$. On the example, $Cv = \lambda v$ needs $(4 - \lambda)^2 - 4 = 0$, so $\lambda = 6$ or $2$, and for $\lambda = 6$ the unit vector is $(1,1)/\sqrt{2}$, the peak of the sweep.
 
-Why call the SVD at all, when `np.linalg.eigh` handles $C$? Forming $X_c^{\top} X_c$ squares every singular value. Stretches of 1 and $10^{-9}$ become 1 and $10^{-18}$, and double precision keeps only about 16 digits, so the small one drowns. Also, `eigh` returns eigenvalues in ascending order, so reverse them:
+Why call the SVD at all, when `np.linalg.eigh` handles $C$? Forming $X_c^{\top} X_c$ squares every singular value, so stretches of 1 and $10^{-9}$ become 1 and $10^{-18}$, and double precision keeps only about 16 digits. `eigh` also returns eigenvalues in ascending order, so reverse them:
 
 ```python
 C = Xc.T @ Xc / (n - 1)
@@ -235,7 +236,7 @@ The $n-1$ cancels, so the example has $r = (12/16,\ 4/16) = (0.75,\ 0.25)$. Ther
 ratios = s ** 2 / np.sum(s ** 2)
 ```
 
-Take six-dimensional data ($n = 300$) built from two strong directions plus a little noise. Two variances tower (8.96 and 2.34) and four are tiny (about 0.04 each). The cumulative shares are 78% after one and 99% after two. A common habit is to keep the smallest $k$ whose cumulative share reaches 90%, as `int(np.searchsorted(np.cumsum(ratios), 0.90) + 1)`. The 90% is a habit, not a theorem: use a higher target when you need to reconstruct, and look for the elbow in a bar plot of the variances (a **scree plot**) when the share creeps up slowly.
+Take six-dimensional data ($n = 300$) built from two strong directions plus a little noise. Two variances tower (8.96 and 2.34) and four are tiny (about 0.04 each). The cumulative shares are 78% after one and 99% after two. A common habit is to keep the smallest $k$ whose cumulative share reaches 90%, as `int(np.searchsorted(np.cumsum(ratios), 0.90) + 1)`. The 90% is a habit, not a theorem: use a higher target when you need to reconstruct, and look for the elbow in a bar plot of the variances (a **scree plot**).
 
 ## Rebuild from k directions
 
@@ -262,9 +263,9 @@ $$
 \sum_{\text{all entries}} (X - \hat{X})^2 = \sum_{i > k} s_i^2 .
 $$
 
-Read it aloud as "the total squared error of the rebuild is the sum of the squared singular values you dropped". The singular values belong to the centred data $X_c$. On the example, $12 + 4 = 16$ is the total, 12 is kept, and 4 is lost.
+Read it aloud as "the total squared error of the rebuild is the sum of the squared singular values you dropped", for the singular values of $X_c$. On the example, $12 + 4 = 16$ is the total, 12 is kept, and 4 is lost.
 
-On the six-dimensional data, the rebuild error falls as you keep more directions, as Figure 3 shows. Each orange dot is the sum of the dropped $s_i^2$, computed without rebuilding anything, and each sits on top of the bar from the actual rebuild. Keeping two directions leaves an error of 47.3 out of a total of 3424.1, so the share you kept is $1 - 47.3/3424.1 = 0.986$, the cumulative share from the scree. In numpy, the error from the singular values alone is one line, so you can choose $k$ for an error budget without rebuilding:
+On the six-dimensional data, the rebuild error falls as you keep more directions, as Figure 3 shows. Each orange dot is the sum of the dropped $s_i^2$, and each sits on top of the bar from the actual rebuild. Keeping two directions leaves an error of 47.3 out of a total of 3424.1, so the share you kept is $1 - 47.3/3424.1 = 0.986$, the cumulative share from the scree. In numpy, the singular values give the error with no rebuild, so you can choose $k$ for an error budget:
 
 ```python
 s = np.linalg.svd(Xc, compute_uv=False)
@@ -319,16 +320,16 @@ error_at_k = np.sum(s[k:] ** 2)
 Figure 3. The error of the rebuild (blue bars) for each number of kept directions k on generated six-dimensional data. The orange dots are the sum of the dropped squared singular values, and each one sits on top of its bar. Two directions already cut the error from 3424 to 47.
 ```
 
-Could a different pair of directions lose less? The **Eckart-Young theorem** says no: the sheet spanned by the top $k$ directions keeps the most, so it loses the least, and no matrix of rank $k$ is closer to the centred data. To see why, ask how much of each $v_i$ a sheet contains. Call that amount $w_i$, the squared length of $v_i$'s shadow on the sheet. Each $w_i$ lies between 0 and 1, and the $w_i$ add up to $k$, because the sheet has $k$ dimensions. The sheet keeps $w_1 s_1^2 + w_2 s_2^2 + \cdots$, a weighted sum of the squared stretches. You can hand out a total weight of $k$, at most 1 per direction, and the sum is largest when the weight goes to the $k$ biggest stretches. That is the sheet spanned by $v_1, \dots, v_k$, the same weighted-average argument that made the first direction win: write any unit direction as $a\,v_1 + b\,v_2$ with $a^2 + b^2 = 1$ and its variance is $6a^2 + 2b^2$, largest when all the weight sits on 6.
+Could a different pair of directions lose less? The **Eckart-Young theorem** says no: the sheet spanned by the top $k$ directions keeps the most, so it loses the least, and no matrix of rank $k$ is closer to the centred data. To see why, ask how much of each $v_i$ a sheet contains, a weight $w_i$ between 0 and 1, with the weights adding to $k$. The sheet keeps $w_1 s_1^2 + w_2 s_2^2 + \cdots$, which is largest when the weight goes to the $k$ biggest stretches.
 
-You can test the theorem rather than trust it. Draw random sheets of two directions in the six-dimensional space, rebuild from each, and compare. Every one of them loses more than 47.3. The exercise runs this test.
+Random two-direction sheets in the six-dimensional space all lose more than 47.3.
 
 > [!KEY]
 > You never search for the best direction. The SVD of the centred data lists all of them, in order, and $s_i^2/(n-1)$ is the variance each one holds. Keeping the top $k$ loses exactly $\sum_{i>k} s_i^2$, and no other $k$ directions lose less, so you know the error before you rebuild and know that no other choice could have been better.
 
 ## Standardise when units differ
 
-PCA measures spread, and spread depends on units. Take the earlier three-point example and write the second reading in hundredths: $(2, 0)$, $(0, 200)$, and $(4, 400)$. Nothing about the cloud has changed except the ruler. The centred rows are $(0, -200)$, $(-2, 0)$, and $(2, 200)$, the variances are 4 and 40000, and the first direction is $(0.005, 1.000)$, which is the second column and nothing else.
+PCA measures spread, and spread depends on units. Write the example's second reading in hundredths: $(2, 0)$, $(0, 200)$, and $(4, 400)$. Only the ruler changed. The centred rows are $(0, -200)$, $(-2, 0)$, and $(2, 200)$, the variances are 4 and 40000, and the first direction is $(0.005, 1.000)$, which is the second column and nothing else.
 
 The fix is to **standardise**: centre each column, then divide it by its standard deviation, which is the square root of its variance. The columns are then $(0, -1, 1)$ and $(-1, 0, 1)$, with variance 1 each, and the first direction returns to $(0.71, 0.71)$ with variances 1.5 and 0.5.
 
@@ -336,7 +337,29 @@ The fix is to **standardise**: centre each column, then divide it by its standar
 Z = (X - X.mean(axis=0)) / X.std(axis=0, ddof=1)
 ```
 
-Standardise when the columns are in different units, or when their sizes are arbitrary. Do not standardise when the columns share a unit and the size is the signal, such as pixel brightnesses. Dividing by the standard deviation there would blow up the quiet, noisy pixels to the same weight as the informative ones.
+Standardise when the columns are in different units, or when their sizes are arbitrary. Do not standardise when the columns share a unit and the size is the signal, such as pixel brightnesses. Dividing there would give quiet, noisy pixels the same weight as informative ones.
+
+## Whiten when every direction should count the same
+
+Standardising fixes the column scales but leaves the lean: in the example the two columns still move together. **Whitening** makes the covariance the identity, so every direction has variance 1 and no two move together. Picture the tilted ellipse squeezed along its long axis and stretched along its short one until it is a circle.
+
+In words: rotate onto the principal directions, then divide each score by the square root of its variance. The square root is right because scaling a score by $c$ scales its variance by $c^2$. On the example the scores on $u$ and $w$ are $(-1.41, 1.41)$, $(-1.41, -1.41)$, and $(2.83, 0)$, with variances 6 and 2. Dividing by $\sqrt{6} = 2.45$ and $\sqrt{2} = 1.41$ gives $(-0.58, 1.00)$, $(-0.58, -1.00)$, and $(1.15, 0)$, and both columns now have variance 1. This is **PCA whitening**, and numpy may flip a column's sign.
+
+Write $C = U \Lambda U^{\top}$, with eigenvectors in $U$ and eigenvalues $\lambda_i$ on the diagonal of $\Lambda$. For a centred row $x$, the whitened row is $z = Wx$, with
+
+$$
+W_{\text{PCA}} = (\Lambda + \epsilon I)^{-1/2} U^{\top}, \qquad W_{\text{ZCA}} = U (\Lambda + \epsilon I)^{-1/2} U^{\top} .
+$$
+
+Read it aloud as "rotate onto the directions, divide each score by $\sqrt{\lambda_i + \epsilon}$, and for **ZCA** whitening rotate back". Rotating back leaves each output axis along an input axis, so $W_{\text{ZCA}}$ is symmetric and the whitened row stays as close to the original as any whitened row can. Kessy, Lewin, and Strimmer prove it is the unique whitening matrix that minimises the squared distance to the input (Section 6.1, Proposition 1). On the example, $W_{\text{ZCA}}$ has rows $(0.558, -0.149)$ and $(-0.149, 0.558)$, the points become $(0.30, -1.12)$, $(-1.12, 0.30)$, and $(0.82, 0.82)$, and their squared distance from the centred points is 4.55, against 9.07 for PCA whitening.
+
+```python
+lam, U = np.linalg.eigh(Xc.T @ Xc / (n - 1))
+W = U.T / np.sqrt(lam + eps)[:, None]    # PCA; use U @ W for ZCA
+Z = Xc @ W.T
+```
+
+The $\epsilon$ guards tiny eigenvalues. A direction with variance $10^{-12}$ is noise, and dividing by its square root multiplies it by $10^{6}$. With $\epsilon = 10^{-5}$ no gain exceeds about 316, and whitened variances become $\lambda_i/(\lambda_i + \epsilon)$. Whitening reappears in [normalisation layers](/lessons/033-normalisation-layers), which rescale activations but do not decorrelate them, and in [autoencoders and VAEs](/lessons/061-autoencoders-and-vaes), whose latent prior has identity covariance.
 
 > [!RECAP]
 > - Centre first. A score is a shadow, `Xc @ u`, and its variance is `scores @ scores / (n - 1)`.
@@ -344,10 +367,11 @@ Standardise when the columns are in different units, or when their sizes are arb
 > - Components are `Vt[:k].T`, and variances are `s[:k] ** 2 / (n - 1)`. The covariance table has the same directions.
 > - Shares are $s_i^2/\sum_j s_j^2$. Rebuild with `mean + scores @ components.T`, and the error is `np.sum(s[k:] ** 2)`.
 > - Standardise columns when units differ, because spread depends on the ruler.
+> - Whiten by dividing each score by $\sqrt{\lambda_i + \epsilon}$. ZCA rotates back, so it stays closest to the input.
 
 ## Build it step by step
 
-`sweep_directions` is written for you, because it only calls `variance_along` in a loop. You write nine functions, in this order.
+`sweep_directions` is written for you, because it only calls `variance_along` in a loop. You write ten functions, in this order.
 
 1. **`center(X)`** takes an `(n, d)` array and returns `(Xc, mean)`, shapes `(n, d)` and `(d,)`. The usual mistake is `axis=1`, which averages each row.
 2. **`variance_along(Xc, u)`** takes centred data and a unit vector, and returns one float: the scores `Xc @ u`, squared, summed, and divided by `n - 1`. The usual mistake is dividing by `n`.
@@ -358,18 +382,18 @@ Standardise when the columns are in different units, or when their sizes are arb
 7. **`reconstruct(mean, components, scores)`** takes a mean `(d,)`, components `(d, k)`, and scores `(n, k)`, and returns the rebuilt table `(n, d)`. The usual mistake is leaving out the mean.
 8. **`reconstruction_error(X, k)`** returns the total squared error of the rank-$k$ rebuild as a float. Run `pca_svd`, rebuild with your `reconstruct`, and add up the squared differences from `X`. The usual mistake is to shortcut with the singular-value formula, which makes the check against that formula circular.
 9. **`standardise(X)`** returns the centred table with each column divided by its standard deviation (`ddof=1`), shape `(n, d)`. A column that is constant has standard deviation 0, so leave its entries at 0 rather than dividing. The usual mistake is dividing by the variance instead of the standard deviation.
+10. **`whiten(X, eps=1e-5, method="pca")`** returns `(Z, W)`, shapes `(n, d)` and `(d, d)`. Centre, get the eigenvalues and eigenvectors of the covariance with your `covariance_eigh`, and build `W` from `1 / np.sqrt(lam + eps)`. The usual mistake is dividing by the eigenvalue instead of its square root.
 
 ## Cost and scaling
 
-Three ways to get the directions cost different amounts for $n$ rows and $d$ columns:
+Two routes to the directions cost different amounts for $n$ rows and $d$ columns:
 
 | Route | How the work grows | Notes |
 |---|---|---|
 | SVD of $X_c$ | About $n\,d\,\min(n, d)$ | The default, and the most accurate. |
 | Eigenvectors of $X_c^{\top}X_c$ | About $n\,d^2 + d^3$ | Forming the product squares the data and loses digits. |
-| Reading the error from `s` | Nothing extra | The singular values are already computed. |
 
-The table $X$ uses about $n\,d$ numbers. The full $U$ adds about $n\,\min(n, d)$ more. The chapter on [power iteration and probabilistic PCA](/lessons/025-power-iteration-and-probabilistic-pca) shows how to get only the top few directions for a fraction of this cost.
+The chapter on [power iteration and probabilistic PCA](/lessons/025-power-iteration-and-probabilistic-pca) shows how to get only the top few directions for a fraction of this cost.
 
 ## Where this breaks
 
@@ -482,11 +506,16 @@ Figure 4 shows three failures.
 Figure 4. Left: one far-off point tilts the first line from 2° (blue) to 35° (orange). Middle: a straight line cannot follow an arc. Right: when one column is in much larger units, it takes over the first direction, and standardising restores an even split.
 ```
 
-- A far-off point drags a direction, because variance squares distance. Remove it, or use a robust variant.
-- A curved cloud, such as an arc or a spiral, has no flat sheet that fits. Kernel PCA handles curves.
-- When two singular values are nearly equal, which of the two directions you keep is unstable, even though the plane they span is fine.
-- The 90% rule says nothing about whether the dropped directions matter to your task. They might hold the signal.
+- A far-off point drags a direction, because variance squares distance. Remove it.
+- A curved cloud, such as an arc, has no flat sheet that fits. Kernel PCA handles curves.
+- When two singular values are nearly equal, which of the two directions you keep is unstable, though the plane they span is fine.
+- The 90% rule ignores your task. The dropped directions might hold the signal.
 
 ## The exercise
 
-You write `center`, `variance_along`, `shadow_split`, `pca_svd`, `covariance_eigh`, `explained_variance_ratio`, `reconstruct`, `reconstruction_error`, and `standardise`. The checks confirm the hand numbers (variance 6 and 2, kept 12 and lost 4, shares 0.75 and 0.25, rebuilt points $(1,1)$, $(1,1)$, $(4,4)$), that kept plus lost equals the total squared length, that the components are orthonormal, and that no random direction beats the first one. They confirm that the eigenvectors satisfy $Cv = \lambda v$ and match the SVD up to sign, that the rebuild error equals $\sum_{i>k} s_i^2$ at every $k$, that random sheets of $k$ directions never beat it, and that standardising gives mean 0 and standard deviation 1 and removes the effect of a change of units.
+You write `center`, `variance_along`, `shadow_split`, `pca_svd`, `covariance_eigh`, `explained_variance_ratio`, `reconstruct`, `reconstruction_error`, `standardise`, and `whiten`. The checks confirm the hand numbers (variance 6 and 2, kept 12 and lost 4, shares 0.75 and 0.25, rebuilt points $(1,1)$, $(1,1)$, $(4,4)$), that the components are orthonormal and no random direction beats the first, that the eigenvectors satisfy $Cv = \lambda v$, that the rebuild error equals $\sum_{i>k} s_i^2$ and no random sheet beats it, and that standardising removes the effect of units. The last two checks confirm the `whiten` hand numbers, that both methods give zero mean and identity covariance, that ZCA is symmetric and closer to the input, and that `eps` caps the gain on a flat direction.
+
+## Further reading
+
+- For where PCA sits in the course, see the Autumn 2018 [CS229 syllabus](https://cs229.stanford.edu/syllabus-autumn2018.html), Lecture 12 class notes "Principal Components Analysis" and Lecture 15 "Principal Component Analysis. Independent Component Analysis."
+- For the proof that ZCA is the closest whitening, see Kessy, Lewin, and Strimmer, [Optimal Whitening and Decorrelation](https://arxiv.org/html/1512.00809), Section 6.1 (ZCA-Mahalanobis) and Section 6.3 (PCA whitening).
