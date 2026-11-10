@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     data_dir: Path = REPO_ROOT / "data"
     content_dir: Path = REPO_ROOT / "content"
     frontend_dist: Path = REPO_ROOT / "frontend" / "dist"
-    # The PDF book and its manifest, written by frontend/scripts/build-book.mjs
-    # on the deploying machine and mounted into the container.
+    # The PDF book and its manifest, written by frontend/scripts/build-book.mjs.
+    # The image build prints them into this folder.
     book_dir: Path = REPO_ROOT / "book"
 
     # Execution
@@ -55,8 +55,7 @@ class Settings(BaseSettings):
     def production(self) -> bool:
         """True when this process is a deployed image.
 
-        The image build and `scripts/deploy.sh` set `GIT_SHA` to the commit
-        they ship. A local run leaves the default `unknown`. Draft lessons
+        The image build sets `GIT_SHA` to the commit it builds from. A local run leaves the default `unknown`. Draft lessons
         follow this value, so a local run shows them and a deployed image
         hides them. There is no separate environment flag.
         """
