@@ -1,7 +1,7 @@
 {
   "id": "028-multilayer-perceptrons",
   "title": "Build a multilayer perceptron and count what it costs",
-  "brief": "Write ReLU, GELU, and their slopes, merge affine layers, run a forward pass, count the pieces of a folded network, and count its parameters, flops, and stored activations.",
+  "brief": "Write ReLU, GELU, and their slopes, merge affine layers, run a forward pass, count the pieces of a folded network, build a hinge network through any knots, and count its parameters, flops, and stored activations.",
   "needs_gpu": false,
   "timeout": 40,
   "packages": ["numpy"],

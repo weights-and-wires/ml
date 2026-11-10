@@ -253,3 +253,98 @@ def test_activation_memory(sub):
     for k in (1, 3, 6):
         # input 1, then 2 per hidden layer, then 1 output
         equal(int(activation_memory(sawtooth_network(k), 1)), 2 * k + 2, label=f"sawtooth depth {k}")
+
+
+def _run(params, x):
+    """Evaluate a list of layers at scalar inputs with plain numpy, so these
+    checks do not depend on the reader's own mlp_forward."""
+    h = np.asarray(x, dtype=float).reshape(-1, 1)
+    for layer in params:
+        z = h @ np.asarray(layer["W"]).T + np.asarray(layer["b"])
+        h = np.maximum(z, 0.0) if layer["activation"] == "relu" else z
+    return h[:, 0]
+
+
+@check("hinge_interpolant: the hand example (output weights 2, -3, 1) and exact heights at random knots")
+def test_hinge_hand_and_knots(sub):
+    # Wrong implementation caught here: using each segment's slope as the output
+    # weight, [2, -1, 0], instead of the change in slope, [2, -3, 1]. It gives
+    # 5 instead of 2 at x = 3, and the knots after the second one drift away.
+    hinge_interpolant = has(sub, "hinge_interpolant")
+    xs = np.array([0.0, 1.0, 2.0, 4.0])
+    ys = np.array([1.0, 3.0, 2.0, 2.0])
+    net = hinge_interpolant(xs, ys)
+    equal(len(net), 2, label="layers of the hinge network")
+    shape(net[0]["W"], (3, 1), label="hidden W")
+    shape(net[0]["b"], (3,), label="hidden b")
+    shape(net[1]["W"], (1, 3), label="output W")
+    equal(net[0]["activation"], "relu", label="hidden activation")
+    equal(net[1]["activation"], "identity", label="output activation")
+    close(net[0]["b"], np.array([0.0, -1.0, -2.0]), atol=1e-12, label="hidden biases, minus each left knot")
+    close(net[1]["W"].reshape(-1), np.array([2.0, -3.0, 1.0]), atol=1e-12, label="output weights, the change in slope")
+    close(net[1]["b"].reshape(-1), np.array([1.0]), atol=1e-12, label="output bias, the first height")
+    close(_run(net, [3.0]), np.array([2.0]), atol=1e-9, label="network at x = 3, on the flat segment")
+
+    rng = np.random.default_rng(7)
+    xs = np.sort(rng.uniform(-3.0, 5.0, size=9))
+    ys = rng.normal(size=9)
+    net = hinge_interpolant(xs, ys)
+    close(_run(net, xs), ys, atol=1e-9, label="network at every random knot")
+
+
+@check("hinge_interpolant is straight between knots, with offsets, flat data, and bad knots")
+def test_hinge_between_knots(sub):
+    # Wrong implementations caught here: a hinge placed at +x_j instead of -x_j
+    # (knots away from 0 break), and a missing output bias (shifts every height
+    # by ys[0], which is 4 here).
+    hinge_interpolant = has(sub, "hinge_interpolant")
+    xs = np.array([-2.0, -1.5, 0.5, 1.0, 3.5])
+    ys = np.array([4.0, 1.0, 2.5, -1.0, 0.0])
+    net = hinge_interpolant(xs, ys)
+    mids = 0.5 * (xs[:-1] + xs[1:])
+    quarters = xs[:-1] + 0.25 * np.diff(xs)
+    probe = np.concatenate([mids, quarters, xs])
+    close(_run(net, probe), np.interp(probe, xs, ys), atol=1e-9, label="network against np.interp between knots")
+
+    flat = hinge_interpolant(np.array([0.0, 1.0, 2.0]), np.array([2.0, 2.0, 2.0]))
+    close(flat[1]["W"].reshape(-1), np.zeros(2), atol=1e-12, label="output weights of a constant function")
+    close(_run(flat, [0.3, 1.7]), np.array([2.0, 2.0]), atol=1e-12, label="constant function")
+
+    two = hinge_interpolant(np.array([1.0, 3.0]), np.array([0.0, 4.0]))
+    shape(two[0]["W"], (1, 1), label="hidden W for two knots")
+    close(_run(two, [1.0, 2.0, 3.0]), np.array([0.0, 2.0, 4.0]), atol=1e-12, label="one segment, slope 2")
+
+    for bad_xs, bad_ys in (
+        (np.array([0.0, 1.0, 1.0]), np.array([0.0, 1.0, 2.0])),
+        (np.array([0.0, 2.0, 1.0]), np.array([0.0, 1.0, 2.0])),
+        (np.array([0.0, 1.0]), np.array([0.0, 1.0, 2.0])),
+    ):
+        try:
+            hinge_interpolant(bad_xs, bad_ys)
+        except ValueError:
+            continue
+        except Exception as exc:  # noqa: BLE001
+            fail(f"knots {bad_xs.tolist()} should raise ValueError, got {type(exc).__name__}")
+        fail(f"knots {bad_xs.tolist()} with {bad_ys.size} heights should raise ValueError, but nothing was raised")
+
+
+@check("hinge_interpolant on sin over [0, pi]: the maximum error falls about 4x each time the knots double")
+def test_hinge_rate(sub):
+    # The slopes-as-output-weights version misses the knots, so it fails the
+    # knot check below before the rate is measured.
+    hinge_interpolant = has(sub, "hinge_interpolant")
+    grid = np.linspace(0.0, np.pi, 20001)
+    errors = []
+    for segments in (8, 16, 32, 64):
+        xs = np.linspace(0.0, np.pi, segments + 1)
+        net = hinge_interpolant(xs, np.sin(xs))
+        close(_run(net, xs), np.sin(xs), atol=1e-9, label=f"{segments} segments, at the knots")
+        err = float(np.max(np.abs(_run(net, grid) - np.sin(grid))))
+        bound = (np.pi / segments) ** 2 / 8.0  # h**2 / 8 times max |sin''| = 1
+        if err > bound * 1.001:
+            fail(f"{segments} segments: max error {err:.6g} exceeds the h**2/8 bound {bound:.6g}")
+        errors.append(err)
+    for (a, b), segments in zip(zip(errors[:-1], errors[1:]), (8, 16, 32)):
+        ratio = a / b
+        if not 3.8 <= ratio <= 4.2:
+            fail(f"doubling {segments} -> {2 * segments} segments: error ratio {ratio:.3f}, expected about 4 (in [3.8, 4.2])")

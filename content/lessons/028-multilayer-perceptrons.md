@@ -2,7 +2,7 @@
 title: Multilayer perceptrons
 slug: 028-multilayer-perceptrons
 part: "Part 4 — Neural networks"
-summary: Why stacked layers need a bend, how a forward pass runs with ReLU and GELU, and how width, depth, and cost trade off.
+summary: Why stacked layers need a bend, how a forward pass runs, how ReLU hinges approximate any curve, and how width, depth, and cost trade off.
 minutes: 80
 gpu: false
 objectives:
@@ -10,6 +10,7 @@ objectives:
   - Compute ReLU, GELU, and their slopes, and solve XOR with two ReLU units followed by one straight cut.
   - Trace an input through a network by hand and write the forward pass for a list of layers.
   - Count the straight pieces of a one-input ReLU network exactly, and show that each extra layer of width-2 units doubles them.
+  - Build the piecewise-linear interpolant of any knots with one ReLU hinge per segment, and state the universal approximation theorem without overclaiming.
   - Count a network's parameters, flops, and stored activations from its layer sizes.
   - Explain why doubling the width roughly quadruples the cost while depth reaches the same pieces with far fewer parameters.
 prereqs:
@@ -24,7 +25,7 @@ Two light switches control one lamp, wired so the lamp is on when exactly one sw
 
 Logistic regression ([sigmoid and log loss](/lessons/008-sigmoid-and-log-loss)) squashes one weighted sum of the inputs, so its decision boundary is a single straight line. On these four points no amount of training fixes that. The fix is to let the model move the points first and cut afterwards, and the move has to include a bend.
 
-This chapter builds that model, the multilayer perceptron. It shows why plain layers cannot supply a bend and builds the cheapest bend there is. It traces numbers through a network so you can predict every value before you run code. And it counts what a network costs, so you can test the claim that depth buys many bends for few parameters.
+This chapter builds that model, the multilayer perceptron, traces numbers through it, shows what it can approximate, and counts what it costs.
 
 ## What you already know
 
@@ -36,7 +37,7 @@ This chapter builds that model, the multilayer perceptron. It shows why plain la
 
 Look at Figure 1, left. The blue points are the two lamp-off settings and the purple points are the two lamp-on settings. The segment between the two blue points and the segment between the two purple points cross at $(0.5, 0.5)$, the midpoint of each.
 
-Suppose a line did separate the classes. A side of a line is a half-plane, so if both blue points lie on one side, their midpoint does too. By the same argument the midpoint of the purple points lies on the other side. But it is the same point, so no such line exists, and the orange line in the figure, like any other, misclassifies at least one point.
+Suppose a line did separate the classes. A side of a line is a half-plane, so if both blue points lie on one side, their midpoint does too. The same holds for the purple pair, on the other side. The midpoint is the same point, so no such line exists.
 
 ```figure
 <svg viewBox="0 0 600 262" role="img" aria-label="Left: the four switch settings as points, blue for lamp off and purple for lamp on, with the two diagonals crossing at (0.5, 0.5) and one orange line that misclassifies a point. Right: the same four points after two ReLU units, where the blue points both land at the origin and one straight orange line separates the classes.">
@@ -84,11 +85,11 @@ Suppose a line did separate the classes. A side of a line is a half-plane, so if
 Figure 1. Left: the blue pair and the purple pair have the same midpoint, (0.5, 0.5), so no line can put the blue pair on one side and the purple pair on the other. Right: after two ReLU units the blue points land together at the origin and the purple points move away, so one line cuts them apart.
 ```
 
-The right panel shows the way out. If a first stage moves the points so that the blue pair lands together and the purple pair lands apart, a line can finish the job. A neural network does this: hidden units re-draw the points, and the last layer is logistic regression on the result. The question is what kind of move is allowed.
+The right panel shows the way out. If a first stage moves the points so that the blue pair lands together and the purple pair lands apart, a line can finish the job. A neural network does this: hidden units re-draw the points, and the last layer is logistic regression on the result.
 
 ## Why stacking plain layers does not help
 
-A layer holds several **units**, each a small detector: a weighted sum of all the inputs plus its own constant. For two switches, one unit might compute `1*x1 - 1*x2`, which is large when switch one is up and switch two is down. Put the weights of the units in the rows of a matrix `W` and the constants in a vector `b`. With 2 inputs and 3 units, `W` has shape `(out, in)` = `(3, 2)`, and `W @ x + b` gives the three readings at once. For a row of data you write `x @ W.T + b`.
+A layer holds several **units**, each a small detector: a weighted sum of all the inputs plus its own constant. Put the weights of the units in the rows of a matrix `W` and the constants in a vector `b`. With 2 inputs and 3 units, `W` has shape `(out, in)` = `(3, 2)`, and `W @ x + b` gives the three readings at once. For a row of data you write `x @ W.T + b`.
 
 The obvious fix is more layers: feed the first layer's output into a second one. Take $x = [2, -3]$. Let the first layer have rows $(1, 0)$ and $(0, 2)$ with constants $[1, 0]$, and let the second have the single row $[3, 1]$ with constant $4$. Run it:
 
@@ -108,7 +109,7 @@ W = W2 @ W1
 b = W2 @ b1 + b2
 ```
 
-Scaling a number and then scaling it again is one scaling, so a hundred layers with nothing between them are still one affine map. A narrow middle layer makes it worse, because $W_2 W_1$ cannot have more independent output directions (its **rank**) than the middle layer has units.
+A hundred layers with nothing between them are still one affine map. A narrow middle layer makes it worse, because $W_2 W_1$ cannot have more independent output directions (its **rank**) than the middle layer has units.
 
 > [!KEY]
 > Without something between them, any stack of affine layers is one affine layer. Depth buys nothing until a layer does something that is not affine.
@@ -191,7 +192,7 @@ Figure 2 shows a network with two inputs, three hidden units, and one output. Th
 Figure 2. The running example, with every number retraced. Solid blue lines are weights equal to 1 and dashed grey lines are weights equal to 0. The value z is each unit's reading before the bend. ReLU keeps 2 and cuts the other two to 0 (crossed out), so the output unit adds 2 + 0 + 0 and the bias 0.5 to get 2.5.
 ```
 
-Unit 1 has weights $(1, 0)$ and reads $2$. Unit 2 has weights $(0, 1)$ and reads $-3$. Unit 3 has weights $(1, 1)$ and constant $-1$, so it asks whether the sum of the readings beats 1, and it reads $2 + (-3) - 1 = -2$. Each unit's raw reading, before any bend, is its **pre-activation**, here $[2, -3, -2]$. The bend turns them into the **activations**: ReLU gives $[2, 0, 0]$. The output unit has weights $(1, 1, 1)$, constant $0.5$, and no bend, so it gives $2 + 0 + 0 + 0.5 = 2.5$.
+Unit 1 has weights $(1, 0)$ and reads $2$. Unit 2 has weights $(0, 1)$ and reads $-3$. Unit 3 has weights $(1, 1)$ and constant $-1$, and it reads $2 + (-3) - 1 = -2$. Each raw reading, before any bend, is a **pre-activation**: $[2, -3, -2]$. The **activations** after ReLU are $[2, 0, 0]$. The output unit has weights $(1, 1, 1)$, constant $0.5$, and no bend, so it gives $2 + 0 + 0 + 0.5 = 2.5$.
 
 Running the numbers from the input to the output, layer by layer, is the **forward pass**. Every layer multiplies by the weights, adds the constants, and bends every entry, so a network of thousands of units is still a short loop. For row data one step is
 
@@ -200,18 +201,18 @@ z = h @ W.T + b
 h = activation(z)
 ```
 
-The common mistake is to write `h @ W` and leave out the transpose. When `W` is `(3, 2)`, numpy raises a shape error, but when `W` is square it runs and silently returns wrong numbers, because it reads the columns of `W` as units instead of the rows.
+The common mistake is `h @ W` without the transpose. A square `W` runs and silently returns wrong numbers, because it reads columns as units.
 
 ## Soften the corner with GELU
 
-ReLU has a corner at 0, and every negative reading is cut to exactly 0, so a nudge to a slightly negative unit changes nothing. Many networks use a smooth cousin, the **Gaussian error linear unit**, GELU for short. Its idea: multiply $x$ by the probability that a standard bell-curve random number falls below $x$. That probability is near 0 for very negative $x$, so $x$ is switched off, and near 1 for large $x$, so $x$ passes. Code uses a stand-in built from **tanh**, a smooth S-shaped function that rises from $-1$ to $1$:
+ReLU has a corner at 0, and a slightly negative unit is cut to exactly 0. Many networks use a smooth cousin, the **Gaussian error linear unit**, GELU for short: multiply $x$ by the probability that a standard bell-curve random number falls below $x$. That is near 0 for very negative $x$ and near 1 for large $x$. Code uses a stand-in built from **tanh**, a smooth S-shaped function that rises from $-1$ to $1$:
 
 $$
 \operatorname{gelu}(x) = \tfrac{1}{2}\, x \left(1 + \tanh(u)\right), \qquad
 u = \sqrt{2/\pi}\,\left(x + 0.044715\, x^3\right) .
 $$
 
-Read it aloud: "squash a scaled cubic in $x$ with tanh, shift the result from $(-1, 1)$ up to $(0, 2)$, halve it to get a switch between 0 and 1, and multiply by $x$." At $x = 1$, $u = 0.797885 \times 1.044715 = 0.833562$, $\tanh(u) = 0.682384$, the switch is $0.841192$, and $\operatorname{gelu}(1) = 0.841192$. The exact bell-curve version gives $0.841345$, so the stand-in is close. At $x = -1$ the same steps give $\operatorname{gelu}(-1) = -0.158808$, a small dip below 0 that ReLU never makes. Figure 3 plots both curves.
+Read it aloud: "squash a scaled cubic in $x$ with tanh, turn the result into a switch between 0 and 1, and multiply by $x$." At $x = 1$, $u = 0.797885 \times 1.044715 = 0.833562$, $\tanh(u) = 0.682384$, the switch is $0.841192$, and $\operatorname{gelu}(1) = 0.841192$. At $x = -1$ the same steps give $\operatorname{gelu}(-1) = -0.158808$, a small dip below 0 that ReLU never makes. Figure 3 plots both curves.
 
 ```python
 u = np.sqrt(2 / np.pi) * (x + 0.044715 * x**3)
@@ -224,9 +225,7 @@ $$
 \operatorname{gelu}'(x) = \tfrac{1}{2}(1 + t) + \tfrac{1}{2}\, x\, (1 - t^2)\, \sqrt{2/\pi}\,\left(1 + 3 \cdot 0.044715\, x^2\right) .
 $$
 
-Read it aloud: "the switch itself, plus $x$ times how fast the switch is changing." At $x = 1$ the switch is $0.841192$, and the second term is $0.5 \times 0.534352 \times 0.904917 = 0.241772$, so the slope is $1.082964$.
-
-A slope above 1 may surprise you: past the dip the curve rises faster than a straight line to catch up with $x$. Left of about $-0.75$ the slope is slightly negative, which ReLU never has.
+At $x = 1$ the switch is $0.841192$, and the second term is $0.5 \times 0.534352 \times 0.904917 = 0.241772$, so the slope is $1.082964$.
 
 ```figure
 <svg viewBox="0 0 600 250" role="img" aria-label="Left: ReLU in grey and GELU in orange on the range minus 4 to 4; GELU dips just below zero for negative inputs and matches ReLU far from zero. Right: ReLU's slope is a step from 0 to 1, while GELU's slope rises smoothly, passing 0.5 at zero and peaking slightly above 1 near x equal to 1.4.">
@@ -344,7 +343,7 @@ Now feed $T$'s output into $T$ again. Because $T$ takes $[0,1]$ onto $[0,1]$, th
 Figure 4. Each fold doubles the number of pieces: 2, then 4, then 8. The colours alternate piece by piece. Notice that every peak reaches 1 and every valley reaches 0, so the next fold has a full-height copy of the zigzag to work on in each half.
 ```
 
-Each fold needs two hinges, so a depth-$k$ network uses $2k$ hidden units. Layer 1 holds $h_1 = \operatorname{relu}(x)$ and $h_2 = \operatorname{relu}(x - \tfrac12)$, so the tent's output is $y = 2h_1 - 4h_2$. The next layer needs $\operatorname{relu}(y)$ and $\operatorname{relu}(y - \tfrac12)$, but a layer only takes weighted sums of the previous layer's values. So you fuse the combine step into its weights: both rows are $[2, -4]$, and the constants are $[0, -\tfrac12]$. The first layer has rows $[1]$ and $[1]$ with the same constants, and the last is $[2, -4]$ with no bend. One hidden layer needs at least $2^k - 1$ units for $2^k$ pieces. At $k = 6$ the folded network has 64 pieces from 12 units.
+Each fold needs two hinges. Layer 1 holds $h_1 = \operatorname{relu}(x)$ and $h_2 = \operatorname{relu}(x - \tfrac12)$, so the tent's output is $y = 2h_1 - 4h_2$. The next layer needs $\operatorname{relu}(y)$ and $\operatorname{relu}(y - \tfrac12)$, but a layer only takes weighted sums of the previous layer's values. So you fuse the combine step into its weights: both rows are $[2, -4]$, and the constants are $[0, -\tfrac12]$. The last layer is $[2, -4]$ with no bend, so depth $k$ uses $2k$ hidden units. One hidden layer needs at least $2^k - 1$ units for $2^k$ pieces. At $k = 6$ the folded network has 64 pieces from 12 units.
 
 ## Count the pieces exactly
 
@@ -364,6 +363,27 @@ Depth multiplies here. In the sawtooth's second layer, the reading $y - \tfrac12
 > [!KEY]
 > Width adds bends one at a time. A layer can fold the curve the previous layer made, so $k$ layers of width 2 make $2^k$ pieces from $2k$ units, while one hidden layer needs about $2^k$.
 
+## Hinges reach any curve
+
+Pick points on a curve and join them with straight segments. A one-hidden-layer ReLU network builds that zigzag with one hinge per segment: start at the first height, then at each knot add a hinge that changes the slope.
+
+Take the knots $(0,1)$, $(1,3)$, $(2,2)$, $(4,2)$. The segment slopes are $2$, $-1$, $0$. The first hinge, at $x=0$, takes the slope from 0 to 2, so its output weight is $2$. The hinges at $x=1$ and $x=2$ change it by $-3$ and $+1$. At $x=3$ the network gives $1 + 2(3) - 3(2) + 1(1) = 2$, on the flat segment from $(2,2)$ to $(4,2)$. Using the slopes $2, -1, 0$ as output weights instead gives 5.
+
+With knots $x_0 < \dots < x_n$, heights $y_j$, and slopes $s_j = (y_{j+1}-y_j)/(x_{j+1}-x_j)$:
+
+$$
+f(x) = y_0 + \sum_{j=0}^{n-1} c_j \operatorname{relu}(x - x_j), \qquad c_0 = s_0,\quad c_j = s_j - s_{j-1} .
+$$
+
+Read it aloud: "the first height, plus a hinge at each segment's left knot, weighted by the change in slope." On $[x_j, x_{j+1}]$ only hinges $0$ to $j$ are on, and their weights sum to $s_j$, so $f$ follows each segment and hits every knot.
+
+For smooth $g$ and knots $h$ apart, the error is at most $\tfrac{h^2}{8}\max|g''|$. For $\sin$ on $[0, \pi]$ the measured maximum error is $0.0188$ with 8 segments and $0.00479$ with 16, a ratio of $3.93$: doubling the knots cuts the error about 4 times.
+
+The **universal approximation theorem** makes this general. For a compact set $K \subset \mathbb{R}^d$, a continuous $g$ on $K$, and any $\varepsilon > 0$, some one-hidden-layer network is within $\varepsilon$ of $g$ at every point of $K$. Cybenko (1989) proved it for sigmoid units, Hornik (1991) for bounded, non-constant activations, and Leshno et al. (1993) for locally bounded, piecewise continuous ones exactly when the activation is not a polynomial.
+
+> [!WARNING]
+> The theorem says a network exists. It says nothing about how many units you need, whether training finds the weights, or the fit outside $K$.
+
 ## Cost and scaling
 
 A **parameter** is one number the network learns: every entry of every `W` and `b`. A layer has `out * in` weights and `out` biases. Layers of size 4, 8, 8, and 3 have shapes $(8, 4)$, $(8, 8)$, and $(3, 8)$, so
@@ -372,53 +392,55 @@ $$
 (32 + 8) + (64 + 8) + (24 + 3) = 40 + 72 + 27 = 139 .
 $$
 
-A **flop** is one floating-point operation, such as one addition or one multiplication, and flops set how long a prediction takes. Each of the `in * out` weights takes part in one multiplication and one addition, so the product costs $2 \cdot \text{in} \cdot \text{out}$ flops. Add `out` for the bias, then the bend on each output: 1 for ReLU, 9 for GELU (counting tanh as one), and 0 for identity. These are counting conventions, so treat totals as comparisons, not stopwatch readings. For the 4-8-8-3 network with ReLU, ReLU, then identity, the layers cost $64 + 8 + 8 = 80$, $128 + 8 + 8 = 144$, and $48 + 3 + 0 = 51$, a total of 275. As a formula for one layer:
+A **flop** is one floating-point operation, such as one addition or one multiplication, and flops set how long a prediction takes. Each of the `in * out` weights takes one multiplication and one addition, so the product costs $2 \cdot \text{in} \cdot \text{out}$ flops. Add `out` for the bias, then the bend per output: 1 for ReLU, 9 for GELU (counting tanh as one), 0 for identity. These are counting conventions, so compare totals and do not time with them. For the 4-8-8-3 network with ReLU, ReLU, then identity, the layers cost $64 + 8 + 8 = 80$, $128 + 8 + 8 = 144$, and $48 + 3 + 0 = 51$, a total of 275. As a formula for one layer:
 
 $$
 \text{flops} = 2\,\text{in}\cdot\text{out} + \text{out} + c_{\text{act}}\cdot\text{out} ,\qquad c_{\text{relu}} = 1,\; c_{\text{gelu}} = 9,\; c_{\text{identity}} = 0 .
 $$
 
-Training adds a third cost. Adjusting the weights means walking the network in reverse, and that walk needs the values each layer produced on the way forward, so training keeps the input and every layer's output. For one input, the 4-8-8-3 network holds $4 + 8 + 8 + 3 = 23$ numbers, and for a batch of 100 it holds 2300.
+Training adds a third cost: walking the network in reverse needs the values each layer produced going forward, so it keeps the input and every layer's output. For one input, the 4-8-8-3 network holds $4 + 8 + 8 + 3 = 23$ numbers, and for a batch of 100 it holds 2300.
 
-A layer with $m$ inputs and $m$ outputs has an $m \times m$ matrix, so doubling $m$ quadruples its weights, while doubling the depth only adds more layers of the same size. So doubling the width roughly quadruples parameters and flops, and doubling the depth roughly doubles them.
+A layer with $m$ inputs and $m$ outputs has $m^2$ weights, so doubling the width roughly quadruples parameters and flops, while doubling the depth roughly doubles them.
 
-That is the case for the sawtooth. At depth $k$ it has $4 + 6(k-1) + 3 = 6k + 1$ parameters. A one-hidden-layer network with the $2^k$ units it needs has $3\cdot 2^k + 1$: weights in, constants, weights out, and one output constant. They match at $k = 1$ (7) and $k = 2$ (13), and then part ways: at $k = 10$ it is 61 against 3073.
+The sawtooth at depth $k$ has $4 + 6(k-1) + 3 = 6k + 1$ parameters. A one-hidden-layer network with the $2^k$ units it needs has $3\cdot 2^k + 1$. They match at $k = 1$ (7) and $k = 2$ (13), and then part ways: at $k = 10$ it is 61 against 3073.
 
 > [!KEY]
 > A network's cost follows from its layer shapes alone: parameters are `out * in + out` per layer, flops are $2\,\text{in}\cdot\text{out} + \text{out} + c\cdot\text{out}$, and training keeps the input and every layer's output. Doubling the width roughly quadruples the cost, while folding with depth makes $2^k$ pieces for $6k + 1$ parameters.
 
 > [!RECAP]
 > - A layer is `h @ W.T + b` with `W` shaped `(out, in)`, and two affine layers merge into `W2 @ W1` and `W2 @ b1 + b2`.
-> - A bend between layers, ReLU (`np.maximum(x, 0.0)`) or GELU, is what makes depth useful.
-> - GELU is `0.5 * x * (1 + tanh(u))`, and its slope has two terms built from one `t = tanh(u)`.
-> - Counting pieces tracks a slope and an intercept per stretch, splits at interior roots, cuts negative ReLU units to 0, and merges equal neighbours.
+> - A bend between layers, ReLU or GELU, is what makes depth useful.
+> - A hinge at each knot, weighted by the change in slope, reproduces the piecewise-linear interpolant.
+> - Counting pieces tracks a slope and an intercept per stretch, splits at interior roots, and merges equal neighbours.
 > - Parameters per layer are `out * in + out`, flops add the product, bias, and bend, and stored activations are `in_dim` plus the sum of the `out` sizes.
 
 ## Build it step by step
 
-Build eleven functions, in this order.
+Build twelve functions, in this order.
 
-1. **`relu(x)`** returns the elementwise larger of the entry and 0, in the same shape. Reach for `np.maximum`, because Python's `max` does not work on arrays.
+1. **`relu(x)`** returns the elementwise larger of the entry and 0, in the same shape.
 
-2. **`relu_grad(x)`** returns 1.0 where `x > 0` and 0.0 where `x < 0`, as floats. A mask of booleans fails the finite-difference check, so cast with `.astype(float)`.
+2. **`relu_grad(x)`** returns 1.0 where `x > 0` and 0.0 where `x < 0`, as floats. Cast a boolean mask with `.astype(float)`.
 
 3. **`compose_affine(W1, b1, W2, b2)`** returns the pair `(W, b)` of the single layer that does the same job as the two. Mind the order: the first layer's matrix sits on the right of the product.
 
-4. **`gelu(x)`** returns the tanh version. Compute `u` once and reuse it. Dropping the cubic term gives close numbers that fail the check at 1.
+4. **`gelu(x)`** returns the tanh version. Dropping the cubic term gives close numbers that fail the check at 1.
 
-5. **`gelu_grad(x)`** returns the slope. Compute `t = np.tanh(u)` once and use it in both terms. A common mistake is forgetting the `3 *` in the slope of `u`.
+5. **`gelu_grad(x)`** returns the slope. A common mistake is forgetting the `3 *` in the slope of `u`.
 
-6. **`mlp_forward(params, x)`** takes a list of layers, each a dict with keys `"W"`, `"b"`, and `"activation"`, and a vector `x`, and returns the output vector. For each layer, form `z`, then pick the bend by name. `"identity"` leaves `z` unchanged, and an unknown name raises `ValueError`.
+6. **`mlp_forward(params, x)`** runs a list of layers on a vector `x` and returns the output vector. Pick the bend by name: `"identity"` leaves `z` unchanged, and an unknown name raises `ValueError`.
 
-7. **`count_linear_regions_1d(params, x_min, x_max)`** returns the number of pieces of a one-input network as an integer. Keep a list of stretches with their ends, slopes, and intercepts. Split only at roots strictly inside a stretch, and skip units whose slope is near 0. The most common mistake is to skip the merge, which over-counts a crossing that changes nothing.
+7. **`count_linear_regions_1d(params, x_min, x_max)`** returns the number of pieces of a one-input network as an integer. Split only at roots strictly inside a stretch, and skip units whose slope is near 0. Skipping the merge over-counts a crossing that changes nothing.
 
-8. **`sawtooth_network(depth)`** returns `depth + 1` layers: the first with `W` of shape `(2, 1)` and constants `[0, -0.5]`, then `depth - 1` ReLU layers with the fused weights above, then `W = [[2, -4]]` with `"identity"`. Do not add a separate layer that combines the two units.
+8. **`sawtooth_network(depth)`** returns `depth + 1` layers: the first with `W` of shape `(2, 1)` and constants `[0, -0.5]`, then `depth - 1` ReLU layers with the fused weights above, then `W = [[2, -4]]` with `"identity"`.
 
-9. **`parameter_count(params)`** returns the size of `W` plus the size of `b`, summed over layers, as an integer. A common mistake is to count only the weights.
+9. **`parameter_count(params)`** returns the size of `W` plus the size of `b`, summed over layers. Do not count only the weights.
 
-10. **`flop_count(params)`** reads `out_dim, in_dim = W.shape` per layer, adds the product, the bias, and the bend cost per output, and sums over layers. Do not charge identity a flop.
+10. **`flop_count(params)`** sums the product, bias, and bend cost per layer. Do not charge identity a flop.
 
-11. **`activation_memory(params, in_dim)`** returns the input size plus every layer's output size. A common mistake is to leave out the input.
+11. **`activation_memory(params, in_dim)`** returns the input size plus every layer's output size. Do not leave out the input.
+
+12. **`hinge_interpolant(xs, ys)`** returns two layers in the `mlp_forward` format: `n - 1` ReLU hinges with `W` of ones and `b = -xs[:-1]`, then an identity layer whose weights are the changes in slope and whose bias is `ys[0]`. Weights equal to the slopes themselves are the mistake to avoid. Raise `ValueError` unless `xs` strictly increases and matches `ys`.
 
 > [!TIP]
 > Check any slope you write with `(f(x + h) - f(x - h)) / (2 * h)` at `h = 1e-5`. If the two disagree away from a corner, the slope is wrong.
@@ -428,8 +450,13 @@ Build eleven functions, in this order.
 
 ## Where this breaks
 
-A ReLU unit whose reading is negative for every input outputs 0 and has slope 0, so nothing flowing back can change it. People call this a dead unit. The sawtooth network exists, but training rarely finds it, so depth makes a function possible, not likely. The piece counter assumes one input, because with more inputs the pieces are flat patches that are much harder to count.
+A ReLU unit whose reading is negative for every input outputs 0 and has slope 0, so nothing flowing back can change it. People call this a dead unit. The sawtooth network exists, but training rarely finds it, so depth makes a function possible, not likely.
 
 ## The exercise
 
-You implement `relu`, `relu_grad`, `compose_affine`, `gelu`, `gelu_grad`, `mlp_forward`, `count_linear_regions_1d`, `sawtooth_network`, `parameter_count`, `flop_count`, and `activation_memory`. The checks compare the bends and slopes with hand values and finite differences, and `compose_affine` with the hand example and the rank limit. They solve XOR with your `relu`, run `mlp_forward` on the hand example (it returns $[2.5]$), count hinges, confirm the sawtooth has $2^k$ pieces, and check the 4-8-8-3 network (139 parameters, 275 flops, 23 stored activations).
+You implement the twelve functions above. The checks compare the bends and slopes with hand values and finite differences, solve XOR with your `relu`, run `mlp_forward` on the hand example (it returns $[2.5]$), count hinges, confirm the sawtooth has $2^k$ pieces, and check the 4-8-8-3 network (139 parameters, 275 flops, 23 stored activations). Three more checks test `hinge_interpolant`: the hand example, exact heights and straight segments, and the 4 times error drop on $\sin$.
+
+## Further reading
+
+- The [6.S898 Deep Learning, Fall 2023 schedule](https://phillipi.github.io/6.s898/) lists "Approximation theory" on Thursday 9/14 (rows are dates, not numbered lectures), covering universal approximation and Barron's theorem. The [MIT OCW 6.7960 Fall 2024 notes](https://ocw.mit.edu/courses/6-7960-deep-learning-fall-2024/lists/lecture-notes/) title the topic "Lecture 3: Approximation Theory".
+- Cybenko (1989), Hornik (1991), and Leshno, Lin, Pinkus, and Schocken (1993, *Neural Networks* 6(6), 861-867) state the theorem.

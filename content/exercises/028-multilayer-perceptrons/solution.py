@@ -127,6 +127,20 @@ def activation_memory(params: list[dict], in_dim: int) -> int:
     return int(in_dim + sum(layer["W"].shape[0] for layer in params))
 
 
+def hinge_interpolant(xs: np.ndarray, ys: np.ndarray) -> list[dict]:
+    xs = np.asarray(xs, dtype=float)
+    ys = np.asarray(ys, dtype=float)
+    if xs.ndim != 1 or xs.shape != ys.shape or xs.size < 2 or np.any(np.diff(xs) <= 0.0):
+        raise ValueError("xs must be strictly increasing and match ys, with at least 2 knots")
+    slopes = np.diff(ys) / np.diff(xs)
+    # The first hinge starts the first slope. Each later hinge adds the change.
+    out_weights = np.diff(slopes, prepend=0.0)
+    return [
+        {"W": np.ones((xs.size - 1, 1)), "b": -xs[:-1], "activation": "relu"},
+        {"W": out_weights.reshape(1, -1), "b": np.array([ys[0]]), "activation": "identity"},
+    ]
+
+
 def _make_net(dims, acts, seed=0):
     rng = np.random.default_rng(seed)
     return [
