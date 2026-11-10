@@ -11,7 +11,7 @@ token or answer, or one per preference pair. The log probabilities here are free
 numbers that you move directly; a real policy moves them through its weights.
 
 The Bradley-Terry functions and optimal_policy are already written below. Use
-them. The six functions after them are the reference answers.
+them. The seven functions after them are the reference answers.
 """
 
 import numpy as np
@@ -107,6 +107,23 @@ def dpo_grad(
     grad_r_chosen, grad_r_rejected = bradley_terry_grad(r_chosen, r_rejected)
     # Each implicit reward moves by beta per unit of policy log probability.
     return beta * grad_r_chosen, beta * grad_r_rejected
+
+
+def terminal_reward_gae(
+    reward: float, values: np.ndarray, gamma: float = 1.0, lam: float = 1.0
+) -> np.ndarray:
+    values = np.asarray(values, dtype=float)
+    n = len(values)
+    advantages = np.zeros(n)
+    running = 0.0
+    for t in reversed(range(n)):
+        # The value after the last token is 0, because the answer has ended.
+        next_value = values[t + 1] if t + 1 < n else 0.0
+        step_reward = reward if t == n - 1 else 0.0
+        delta = step_reward + gamma * next_value - values[t]
+        running = delta + gamma * lam * running
+        advantages[t] = running
+    return advantages
 
 
 if __name__ == "__main__":

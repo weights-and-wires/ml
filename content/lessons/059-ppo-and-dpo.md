@@ -3,13 +3,14 @@ title: "PPO and DPO: two ways to reach the leashed optimum"
 slug: 059-ppo-and-dpo
 part: "Part 7 — Large language models"
 summary: PPO reaches the best leashed policy by sampling, an advantage, and a clip. DPO reads a reward off the policy and trains on pairs directly.
-minutes: 75
+minutes: 80
 gpu: false
 objectives:
   - Walk through one round of PPO, from sample and score to baseline, clipped update, and repeat.
   - Compute an advantage and a clipped objective by hand, and explain what the clip does for positive and negative advantages.
   - Solve the best-policy formula for the reward, and show with numbers why the unknown normaliser cancels in a comparison.
   - Compute the DPO implicit reward, loss, and gradient, and read the gradient as a per-pair weight that fades as a pair is ranked right.
+  - State how the per-answer advantage relates to generalised advantage estimation, and show that with one terminal reward and gamma = lambda = 1 it is the reward minus the value guess at every token.
   - Compare the two methods by the models they keep in memory and whether they generate text during training.
 prereqs:
   - 058-reward-models-and-the-kl-leash
@@ -108,6 +109,21 @@ A_i = \frac{(r_i - v_i) - \text{mean}}{\text{std}}
 $$
 
 Read it aloud: reward minus the value head's guess, then recentred and rescaled over the batch. If every sample matches its guess, the standard deviation is 0 and the advantages must be 0, not `nan`, so add a tiny constant to the denominator. In numpy: `raw = rewards - values`, then `(raw - raw.mean()) / (raw.std() + 1e-8)`.
+
+### How this relates to a full PPO trainer
+
+This chapter treats the advantage as given for each answer. A real PPO trainer fits the value head by regression: it nudges the head's guess toward the return the rollouts earned. It also spreads credit over tokens with *generalised advantage estimation* (GAE) instead of giving one number to a whole answer. The reinforcement learning course teaches both.
+
+Here is how the two forms connect. Take a three-token answer with one reward, 3.5, at the last token, and value guesses $[2.0, 2.5, 3.0]$ for the three tokens. The value after the last token is 0. Set $\gamma = 1$ and $\lambda = 1$. GAE sums one-step errors $\delta_t = r_t + \gamma V_{t+1} - V_t$, which here are $0.5$, $0.5$, and $0.5$. Summing from each token to the end gives advantages $[1.5, 1.0, 0.5]$. Each one is $3.5$ minus that token's guess, which is the per-answer form applied at every token. With $\gamma$ or $\lambda$ below 1, the later errors count for less, and the advantages move away from that simple gap.
+
+To go deeper, read these lessons in the RL course:
+
+- [Baselines and actor-critic](https://rl.ifkash.dev/lessons/031-baselines-and-actor-critic)
+- [Generalized advantage estimation](https://rl.ifkash.dev/lessons/032-generalized-advantage-estimation)
+- [Proximal policy optimization](https://rl.ifkash.dev/lessons/034-proximal-policy-optimization)
+- [RLHF with PPO](https://rl.ifkash.dev/lessons/053-rlhf-with-ppo)
+
+The exercise has a small `terminal_reward_gae` function that reproduces the numbers above.
 
 ### Nudge, but not too far
 
@@ -421,12 +437,18 @@ def dpo_grad(policy_chosen_logps, policy_rejected_logps,
 
 ## Where this breaks
 
-A weak reward model is still the weakest link for PPO. The leash and the clip slow down a policy that chases its blind spots, and neither removes them. The value head must learn at the pace of the policy, and when it lags the advantages mislead. Because each step is small, PPO needs many rounds, and each round needs fresh generation.
+A weak reward model is still the weakest link for PPO. The leash and the clip slow down a policy that chases its blind spots, and neither removes them. The value head must learn at the pace of the policy, and when it lags the advantages mislead. The advantage in this chapter is also incomplete without a trained value function: a real trainer fits the value head by regression and spreads credit over tokens with GAE. Because each step is small, PPO needs many rounds, and each round needs fresh generation.
 
 DPO learns the preferences in its pairs, blind spots included, and it has no signal for prompts the pairs do not cover. The pairs were usually written by some other model, so the policy trains on answers it might never write itself. A small $\beta$ lets the policy move far from the reference before the weights fade, and a large $\beta$ keeps it close. Practitioners often add a small supervised loss on the chosen answers to keep their probability from falling.
 
 ## The exercise
 
-You build `policy_ratio`, `advantage`, `clipped_objective`, `implicit_reward`, `dpo_loss`, and `dpo_grad`. The PPO checks verify the hand-worked ratios, the advantages $[1, 1, -1, -1]$ and the zero-variance case, and the objective value $0.05$. Finite differences confirm that the objective's gradient is 0 in the flat regions and nonzero for a bad answer whose ratio went above $1 + \epsilon$, and a gradient ascent on one ratio stops near $1 + \epsilon$.
+You build `policy_ratio`, `advantage`, `clipped_objective`, `implicit_reward`, `dpo_loss`, `dpo_grad`, and a short pointer to the full method, `terminal_reward_gae`. The PPO checks verify the hand-worked ratios, the advantages $[1, 1, -1, -1]$ and the zero-variance case, and the objective value $0.05$. Finite differences confirm that the objective's gradient is 0 in the flat regions and nonzero for a bad answer whose ratio went above $1 + \epsilon$, and a gradient ascent on one ratio stops near $1 + \epsilon$.
 
 The DPO checks verify the implicit reward and the planted-reward recovery from `optimal_policy`, the loss against Bradley-Terry on the implicit rewards, the value $\log 2$ at the start, and the claim that shifting both reference log probabilities by one constant changes nothing. They also check the gradient against finite differences, check that its size is $\beta(1 - \sigma(u))/n$, and run fifty gradient steps to confirm that the loss falls and the chosen answer gains on the rejected one.
+
+The `terminal_reward_gae` checks compare a hand-worked answer with $\gamma = 0.9$ and $\lambda = 0.8$, and confirm that with $\gamma = \lambda = 1$ every token's advantage is the reward minus its value guess.
+
+## Further reading
+
+- Schulman, Moritz, Levine, Jordan, and Abbeel, ["High-Dimensional Continuous Control Using Generalized Advantage Estimation"](https://arxiv.org/abs/1506.02438) (ICLR 2016). Section 3 defines the one-step error $\delta_t^V = r_t + \gamma V(s_{t+1}) - V(s_t)$ and the estimator as the $\gamma\lambda$-discounted sum of those errors (Equation 16). Equation 18 shows that $\lambda = 1$ gives the discounted return minus $V(s_t)$, which is the per-answer form this chapter uses.

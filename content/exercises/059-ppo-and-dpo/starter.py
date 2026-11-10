@@ -11,7 +11,7 @@ token or answer, or one per preference pair. The log probabilities here are free
 numbers that you move directly; a real policy moves them through its weights.
 
 The Bradley-Terry functions and optimal_policy are already written below. Use
-them. You write the six functions after them.
+them. You write the seven functions after them.
 """
 
 import numpy as np
@@ -163,6 +163,28 @@ def dpo_grad(
         A tuple (grad_chosen, grad_rejected), each shape (n,).
     """
     raise NotImplementedError("dpo_grad")
+
+
+def terminal_reward_gae(
+    reward: float, values: np.ndarray, gamma: float = 1.0, lam: float = 1.0
+) -> np.ndarray:
+    """Per-token advantages for an answer that earns one reward at its last token.
+
+    The reward arrives after the final token, and every earlier token gets
+    reward 0. The value after the final token is 0, because the answer ended.
+    Work backward from the last token: delta_t = r_t + gamma * V_{t+1} - V_t,
+    then A_t = delta_t + gamma * lam * A_{t+1}, with A_{n} = 0.
+
+    Args:
+        reward: the single reward paid after the last token.
+        values: the value head's guess for each token, shape (n,).
+        gamma: the discount, in [0, 1].
+        lam: the GAE smoothing parameter, in [0, 1].
+
+    Returns:
+        The advantage of each token, shape (n,).
+    """
+    raise NotImplementedError("terminal_reward_gae")
 
 
 if __name__ == "__main__":
