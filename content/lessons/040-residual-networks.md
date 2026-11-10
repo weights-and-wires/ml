@@ -366,7 +366,7 @@ The checks call the functions in this order:
 - A block that changes the channel count cannot add its input to its output, so it puts a learned 1×1 convolution on the shortcut, a **projection shortcut**. Memory grows in a straight line with depth, because backpropagation keeps every block's activations.
 - A shortcut keeps the gradient alive, but it does not fix a badly scaled branch. With weight scale 0.5 in place of 0.1, the same 50-layer residual stack has a median length near 150 over 200 seeds, because the notes are no longer small.
 - Shrinking gradients are one mechanism, not the whole explanation. The authors of the original residual-network paper reported that plain networks with normalisation layers, whose signals were healthy, still trained worse at depth.
-- Real blocks put normalisation inside the branch, which this chapter leaves out. [The transformer block](/lessons/052-the-transformer-block) builds that version.
+- Real blocks put normalisation inside the branch, which this chapter leaves out. [The transformer block](/lessons/053-the-transformer-block) builds that version.
 - A multiply-add count is a guide and not a stopwatch, because running time also depends on how much data a layer moves.
 
 ## The exercise
