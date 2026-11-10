@@ -169,3 +169,28 @@ def test_training(sub):
         fail(f"the gap between chosen and rejected log probabilities should widen: {gap0:.4f} then {gap1:.4f}")
     if loss1 >= loss0:
         fail(f"the DPO loss should fall: {loss0:.4f} then {loss1:.4f}")
+
+
+# A plausible wrong implementation that these two checks catch: bootstrapping the
+# last token from its own value guess (values[-1]) instead of from 0. The answer
+# has ended, so nothing follows it. With reward 3.5, values [2.0, 2.5, 3.0], and
+# gamma = lam = 1, it gives the last advantage 3.5 + 3.0 - 3.0 = 3.5 instead of 0.5.
+@check("terminal_reward_gae matches the hand-worked advantages [0.6532, 0.56, 0.5] for gamma 0.9 and lambda 0.8")
+def test_gae_hand(sub):
+    gae = has(sub, "terminal_reward_gae")
+    values = np.array([2.0, 2.5, 3.0])
+    got = gae(3.5, values, gamma=0.9, lam=0.8)
+    shape(got, (3,), label="advantages")
+    # delta = [0.25, 0.2, 0.5]; A2 = 0.5, A1 = 0.2 + 0.72 * 0.5, A0 = 0.25 + 0.72 * 0.56.
+    close(got, [0.6532, 0.56, 0.5], atol=1e-10, label="gamma 0.9, lambda 0.8")
+
+
+@check("With gamma = lambda = 1 every token's advantage is the reward minus that token's value guess")
+def test_gae_reduces_to_reward_minus_value(sub):
+    gae = has(sub, "terminal_reward_gae")
+    close(gae(3.5, np.array([2.0, 2.5, 3.0])), [1.5, 1.0, 0.5], atol=1e-10, label="worked example")
+    rng = np.random.default_rng(11)
+    for n in (1, 4, 9):
+        values = rng.uniform(-1.0, 4.0, size=n)
+        reward = float(rng.uniform(0.0, 5.0))
+        close(gae(reward, values, gamma=1.0, lam=1.0), reward - values, atol=1e-10, label=f"{n} tokens")
