@@ -1,0 +1,21 @@
+{
+  "id": "066-state-space-models",
+  "title": "Run attention as a recurrence, and a recurrence as a scan",
+  "brief": "Write causal linear attention in its quadratic and recurrent forms, a state-space model as a recurrence and as a convolution, a zero-order-hold discretisation, and an associative parallel scan with its backward pass.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "feature_map: x + 1 where x is positive and exp(x) elsewhere. Clip x at 0 before calling exp on the other branch, so a large positive x cannot overflow inside np.where.",
+    "causal_linear_attention_quadratic: scores = tril(phi_q @ phi_k.T), then divide each row by its sum and multiply by v. On the worked example the row weights are [1, 0, 0], [1/2, 1/2, 0], and [0, 1/2, 1/2], so the output is [2, 3, 5].",
+    "causal_linear_attention_recurrent: at step t, first add outer(phi_k[t], v[t]) to S and phi_k[t] to z, and only then read phi_q[t] @ S / (phi_q[t] @ z). On the worked example S goes [[2],[0]], [[2],[4]], [[8],[10]] and z goes [1,0], [1,1], [2,2].",
+    "ssm_kernel: start with a vector u = B. For each j, record C @ u and then set u = A @ u. For A = [[0.5]], B = C = [1] the taps are 1, 0.5, 0.25.",
+    "ssm_recurrent: h = A @ h + B * x[t], then y[t] = C @ h. ssm_convolution: np.convolve(x, kernel)[:T] keeps only the causal part. On x = [1, 2, 3] both give [1, 2.5, 4.25].",
+    "discretise_zoh: a_bar = exp(dt * a) and b_bar = (a_bar - 1) / a * b. Use np.expm1(dt * a) / a for accuracy, and use dt where a is 0. For a = -1, b = 1, dt = 1 the pair is (0.3679, 0.6321).",
+    "scan_combine: applying (a1, b1) and then (a2, b2) gives h -> a2 * (a1 * h + b1) + b2. Read off the new pair from that. For (0.5, 1) then (2, 1) the result is (1, 3). Adding the two b values gives 2, which is the classic bug.",
+    "parallel_scan: for shift = 1, 2, 4, and so on while shift < T, combine each element t >= shift with the element shift places earlier, reading from the old arrays, and keep the first shift elements unchanged. After the last round the b array is h. For a = [0.5, 2, 3] and b = [1, 1, 1] it is [1, 3, 10].",
+    "linear_recurrence_backward: sweep t from T-1 down to 0 with g[t] = dh[t] + a[t+1] * g[t+1], where the last term is 0. Then db = g and da[t] = g[t] * h[t-1], with h[-1] = 0. selective_ssm is parallel_scan(a, b * x[:, None]), then a sum of c * h over the state axis."
+  ]
+}

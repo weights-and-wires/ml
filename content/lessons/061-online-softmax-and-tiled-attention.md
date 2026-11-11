@@ -289,7 +289,7 @@ Bytes moved matter too. Dense attention writes `S`, reads it for the softmax, wr
 
 ## Where the rest of the story lives
 
-This chapter owns the algorithm: the streaming softmax, the merge, the tile loop, and the recompute. Making it fast on a GPU belongs to two other courses. The inference course covers [FlashAttention](https://qwen.ifkash.dev/c/14-flash-attention), then [split-KV decode attention](https://qwen.ifkash.dev/c/14a-split-kv-decode-attention) for one query against a long cache, and [paged attention](https://qwen.ifkash.dev/c/15-paged-attention) for a cache stored in pages. The GPU course writes the [FlashAttention kernel](https://gpu.ifkash.dev/c/16-flash-attention) in Triton, forward and backward. Linear attention and state-space models change the maths of the layer instead of the schedule, so they are outside this chapter.
+This chapter owns the algorithm: the streaming softmax, the merge, the tile loop, and the recompute. Making it fast on a GPU belongs to two other courses. The inference course covers [FlashAttention](https://qwen.ifkash.dev/c/14-flash-attention), then [split-KV decode attention](https://qwen.ifkash.dev/c/14a-split-kv-decode-attention) for one query against a long cache, and [paged attention](https://qwen.ifkash.dev/c/15-paged-attention) for a cache stored in pages. The GPU course writes the [FlashAttention kernel](https://gpu.ifkash.dev/c/16-flash-attention) in Triton, forward and backward. Linear attention and [state-space models](/lessons/066-state-space-models) change the maths of the layer instead of the schedule, so they are outside this chapter.
 
 > [!RECAP]
 > Before you build:
