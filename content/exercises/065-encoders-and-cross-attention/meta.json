@@ -1,0 +1,18 @@
+{
+  "id": "065-encoders-and-cross-attention",
+  "title": "Masks, masked-token loss, cross-attention, and span corruption",
+  "brief": "Write padding and causal masks, cross-attention that ignores padded encoder positions, BERT-style token masking with its loss, and T5-style span corruption.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "padding_mask is np.arange(T)[None, :] < lengths[:, None]. For lengths [3, 2] and T = 4 the rows are [1, 1, 1, 0] and [1, 1, 0, 0]. attention_allowed copies that row into every query row: pad[:, None, :], broadcast to (B, T, T). The causal rule multiplies in a lower-triangular matrix.",
+    "masked_softmax: replace blocked scores with -np.inf, subtract the row maximum, exponentiate, divide by the row sum. exp(-inf) is exactly 0, so blocked entries get weight 0 with no extra step. For scores [1000, 1001, 5000] with the last blocked, the weights are [0.2689, 0.7311, 0].",
+    "cross_attention: scores = q_dec @ k_enc.T / np.sqrt(d), with d read from q_dec.shape[-1]. Broadcast pad_mask of shape (T_enc,) to the score shape, call masked_softmax, and return (weights @ v_enc, weights). In the worked example the scores are [0.7071, 0, 0.7071], key 3 is padded, and the weights are [0.6698, 0.3302, 0].",
+    "mask_tokens: draw three arrays shaped like ids from the one rng: chosen = rng.random(shape) < rate, roll = rng.random(shape), and random_ids = rng.integers(0, vocab, size=shape). Use np.where: mask_id where chosen and roll < 0.8, random_ids where chosen and 0.8 <= roll < 0.9, otherwise the original id.",
+    "masked_lm_loss: build log-probabilities as shifted - log(sum(exp(shifted))) with shifted = logits - logits.max(axis=-1, keepdims=True). The per-position loss is -log_probs[np.arange(T), targets]. Average it over positions where chosen is True. On the worked example the per-position losses are [0.2413, 4.0360, 1.0986] and the chosen mean is 0.6700.",
+    "The gradient of one position's loss is softmax(logits) minus the one-hot target. Multiply each row by chosen / n_chosen, so unchosen rows are zero and the chosen rows sum their share of the mean. Handle n_chosen = 0 before you divide.",
+    "span_corrupt: walk the spans in order, keeping a pointer prev to the end of the last span. For span k at (start, length), append ids[prev:start] and the sentinel sentinel_start + k to the input, and append the sentinel and ids[start:start + length] to the target. After the loop, append ids[prev:] to the input and one closing sentinel to the target. For ids 0 to 9, spans (2, 2) and (8, 1), and sentinel_start 100, the target is [100, 2, 3, 101, 8, 102].",
+    "span_corruption_lengths: noise = round(T * density), n_spans = round(noise / mean_span). The input is T - noise + n_spans long and the target is noise + n_spans + 1 long. At T = 512 that is noise 77, spans 26, input 461, and target 104."
+  ]
+}

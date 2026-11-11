@@ -1,0 +1,18 @@
+{
+  "id": "077-diffusion-models",
+  "title": "Diffusion models: add noise, then walk it back",
+  "brief": "Write the cumulative noise schedule and the closed-form noisy sample, the noise-prediction loss and its gradient, one ancestral step and one deterministic step, ancestral samples from an exact two-bell denoiser, and a classifier-free guidance step.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "alpha_bar is the cumulative product of 1 - beta, not 1 - beta itself. On (0.1, 0.2, 0.4) the second entry is 0.72. The value 1 - 0.2 is 0.8.",
+    "q_sample multiplies the clean point by sqrt(alpha-bar) and the noise by sqrt(1 - alpha-bar). Leaving the clean point unscaled keeps the variance and moves the Monte Carlo mean to x0.",
+    "ddpm_loss is the mean of the squared gap between eps and model(x_t, t). For a standard normal cloud the model returns sqrt(1 - alpha-bar) * x_t. The worked pair scores 0.260281. Swapping the two square roots scores 0.291721.",
+    "On one row the gradient of the linear denoiser is minus the residual times x_t. With several rows it is -2 over the number of entries, times the sum of residual times x_t on each coordinate.",
+    "The ancestral mean divides by sqrt(alpha_t) after subtracting (beta_t / sqrt(1 - alpha-bar_t)) * eps. The added noise has scale sqrt(beta-tilde). beta-tilde is 0 at t = 1, so that step ignores the noise argument. Using sqrt(beta_t) changes the scale from 0.267261 to 0.447214.",
+    "ddpm_sample draws x_T from the generator, then steps from t = T down to t = 1, drawing a fresh normal only when t > 1. The 2500-dot, 80-step, seed-0 cloud has a mean near 0 and covariance entries near 3.108, -0.080, and 0.943.",
+    "The deterministic step rebuilds the previous time from the predicted clean point and the same noise prediction. Returning only the predicted clean point gives (1.5, 0) on the worked inputs, where the step is (1.739253, -0.316228).",
+    "classifier_free_guidance is uncond + scale * (cond - uncond). Scale 3 on (1, -0.5) and (0.2, 0) returns (2.6, -1.5). Adding scale * cond without the subtraction returns (3.2, -1.5)."
+  ]
+}
