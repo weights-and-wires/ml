@@ -1,5 +1,5 @@
 {
-  "id": "072-scaling-laws",
+  "id": "073-scaling-laws",
   "title": "Fit a scaling law, price a run, and split its budget",
   "brief": "Fit and extrapolate a power law on log axes, split a loss into a floor and two penalties, count the weights that multiply, price training in flops and days, then find the best split of a budget between model size and data.",
   "needs_gpu": false,

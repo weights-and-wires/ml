@@ -1,6 +1,6 @@
 ---
 title: "Mixtures of experts: routing, the router's gradient, and balance"
-slug: 077-mixtures-of-experts
+slug: 078-mixtures-of-experts
 part: "Part 7 — Large language models"
 summary: A router sends each token to a few experts. It learns through the gate weights, and a balancing loss and a seat limit keep the load even.
 minutes: 80
@@ -14,7 +14,7 @@ objectives:
 prereqs:
   - 063-the-transformer-block
   - 037-softmax-and-whole-network-gradients
-exercise: 077-mixtures-of-experts
+exercise: 078-mixtures-of-experts
 ---
 
 # Mixtures of experts: routing, the router's gradient, and balance

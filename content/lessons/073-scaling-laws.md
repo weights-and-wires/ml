@@ -1,6 +1,6 @@
 ---
 title: "Scaling laws and the compute budget"
-slug: 072-scaling-laws
+slug: 073-scaling-laws
 part: "Part 7 — Large language models"
 summary: Fit a power law on log axes, split a model's loss into a floor and two penalties, then spend a fixed compute budget on size and data.
 minutes: 75
@@ -18,7 +18,7 @@ prereqs:
   - 034-multilayer-perceptrons
   - 063-the-transformer-block
   - 069-training-loop-and-cost
-exercise: 072-scaling-laws
+exercise: 073-scaling-laws
 ---
 
 # Scaling laws and the compute budget

@@ -1,6 +1,6 @@
 ---
 title: Fine-tuning on a budget with LoRA
-slug: 074-fine-tuning-and-lora
+slug: 075-fine-tuning-and-lora
 part: "Part 7 — Large language models"
 summary: Training a parameter costs 16 bytes, so LoRA trains a low-rank update, merges it for serving, and loses only the singular values it drops.
 minutes: 75
@@ -13,10 +13,10 @@ objectives:
   - Derive the gradients of A and B by the chain rule, and say which part of the full gradient a LoRA step follows.
 prereqs:
   - 038-sgd-adam-and-schedules
-  - 073-decoding-and-sampling
+  - 074-decoding-and-sampling
   - 004-stable-least-squares
   - 028-principal-components
-exercise: 074-fine-tuning-and-lora
+exercise: 075-fine-tuning-and-lora
 ---
 
 # Fine-tuning on a budget with LoRA
@@ -277,7 +277,7 @@ y = x @ W_merged.T
 
 On the 2 by 2 example the merged matrix is $[[3, 4], [0, 1]]$, and it gives $[7, 1]$, the same as the split path.
 
-Per example, the adapter path costs one multiply for each trained parameter, 65,536 against 16,777,216 for the 4096 by 4096 layer at rank 8, or 0.39 percent. So the gain from merging is not mainly arithmetic. The merged layer needs no adapter-aware server code and reads only the base model's bytes per token, which is what decoding waits on, as in the chapter on [decoding and the KV cache](/lessons/073-decoding-and-sampling). Compute the merge in 32 bits and round once at the end, because a very small update can round away in 16 bits.
+Per example, the adapter path costs one multiply for each trained parameter, 65,536 against 16,777,216 for the 4096 by 4096 layer at rank 8, or 0.39 percent. So the gain from merging is not mainly arithmetic. The merged layer needs no adapter-aware server code and reads only the base model's bytes per token, which is what decoding waits on, as in the chapter on [decoding and the KV cache](/lessons/074-decoding-and-sampling). Compute the merge in 32 bits and round once at the end, because a very small update can round away in 16 bits.
 
 Merging is not always right. Suppose three customers each have an adapter on one 7-billion-parameter base. Three merged copies take 42 GB, while one base plus three adapters of 16 MiB each takes about 14 GB. A server with many adapters keeps them separate and adds the small extra path for each request. A server whose one adapter takes almost all the traffic should merge.
 

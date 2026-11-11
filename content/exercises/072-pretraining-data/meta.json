@@ -1,0 +1,17 @@
+{
+  "id": "072-pretraining-data",
+  "title": "Dedup, filter, and mix a pretraining corpus",
+  "brief": "Shingle and compare documents, build MinHash signatures and LSH bands, drop planted near-duplicates, score text quality with a character bigram, and compute temperature-sampled domain weights.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "shingles: words = normalise(text).split(), then {' '.join(words[i:i + k]) for i in range(len(words) - k + 1)}. Handle the short and empty cases first. jaccard divides len(a & b) by len(a | b). For the lesson's sentences the answer is 4 / 6.",
+    "minhash_signature: ids = np.array([stable_id(s) for s in shingle_set]), then (a[:, None] * ids[None, :] + b[:, None]) % PRIME has shape (n_hashes, n_shingles). Take the minimum along axis 1. Use all n_hashes hash functions on every shingle; do not sort one hash and keep the k smallest values.",
+    "lsh_candidate_prob: one band of r rows matches with probability s**r. All b bands miss with probability (1 - s**r)**b. The answer is 1 minus that. At s = 0.5, r = 4, b = 5 it is 1 - 0.9375**5 = 0.2758.",
+    "lsh_candidates: for each band, build a dict from tuple(sigs[i, band * r:(band + 1) * r]) to the list of rows with that key. Every pair inside one list is a candidate. Collect the pairs in a set so a pair found in two bands counts once.",
+    "dedup: keep a parent list. For each candidate pair with estimate_jaccard >= threshold, link the roots and let the smaller index be the root. At the end the roots are the earliest document of each cluster.",
+    "mix_weights: w = np.asarray(sizes, dtype=float) ** (1 / T), then w / w.sum(). For sizes [900, 90, 10] and T = 2 the square roots are 30, 9.49, 3.16, so the shares are 0.7034, 0.2224, 0.0741. epochs_per_domain is budget * weights / sizes.",
+    "train_char_bigram: codes = np.minimum(np.array([ord(c) for c in text]), 127). np.add.at(counts, (codes[:-1], codes[1:]), 1) adds one to every pair. Add alpha, divide by each row's sum, and take the log. quality_score averages logp[codes[:-1], codes[1:]]."
+  ]
+}

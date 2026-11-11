@@ -1,5 +1,5 @@
 {
-  "id": "077-mixtures-of-experts",
+  "id": "078-mixtures-of-experts",
   "title": "Route, train, and balance a mixture of experts",
   "brief": "Score and pick the top k experts, compute the router's gradient through the gate weights, build the load-balancing loss, and run a capacity-limited forward pass that drops overflow.",
   "needs_gpu": false,
