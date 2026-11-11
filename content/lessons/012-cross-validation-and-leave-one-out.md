@@ -169,7 +169,7 @@ To choose a penalty you compute this score once per candidate, and the candidate
 
 ## Choosing k
 
-Each round trains on $(k-1)/k$ of the rows. At $k = 5$ that is 48 of the 60 houses, a little fewer than the 60 the final model will use. A model with less data does a little worse, so the cross-validation score runs a bit high, or *pessimistic*. A larger $k$ shrinks that gap, since $k = 10$ trains on 54 houses, but it costs $k$ fits instead of 5. Five or ten folds are the usual compromise. In Figure 1 the five-fold minimum is 1.15 and the unseen-house error at the same penalty is 1.37. The minimum of 20 noisy estimates leans toward luck, and the [next chapter](/lessons/013-learning-curves-and-winners-curse) shows how large that lean can be.
+Each round trains on $(k-1)/k$ of the rows. At $k = 5$ that is 48 of the 60 houses, a little fewer than the 60 the final model will use. A model with less data does a little worse, so the cross-validation score runs a bit high, or *pessimistic*. A larger $k$ shrinks that gap, since $k = 10$ trains on 54 houses, but it costs $k$ fits instead of 5. Five or ten folds are the usual compromise. In Figure 1 the five-fold minimum is 1.15 and the unseen-house error at the same penalty is 1.37. The minimum of 20 noisy estimates leans toward luck, and the [next chapter](/lessons/014-learning-curves-and-winners-curse) shows how large that lean can be.
 
 > [!KEY]
 > Training error always prefers the most flexible model, so it cannot choose a penalty. Cross-validation scores every house once, with a model that never saw it, and the penalty with the lowest average is the one to ship. Score every penalty on the same folds.
