@@ -30,95 +30,95 @@
   "018-gda-logistic-and-naive-bayes"
  ],
  "09-support-vector-machines": [
-  "019-support-vector-machines"
+  "020-support-vector-machines"
  ],
  "10-kernels": [
-  "020-kernels-and-validity",
-  "021-kernel-ridge-and-random-features"
+  "021-kernels-and-validity",
+  "022-kernel-ridge-and-random-features"
  ],
  "11-decision-trees": [
-  "023-impurity-and-best-split",
-  "024-grow-and-prune-trees"
+  "024-impurity-and-best-split",
+  "025-grow-and-prune-trees"
  ],
  "12-ensembles": [
-  "025-averaging-and-bagging",
-  "026-gradient-boosting"
+  "026-averaging-and-bagging",
+  "027-gradient-boosting"
  ],
  "13-pca-and-svd": [
-  "027-principal-components",
-  "028-power-iteration-and-probabilistic-pca"
+  "028-principal-components",
+  "029-power-iteration-and-probabilistic-pca"
  ],
  "14-clustering-and-em": [
-  "029-k-means",
-  "030-gaussian-mixtures-and-em"
+  "030-k-means",
+  "031-gaussian-mixtures-and-em"
  ],
  "15-multilayer-perceptrons": [
-  "031-multilayer-perceptrons"
+  "032-multilayer-perceptrons"
  ],
  "16-backpropagation": [
-  "032-backpropagation",
-  "033-softmax-and-whole-network-gradients"
+  "033-backpropagation",
+  "034-softmax-and-whole-network-gradients"
  ],
  "17-optimisers": [
-  "034-sgd-adam-and-schedules"
+  "035-sgd-adam-and-schedules"
  ],
  "18-initialisation-and-norm": [
-  "035-signal-size-and-initialisation",
-  "036-normalisation-layers"
+  "036-signal-size-and-initialisation",
+  "037-normalisation-layers"
  ],
  "19-deep-regularisation": [
-  "037-weight-decay-and-early-stopping",
-  "038-dropout-and-label-smoothing"
+  "038-weight-decay-and-early-stopping",
+  "039-dropout-and-label-smoothing"
  ],
  "20-convolutions": [
-  "041-convolution-and-receptive-field",
-  "042-im2col-and-convolution-backward"
+  "042-convolution-and-receptive-field",
+  "043-im2col-and-convolution-backward"
  ],
  "21-residual-networks": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "22-recurrent-networks": [
-  "047-recurrent-cells-and-bptt",
-  "048-vanishing-gradients-and-clipping"
+  "048-recurrent-cells-and-bptt",
+  "049-vanishing-gradients-and-clipping"
  ],
  "23-gated-recurrence": [
-  "049-the-lstm",
-  "050-lstm-backward-and-the-gru"
+  "050-the-lstm",
+  "051-lstm-backward-and-the-gru"
  ],
  "24-seq2seq-attention": [
-  "051-attention-as-soft-lookup",
-  "052-attention-gradients-and-alignment"
+  "052-attention-as-soft-lookup",
+  "053-attention-gradients-and-alignment"
  ],
  "25-self-attention": [
-  "053-scaled-attention-and-heads",
-  "054-attention-backward-and-cost"
+  "054-scaled-attention-and-heads",
+  "055-attention-backward-and-cost"
  ],
  "26-the-transformer-block": [
-  "056-position-encodings",
-  "057-the-transformer-block"
+  "057-position-encodings",
+  "058-the-transformer-block"
  ],
  "27-training-a-transformer": [
-  "059-next-token-loss-and-safe-steps",
-  "060-training-loop-and-cost"
+  "060-next-token-loss-and-safe-steps",
+  "061-training-loop-and-cost"
  ],
  "28-tokenisation": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "29-scaling-laws": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "30-inference-and-decoding": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "31-parameter-efficient-tuning": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "32-alignment": [
-  "065-reward-models-and-the-kl-leash",
-  "066-ppo-and-dpo"
+  "066-reward-models-and-the-kl-leash",
+  "067-ppo-and-dpo"
  ],
  "33-mixtures-of-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "007-lost-digits": [
   "004-stable-least-squares"
@@ -202,364 +202,364 @@
   "018-gda-logistic-and-naive-bayes"
  ],
  "032-widest-road-hinge-loss": [
-  "019-support-vector-machines"
+  "020-support-vector-machines"
  ],
  "033-dual-multipliers-kernels": [
-  "019-support-vector-machines"
+  "020-support-vector-machines"
  ],
  "033-the-dual-and-support-vectors": [
-  "019-support-vector-machines"
+  "020-support-vector-machines"
  ],
  "034-support-vectors-kkt": [
-  "019-support-vector-machines"
+  "020-support-vector-machines"
  ],
  "035-smo-two-at-a-time": [
-  "019-support-vector-machines"
+  "020-support-vector-machines"
  ],
  "036-kernels-as-similarity": [
-  "020-kernels-and-validity"
+  "021-kernels-and-validity"
  ],
  "037-valid-kernels": [
-  "020-kernels-and-validity"
+  "021-kernels-and-validity"
  ],
  "038-kernel-ridge-regression": [
-  "021-kernel-ridge-and-random-features"
+  "022-kernel-ridge-and-random-features"
  ],
  "039-representer-and-random-features": [
-  "021-kernel-ridge-and-random-features"
+  "022-kernel-ridge-and-random-features"
  ],
  "039p-project-spam-filter": [
-  "022p-project-spam-filter"
+  "023p-project-spam-filter"
  ],
  "040-leaves-and-impurity": [
-  "023-impurity-and-best-split"
+  "024-impurity-and-best-split"
  ],
  "041-gain-and-best-split": [
-  "023-impurity-and-best-split"
+  "024-impurity-and-best-split"
  ],
  "042-grow-and-predict": [
-  "024-grow-and-prune-trees"
+  "025-grow-and-prune-trees"
  ],
  "043-pruning": [
-  "024-grow-and-prune-trees"
+  "025-grow-and-prune-trees"
  ],
  "044-averaging-models": [
-  "025-averaging-and-bagging"
+  "026-averaging-and-bagging"
  ],
  "045-bagging-and-out-of-bag-error": [
-  "025-averaging-and-bagging"
+  "026-averaging-and-bagging"
  ],
  "045-bootstrap-and-bagging": [
-  "025-averaging-and-bagging"
+  "026-averaging-and-bagging"
  ],
  "046-out-of-bag-error": [
-  "025-averaging-and-bagging"
+  "026-averaging-and-bagging"
  ],
  "047-gradient-boosting": [
-  "026-gradient-boosting"
+  "027-gradient-boosting"
  ],
  "048-principal-directions": [
-  "027-principal-components"
+  "028-principal-components"
  ],
  "048-spread-shadows-first-direction": [
-  "027-principal-components"
+  "028-principal-components"
  ],
  "049-svd-hands-you-every-direction": [
-  "027-principal-components"
+  "028-principal-components"
  ],
  "050-compress-and-know-what-you-lost": [
-  "027-principal-components"
+  "028-principal-components"
  ],
  "051-power-iteration": [
-  "028-power-iteration-and-probabilistic-pca"
+  "029-power-iteration-and-probabilistic-pca"
  ],
  "052-probabilistic-pca-em": [
-  "028-power-iteration-and-probabilistic-pca"
+  "029-power-iteration-and-probabilistic-pca"
  ],
  "053-k-means": [
-  "029-k-means"
+  "030-k-means"
  ],
  "053-kmeans-lloyd": [
-  "029-k-means"
+  "030-k-means"
  ],
  "054-kmeans-plusplus-seeding": [
-  "029-k-means"
+  "030-k-means"
  ],
  "055-gmm-soft-assignment": [
-  "030-gaussian-mixtures-and-em"
+  "031-gaussian-mixtures-and-em"
  ],
  "056-em-refit-and-converge": [
-  "030-gaussian-mixtures-and-em"
+  "031-gaussian-mixtures-and-em"
  ],
  "056p-project-segment-customers": [
-  "030p-project-segment-customers"
+  "031p-project-segment-customers"
  ],
  "057-why-layers-need-a-bend": [
-  "031-multilayer-perceptrons"
+  "032-multilayer-perceptrons"
  ],
  "058-forward-pass-and-gelu": [
-  "031-multilayer-perceptrons"
+  "032-multilayer-perceptrons"
  ],
  "059-width-adds-depth-multiplies": [
-  "031-multilayer-perceptrons"
+  "032-multilayer-perceptrons"
  ],
  "059-width-depth-and-cost": [
-  "031-multilayer-perceptrons"
+  "032-multilayer-perceptrons"
  ],
  "060-count-parameters-and-flops": [
-  "031-multilayer-perceptrons"
+  "032-multilayer-perceptrons"
  ],
  "061-backprop-the-graph-and-reverse-order": [
-  "032-backpropagation"
+  "033-backpropagation"
  ],
  "062-backprop-array-operations": [
-  "032-backpropagation"
+  "033-backpropagation"
  ],
  "063-softmax-cross-entropy-gradient": [
-  "033-softmax-and-whole-network-gradients"
+  "034-softmax-and-whole-network-gradients"
  ],
  "064-backprop-mlp-and-gradient-check": [
-  "033-softmax-and-whole-network-gradients"
+  "034-softmax-and-whole-network-gradients"
  ],
  "065-stochastic-gradients": [
-  "034-sgd-adam-and-schedules"
+  "035-sgd-adam-and-schedules"
  ],
  "066-adam": [
-  "034-sgd-adam-and-schedules"
+  "035-sgd-adam-and-schedules"
  ],
  "066-adam-and-adamw": [
-  "034-sgd-adam-and-schedules"
+  "035-sgd-adam-and-schedules"
  ],
  "067-adamw": [
-  "034-sgd-adam-and-schedules"
+  "035-sgd-adam-and-schedules"
  ],
  "068-lr-schedules": [
-  "034-sgd-adam-and-schedules"
+  "035-sgd-adam-and-schedules"
  ],
  "069-signal-size-through-layers": [
-  "035-signal-size-and-initialisation"
+  "036-signal-size-and-initialisation"
  ],
  "070-xavier-and-he": [
-  "035-signal-size-and-initialisation"
+  "036-signal-size-and-initialisation"
  ],
  "071-batch-norm-and-layer-norm": [
-  "036-normalisation-layers"
+  "037-normalisation-layers"
  ],
  "072-normalisation-backward": [
-  "036-normalisation-layers"
+  "037-normalisation-layers"
  ],
  "073-weight-decay": [
-  "037-weight-decay-and-early-stopping"
+  "038-weight-decay-and-early-stopping"
  ],
  "074-early-stopping-ridge": [
-  "037-weight-decay-and-early-stopping"
+  "038-weight-decay-and-early-stopping"
  ],
  "075-dropout": [
-  "038-dropout-and-label-smoothing"
+  "039-dropout-and-label-smoothing"
  ],
  "076-label-smoothing": [
-  "038-dropout-and-label-smoothing"
+  "039-dropout-and-label-smoothing"
  ],
  "076p-project-read-digits": [
-  "039p-project-read-digits"
+  "040p-project-read-digits"
  ],
  "077-sliding-a-filter": [
-  "041-convolution-and-receptive-field"
+  "042-convolution-and-receptive-field"
  ],
  "078-output-size-and-receptive-field": [
-  "041-convolution-and-receptive-field"
+  "042-convolution-and-receptive-field"
  ],
  "079-convolution-as-matrix-multiply": [
-  "042-im2col-and-convolution-backward"
+  "043-im2col-and-convolution-backward"
  ],
  "080-convolution-backward": [
-  "042-im2col-and-convolution-backward"
+  "043-im2col-and-convolution-backward"
  ],
  "081-residual-block-forward": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "081-the-residual-block": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "082-residual-block-backward": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "083-gradient-through-deep-stacks": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "084-bottleneck-cost": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "085-recurrent-cell": [
-  "047-recurrent-cells-and-bptt"
+  "048-recurrent-cells-and-bptt"
  ],
  "086-backprop-through-time": [
-  "047-recurrent-cells-and-bptt"
+  "048-recurrent-cells-and-bptt"
  ],
  "087-vanishing-and-exploding-gradients": [
-  "048-vanishing-gradients-and-clipping"
+  "049-vanishing-gradients-and-clipping"
  ],
  "088-truncation-and-clipping": [
-  "048-vanishing-gradients-and-clipping"
+  "049-vanishing-gradients-and-clipping"
  ],
  "089-why-rnns-forget-the-belt": [
-  "049-the-lstm"
+  "050-the-lstm"
  ],
  "090-gates-and-the-lstm-update": [
-  "049-the-lstm"
+  "050-the-lstm"
  ],
  "091-lstm-backward-step": [
-  "050-lstm-backward-and-the-gru"
+  "051-lstm-backward-and-the-gru"
  ],
  "092-gru-and-parameter-counts": [
-  "050-lstm-backward-and-the-gru"
+  "051-lstm-backward-and-the-gru"
  ],
  "093-attention-as-soft-lookup": [
-  "051-attention-as-soft-lookup"
+  "052-attention-as-soft-lookup"
  ],
  "094-additive-attention": [
-  "051-attention-as-soft-lookup"
+  "052-attention-as-soft-lookup"
  ],
  "095-attention-gradients": [
-  "052-attention-gradients-and-alignment"
+  "053-attention-gradients-and-alignment"
  ],
  "096-alignment-and-copy-decoder": [
-  "052-attention-gradients-and-alignment"
+  "053-attention-gradients-and-alignment"
  ],
  "096p-project-spot-defects": [
-  "052p-project-spot-defects"
+  "053p-project-spot-defects"
  ],
  "097-attention-scores-and-weights": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "097-scaled-attention-scores": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "098-scaling-the-scores": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "099-heads-and-causal-mask": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "100-attention-backward-and-cost": [
-  "054-attention-backward-and-cost"
+  "055-attention-backward-and-cost"
  ],
  "101-position-clocks": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "102-rotary-embeddings": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "103-gated-feed-forward": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "104-the-residual-block": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "105-next-token-loss": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "106-safe-steps": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "107-the-training-loop": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "108-cost-of-training": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "108p-project-train-a-tiny-transformer": [
-  "060p-project-train-a-tiny-transformer"
+  "061p-project-train-a-tiny-transformer"
  ],
  "109-bytes-and-the-vocabulary-trade": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "110-byte-pair-encoding": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "110-training-bpe": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "111-encode-and-decode": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "112-fertility-and-fairness": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "113-power-laws-log-log": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "114-loss-from-size-and-data": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "115-compute-optimal-models": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "115-counting-parameters-and-flops": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "116-compute-optimal-split": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "117-decoding-and-the-kv-cache": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "117-why-decoding-waits-on-memory": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "118-the-kv-cache": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "119-temperature-and-sampling": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "120-speculative-decoding": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "121-fine-tuning-memory-bill": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "122-lora": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "122-lora-layer": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "123-merging-and-serving": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "124-low-rank-reach-and-training": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "125-reward-from-preferences": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "126-kl-leash-and-optimal-policy": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "127-ppo-the-sampling-loop": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "128-dpo-implicit-reward": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "129-top-k-routing": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "130-router-gradient": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "131-balancing-the-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "131-load-balancing": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "132-capacity-and-dropping": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "132p-project-serve-a-tiny-model": [
-  "067p-project-serve-a-tiny-model"
+  "068p-project-serve-a-tiny-model"
  ],
  "001-scoring-a-guess": [
   "001-loss-and-honest-scores"
@@ -649,268 +649,268 @@
   "018-gda-logistic-and-naive-bayes"
  ],
  "030-widest-road-hinge-loss": [
-  "019-support-vector-machines"
+  "020-support-vector-machines"
  ],
  "031-the-dual-and-support-vectors": [
-  "019-support-vector-machines"
+  "020-support-vector-machines"
  ],
  "032-smo-two-at-a-time": [
-  "019-support-vector-machines"
+  "020-support-vector-machines"
  ],
  "033-kernels-as-similarity": [
-  "020-kernels-and-validity"
+  "021-kernels-and-validity"
  ],
  "034-valid-kernels": [
-  "020-kernels-and-validity"
+  "021-kernels-and-validity"
  ],
  "035-kernel-ridge-regression": [
-  "021-kernel-ridge-and-random-features"
+  "022-kernel-ridge-and-random-features"
  ],
  "036-representer-and-random-features": [
-  "021-kernel-ridge-and-random-features"
+  "022-kernel-ridge-and-random-features"
  ],
  "037-leaves-and-impurity": [
-  "023-impurity-and-best-split"
+  "024-impurity-and-best-split"
  ],
  "038-gain-and-best-split": [
-  "023-impurity-and-best-split"
+  "024-impurity-and-best-split"
  ],
  "039-grow-and-predict": [
-  "024-grow-and-prune-trees"
+  "025-grow-and-prune-trees"
  ],
  "040-pruning": [
-  "024-grow-and-prune-trees"
+  "025-grow-and-prune-trees"
  ],
  "041-averaging-models": [
-  "025-averaging-and-bagging"
+  "026-averaging-and-bagging"
  ],
  "042-bagging-and-out-of-bag-error": [
-  "025-averaging-and-bagging"
+  "026-averaging-and-bagging"
  ],
  "043-gradient-boosting": [
-  "026-gradient-boosting"
+  "027-gradient-boosting"
  ],
  "044-principal-directions": [
-  "027-principal-components"
+  "028-principal-components"
  ],
  "045-compress-and-know-what-you-lost": [
-  "027-principal-components"
+  "028-principal-components"
  ],
  "046-power-iteration": [
-  "028-power-iteration-and-probabilistic-pca"
+  "029-power-iteration-and-probabilistic-pca"
  ],
  "047-probabilistic-pca-em": [
-  "028-power-iteration-and-probabilistic-pca"
+  "029-power-iteration-and-probabilistic-pca"
  ],
  "048-k-means": [
-  "029-k-means"
+  "030-k-means"
  ],
  "049-gmm-soft-assignment": [
-  "030-gaussian-mixtures-and-em"
+  "031-gaussian-mixtures-and-em"
  ],
  "050-em-refit-and-converge": [
-  "030-gaussian-mixtures-and-em"
+  "031-gaussian-mixtures-and-em"
  ],
  "051-why-layers-need-a-bend": [
-  "031-multilayer-perceptrons"
+  "032-multilayer-perceptrons"
  ],
  "052-forward-pass-and-gelu": [
-  "031-multilayer-perceptrons"
+  "032-multilayer-perceptrons"
  ],
  "053-width-depth-and-cost": [
-  "031-multilayer-perceptrons"
+  "032-multilayer-perceptrons"
  ],
  "054-backprop-the-graph-and-reverse-order": [
-  "032-backpropagation"
+  "033-backpropagation"
  ],
  "055-backprop-array-operations": [
-  "032-backpropagation"
+  "033-backpropagation"
  ],
  "056-softmax-cross-entropy-gradient": [
-  "033-softmax-and-whole-network-gradients"
+  "034-softmax-and-whole-network-gradients"
  ],
  "057-backprop-mlp-and-gradient-check": [
-  "033-softmax-and-whole-network-gradients"
+  "034-softmax-and-whole-network-gradients"
  ],
  "058-stochastic-gradients": [
-  "034-sgd-adam-and-schedules"
+  "035-sgd-adam-and-schedules"
  ],
  "059-adam-and-adamw": [
-  "034-sgd-adam-and-schedules"
+  "035-sgd-adam-and-schedules"
  ],
  "060-lr-schedules": [
-  "034-sgd-adam-and-schedules"
+  "035-sgd-adam-and-schedules"
  ],
  "061-signal-size-through-layers": [
-  "035-signal-size-and-initialisation"
+  "036-signal-size-and-initialisation"
  ],
  "062-xavier-and-he": [
-  "035-signal-size-and-initialisation"
+  "036-signal-size-and-initialisation"
  ],
  "063-batch-norm-and-layer-norm": [
-  "036-normalisation-layers"
+  "037-normalisation-layers"
  ],
  "064-normalisation-backward": [
-  "036-normalisation-layers"
+  "037-normalisation-layers"
  ],
  "065-weight-decay": [
-  "037-weight-decay-and-early-stopping"
+  "038-weight-decay-and-early-stopping"
  ],
  "066-early-stopping-ridge": [
-  "037-weight-decay-and-early-stopping"
+  "038-weight-decay-and-early-stopping"
  ],
  "067-dropout": [
-  "038-dropout-and-label-smoothing"
+  "039-dropout-and-label-smoothing"
  ],
  "068-label-smoothing": [
-  "038-dropout-and-label-smoothing"
+  "039-dropout-and-label-smoothing"
  ],
  "069-sliding-a-filter": [
-  "041-convolution-and-receptive-field"
+  "042-convolution-and-receptive-field"
  ],
  "070-output-size-and-receptive-field": [
-  "041-convolution-and-receptive-field"
+  "042-convolution-and-receptive-field"
  ],
  "071-convolution-as-matrix-multiply": [
-  "042-im2col-and-convolution-backward"
+  "043-im2col-and-convolution-backward"
  ],
  "072-convolution-backward": [
-  "042-im2col-and-convolution-backward"
+  "043-im2col-and-convolution-backward"
  ],
  "073-the-residual-block": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "074-gradient-through-deep-stacks": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "075-bottleneck-cost": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "076-recurrent-cell": [
-  "047-recurrent-cells-and-bptt"
+  "048-recurrent-cells-and-bptt"
  ],
  "077-backprop-through-time": [
-  "047-recurrent-cells-and-bptt"
+  "048-recurrent-cells-and-bptt"
  ],
  "078-vanishing-and-exploding-gradients": [
-  "048-vanishing-gradients-and-clipping"
+  "049-vanishing-gradients-and-clipping"
  ],
  "079-truncation-and-clipping": [
-  "048-vanishing-gradients-and-clipping"
+  "049-vanishing-gradients-and-clipping"
  ],
  "080-why-rnns-forget-the-belt": [
-  "049-the-lstm"
+  "050-the-lstm"
  ],
  "081-gates-and-the-lstm-update": [
-  "049-the-lstm"
+  "050-the-lstm"
  ],
  "082-lstm-backward-step": [
-  "050-lstm-backward-and-the-gru"
+  "051-lstm-backward-and-the-gru"
  ],
  "083-gru-and-parameter-counts": [
-  "050-lstm-backward-and-the-gru"
+  "051-lstm-backward-and-the-gru"
  ],
  "084-attention-as-soft-lookup": [
-  "051-attention-as-soft-lookup"
+  "052-attention-as-soft-lookup"
  ],
  "085-additive-attention": [
-  "051-attention-as-soft-lookup"
+  "052-attention-as-soft-lookup"
  ],
  "086-attention-gradients": [
-  "052-attention-gradients-and-alignment"
+  "053-attention-gradients-and-alignment"
  ],
  "087-alignment-and-copy-decoder": [
-  "052-attention-gradients-and-alignment"
+  "053-attention-gradients-and-alignment"
  ],
  "088-scaled-attention-scores": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "089-heads-and-causal-mask": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "090-attention-backward-and-cost": [
-  "054-attention-backward-and-cost"
+  "055-attention-backward-and-cost"
  ],
  "091-position-clocks": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "092-rotary-embeddings": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "093-gated-feed-forward": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "094-the-residual-block": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "095-next-token-loss": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "096-safe-steps": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "097-the-training-loop": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "098-cost-of-training": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "099-bytes-and-the-vocabulary-trade": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "100-byte-pair-encoding": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "101-fertility-and-fairness": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "102-power-laws-log-log": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "103-loss-from-size-and-data": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "104-compute-optimal-models": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "105-decoding-and-the-kv-cache": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "106-temperature-and-sampling": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "107-speculative-decoding": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "108-fine-tuning-memory-bill": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "109-lora": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "110-low-rank-reach-and-training": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "111-reward-from-preferences": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "112-kl-leash-and-optimal-policy": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "113-ppo-the-sampling-loop": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "114-dpo-implicit-reward": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "115-top-k-routing": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "116-router-gradient": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "117-balancing-the-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "004p-project-explore-before-you-model": [
   "002p-project-explore-before-you-model"
@@ -919,22 +919,22 @@
   "010p-project-price-houses"
  ],
  "036p-project-spam-filter": [
-  "022p-project-spam-filter"
+  "023p-project-spam-filter"
  ],
  "050p-project-segment-customers": [
-  "030p-project-segment-customers"
+  "031p-project-segment-customers"
  ],
  "068p-project-read-digits": [
-  "039p-project-read-digits"
+  "040p-project-read-digits"
  ],
  "087p-project-spot-defects": [
-  "052p-project-spot-defects"
+  "053p-project-spot-defects"
  ],
  "098p-project-train-a-tiny-transformer": [
-  "060p-project-train-a-tiny-transformer"
+  "061p-project-train-a-tiny-transformer"
  ],
  "117p-project-serve-a-tiny-model": [
-  "067p-project-serve-a-tiny-model"
+  "068p-project-serve-a-tiny-model"
  ],
  "011-cross-validation-and-leave-one-out": [
   "012-cross-validation-and-leave-one-out"
@@ -949,145 +949,145 @@
   "018-gda-logistic-and-naive-bayes"
  ],
  "015-support-vector-machines": [
-  "019-support-vector-machines"
+  "020-support-vector-machines"
  ],
  "016-kernels-and-validity": [
-  "020-kernels-and-validity"
+  "021-kernels-and-validity"
  ],
  "017-kernel-ridge-and-random-features": [
-  "021-kernel-ridge-and-random-features"
+  "022-kernel-ridge-and-random-features"
  ],
  "017p-project-spam-filter": [
-  "022p-project-spam-filter"
+  "023p-project-spam-filter"
  ],
  "018-impurity-and-best-split": [
-  "023-impurity-and-best-split"
+  "024-impurity-and-best-split"
  ],
  "019-grow-and-prune-trees": [
-  "024-grow-and-prune-trees"
+  "025-grow-and-prune-trees"
  ],
  "020-averaging-and-bagging": [
-  "025-averaging-and-bagging"
+  "026-averaging-and-bagging"
  ],
  "021-gradient-boosting": [
-  "026-gradient-boosting"
+  "027-gradient-boosting"
  ],
  "022-principal-components": [
-  "027-principal-components"
+  "028-principal-components"
  ],
  "023-power-iteration-and-probabilistic-pca": [
-  "028-power-iteration-and-probabilistic-pca"
+  "029-power-iteration-and-probabilistic-pca"
  ],
  "024-k-means": [
-  "029-k-means"
+  "030-k-means"
  ],
  "025-gaussian-mixtures-and-em": [
-  "030-gaussian-mixtures-and-em"
+  "031-gaussian-mixtures-and-em"
  ],
  "025p-project-segment-customers": [
-  "030p-project-segment-customers"
+  "031p-project-segment-customers"
  ],
  "026-multilayer-perceptrons": [
-  "031-multilayer-perceptrons"
+  "032-multilayer-perceptrons"
  ],
  "027-backpropagation": [
-  "032-backpropagation"
+  "033-backpropagation"
  ],
  "028-softmax-and-whole-network-gradients": [
-  "033-softmax-and-whole-network-gradients"
+  "034-softmax-and-whole-network-gradients"
  ],
  "029-sgd-adam-and-schedules": [
-  "034-sgd-adam-and-schedules"
+  "035-sgd-adam-and-schedules"
  ],
  "030-signal-size-and-initialisation": [
-  "035-signal-size-and-initialisation"
+  "036-signal-size-and-initialisation"
  ],
  "031-normalisation-layers": [
-  "036-normalisation-layers"
+  "037-normalisation-layers"
  ],
  "032-weight-decay-and-early-stopping": [
-  "037-weight-decay-and-early-stopping"
+  "038-weight-decay-and-early-stopping"
  ],
  "033-dropout-and-label-smoothing": [
-  "038-dropout-and-label-smoothing"
+  "039-dropout-and-label-smoothing"
  ],
  "033p-project-read-digits": [
-  "039p-project-read-digits"
+  "040p-project-read-digits"
  ],
  "034-convolution-and-receptive-field": [
-  "041-convolution-and-receptive-field"
+  "042-convolution-and-receptive-field"
  ],
  "035-im2col-and-convolution-backward": [
-  "042-im2col-and-convolution-backward"
+  "043-im2col-and-convolution-backward"
  ],
  "036-residual-networks": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "037-recurrent-cells-and-bptt": [
-  "047-recurrent-cells-and-bptt"
+  "048-recurrent-cells-and-bptt"
  ],
  "038-vanishing-gradients-and-clipping": [
-  "048-vanishing-gradients-and-clipping"
+  "049-vanishing-gradients-and-clipping"
  ],
  "039-the-lstm": [
-  "049-the-lstm"
+  "050-the-lstm"
  ],
  "040-lstm-backward-and-the-gru": [
-  "050-lstm-backward-and-the-gru"
+  "051-lstm-backward-and-the-gru"
  ],
  "041-attention-as-soft-lookup": [
-  "051-attention-as-soft-lookup"
+  "052-attention-as-soft-lookup"
  ],
  "042-attention-gradients-and-alignment": [
-  "052-attention-gradients-and-alignment"
+  "053-attention-gradients-and-alignment"
  ],
  "042p-project-spot-defects": [
-  "052p-project-spot-defects"
+  "053p-project-spot-defects"
  ],
  "043-scaled-attention-and-heads": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "044-attention-backward-and-cost": [
-  "054-attention-backward-and-cost"
+  "055-attention-backward-and-cost"
  ],
  "045-position-encodings": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "046-the-transformer-block": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "047-next-token-loss-and-safe-steps": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "048-training-loop-and-cost": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "048p-project-train-a-tiny-transformer": [
-  "060p-project-train-a-tiny-transformer"
+  "061p-project-train-a-tiny-transformer"
  ],
  "049-tokenisation": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "050-scaling-laws": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "051-decoding-and-sampling": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "052-fine-tuning-and-lora": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "053-reward-models-and-the-kl-leash": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "054-ppo-and-dpo": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "055-mixtures-of-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "055p-project-serve-a-tiny-model": [
-  "067p-project-serve-a-tiny-model"
+  "068p-project-serve-a-tiny-model"
  ],
  "014-bayes-rule-and-gaussian-classes": [
   "017-bayes-rule-and-gaussian-classes"
@@ -1096,613 +1096,613 @@
   "018-gda-logistic-and-naive-bayes"
  ],
  "016-support-vector-machines": [
-  "019-support-vector-machines"
+  "020-support-vector-machines"
  ],
  "017-kernels-and-validity": [
-  "020-kernels-and-validity"
+  "021-kernels-and-validity"
  ],
  "018-kernel-ridge-and-random-features": [
-  "021-kernel-ridge-and-random-features"
+  "022-kernel-ridge-and-random-features"
  ],
  "018p-project-spam-filter": [
-  "022p-project-spam-filter"
+  "023p-project-spam-filter"
  ],
  "019-impurity-and-best-split": [
-  "023-impurity-and-best-split"
+  "024-impurity-and-best-split"
  ],
  "020-grow-and-prune-trees": [
-  "024-grow-and-prune-trees"
+  "025-grow-and-prune-trees"
  ],
  "021-averaging-and-bagging": [
-  "025-averaging-and-bagging"
+  "026-averaging-and-bagging"
  ],
  "022-gradient-boosting": [
-  "026-gradient-boosting"
+  "027-gradient-boosting"
  ],
  "023-principal-components": [
-  "027-principal-components"
+  "028-principal-components"
  ],
  "024-power-iteration-and-probabilistic-pca": [
-  "028-power-iteration-and-probabilistic-pca"
+  "029-power-iteration-and-probabilistic-pca"
  ],
  "025-k-means": [
-  "029-k-means"
+  "030-k-means"
  ],
  "026-gaussian-mixtures-and-em": [
-  "030-gaussian-mixtures-and-em"
+  "031-gaussian-mixtures-and-em"
  ],
  "026p-project-segment-customers": [
-  "030p-project-segment-customers"
+  "031p-project-segment-customers"
  ],
  "027-multilayer-perceptrons": [
-  "031-multilayer-perceptrons"
+  "032-multilayer-perceptrons"
  ],
  "028-backpropagation": [
-  "032-backpropagation"
+  "033-backpropagation"
  ],
  "029-softmax-and-whole-network-gradients": [
-  "033-softmax-and-whole-network-gradients"
+  "034-softmax-and-whole-network-gradients"
  ],
  "030-sgd-adam-and-schedules": [
-  "034-sgd-adam-and-schedules"
+  "035-sgd-adam-and-schedules"
  ],
  "031-signal-size-and-initialisation": [
-  "035-signal-size-and-initialisation"
+  "036-signal-size-and-initialisation"
  ],
  "032-normalisation-layers": [
-  "036-normalisation-layers"
+  "037-normalisation-layers"
  ],
  "033-weight-decay-and-early-stopping": [
-  "037-weight-decay-and-early-stopping"
+  "038-weight-decay-and-early-stopping"
  ],
  "034-dropout-and-label-smoothing": [
-  "038-dropout-and-label-smoothing"
+  "039-dropout-and-label-smoothing"
  ],
  "034p-project-read-digits": [
-  "039p-project-read-digits"
+  "040p-project-read-digits"
  ],
  "035-convolution-and-receptive-field": [
-  "041-convolution-and-receptive-field"
+  "042-convolution-and-receptive-field"
  ],
  "036-im2col-and-convolution-backward": [
-  "042-im2col-and-convolution-backward"
+  "043-im2col-and-convolution-backward"
  ],
  "037-residual-networks": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "038-recurrent-cells-and-bptt": [
-  "047-recurrent-cells-and-bptt"
+  "048-recurrent-cells-and-bptt"
  ],
  "039-vanishing-gradients-and-clipping": [
-  "048-vanishing-gradients-and-clipping"
+  "049-vanishing-gradients-and-clipping"
  ],
  "040-the-lstm": [
-  "049-the-lstm"
+  "050-the-lstm"
  ],
  "041-lstm-backward-and-the-gru": [
-  "050-lstm-backward-and-the-gru"
+  "051-lstm-backward-and-the-gru"
  ],
  "042-attention-as-soft-lookup": [
-  "051-attention-as-soft-lookup"
+  "052-attention-as-soft-lookup"
  ],
  "043-attention-gradients-and-alignment": [
-  "052-attention-gradients-and-alignment"
+  "053-attention-gradients-and-alignment"
  ],
  "043p-project-spot-defects": [
-  "052p-project-spot-defects"
+  "053p-project-spot-defects"
  ],
  "044-scaled-attention-and-heads": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "045-attention-backward-and-cost": [
-  "054-attention-backward-and-cost"
+  "055-attention-backward-and-cost"
  ],
  "046-position-encodings": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "047-the-transformer-block": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "048-next-token-loss-and-safe-steps": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "049-training-loop-and-cost": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "049p-project-train-a-tiny-transformer": [
-  "060p-project-train-a-tiny-transformer"
+  "061p-project-train-a-tiny-transformer"
  ],
  "050-tokenisation": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "051-scaling-laws": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "052-decoding-and-sampling": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "053-fine-tuning-and-lora": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "054-reward-models-and-the-kl-leash": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "055-ppo-and-dpo": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "056-mixtures-of-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "056p-project-serve-a-tiny-model": [
-  "067p-project-serve-a-tiny-model"
+  "068p-project-serve-a-tiny-model"
  ],
  "035p-project-read-digits": [
-  "039p-project-read-digits"
+  "040p-project-read-digits"
  ],
  "036-convolution-and-receptive-field": [
-  "041-convolution-and-receptive-field"
+  "042-convolution-and-receptive-field"
  ],
  "037-im2col-and-convolution-backward": [
-  "042-im2col-and-convolution-backward"
+  "043-im2col-and-convolution-backward"
  ],
  "038-residual-networks": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "039-recurrent-cells-and-bptt": [
-  "047-recurrent-cells-and-bptt"
+  "048-recurrent-cells-and-bptt"
  ],
  "040-vanishing-gradients-and-clipping": [
-  "048-vanishing-gradients-and-clipping"
+  "049-vanishing-gradients-and-clipping"
  ],
  "041-the-lstm": [
-  "049-the-lstm"
+  "050-the-lstm"
  ],
  "042-lstm-backward-and-the-gru": [
-  "050-lstm-backward-and-the-gru"
+  "051-lstm-backward-and-the-gru"
  ],
  "043-attention-as-soft-lookup": [
-  "051-attention-as-soft-lookup"
+  "052-attention-as-soft-lookup"
  ],
  "044-attention-gradients-and-alignment": [
-  "052-attention-gradients-and-alignment"
+  "053-attention-gradients-and-alignment"
  ],
  "044p-project-spot-defects": [
-  "052p-project-spot-defects"
+  "053p-project-spot-defects"
  ],
  "045-scaled-attention-and-heads": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "046-attention-backward-and-cost": [
-  "054-attention-backward-and-cost"
+  "055-attention-backward-and-cost"
  ],
  "047-position-encodings": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "048-the-transformer-block": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "049-next-token-loss-and-safe-steps": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "050-training-loop-and-cost": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "050p-project-train-a-tiny-transformer": [
-  "060p-project-train-a-tiny-transformer"
+  "061p-project-train-a-tiny-transformer"
  ],
  "051-tokenisation": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "052-scaling-laws": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "053-decoding-and-sampling": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "054-fine-tuning-and-lora": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "055-reward-models-and-the-kl-leash": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "056-ppo-and-dpo": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "057-mixtures-of-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "057p-project-serve-a-tiny-model": [
-  "067p-project-serve-a-tiny-model"
+  "068p-project-serve-a-tiny-model"
  ],
  "037-convolution-and-receptive-field": [
-  "041-convolution-and-receptive-field"
+  "042-convolution-and-receptive-field"
  ],
  "038-im2col-and-convolution-backward": [
-  "042-im2col-and-convolution-backward"
+  "043-im2col-and-convolution-backward"
  ],
  "039-residual-networks": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "040-recurrent-cells-and-bptt": [
-  "047-recurrent-cells-and-bptt"
+  "048-recurrent-cells-and-bptt"
  ],
  "041-vanishing-gradients-and-clipping": [
-  "048-vanishing-gradients-and-clipping"
+  "049-vanishing-gradients-and-clipping"
  ],
  "042-the-lstm": [
-  "049-the-lstm"
+  "050-the-lstm"
  ],
  "043-lstm-backward-and-the-gru": [
-  "050-lstm-backward-and-the-gru"
+  "051-lstm-backward-and-the-gru"
  ],
  "044-attention-as-soft-lookup": [
-  "051-attention-as-soft-lookup"
+  "052-attention-as-soft-lookup"
  ],
  "045-attention-gradients-and-alignment": [
-  "052-attention-gradients-and-alignment"
+  "053-attention-gradients-and-alignment"
  ],
  "045p-project-spot-defects": [
-  "052p-project-spot-defects"
+  "053p-project-spot-defects"
  ],
  "046-scaled-attention-and-heads": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "047-attention-backward-and-cost": [
-  "054-attention-backward-and-cost"
+  "055-attention-backward-and-cost"
  ],
  "048-position-encodings": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "049-the-transformer-block": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "050-next-token-loss-and-safe-steps": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "051-training-loop-and-cost": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "051p-project-train-a-tiny-transformer": [
-  "060p-project-train-a-tiny-transformer"
+  "061p-project-train-a-tiny-transformer"
  ],
  "052-tokenisation": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "053-scaling-laws": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "054-decoding-and-sampling": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "055-fine-tuning-and-lora": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "056-reward-models-and-the-kl-leash": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "057-ppo-and-dpo": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "058-mixtures-of-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "058p-project-serve-a-tiny-model": [
-  "067p-project-serve-a-tiny-model"
+  "068p-project-serve-a-tiny-model"
  ],
  "051-next-token-loss-and-safe-steps": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "052-training-loop-and-cost": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "052p-project-train-a-tiny-transformer": [
-  "060p-project-train-a-tiny-transformer"
+  "061p-project-train-a-tiny-transformer"
  ],
  "053-tokenisation": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "054-scaling-laws": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "055-decoding-and-sampling": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "056-fine-tuning-and-lora": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "057-reward-models-and-the-kl-leash": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "058-ppo-and-dpo": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "059-mixtures-of-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "059p-project-serve-a-tiny-model": [
-  "067p-project-serve-a-tiny-model"
+  "068p-project-serve-a-tiny-model"
  ],
  "049-position-encodings": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "050-the-transformer-block": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "051-counts-to-a-language-model": [
-  "058-counts-to-a-language-model"
+  "059-counts-to-a-language-model"
  ],
  "052-next-token-loss-and-safe-steps": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "053-training-loop-and-cost": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "053p-project-train-a-tiny-transformer": [
-  "060p-project-train-a-tiny-transformer"
+  "061p-project-train-a-tiny-transformer"
  ],
  "054-tokenisation": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "055-scaling-laws": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "056-decoding-and-sampling": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "057-fine-tuning-and-lora": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "058-reward-models-and-the-kl-leash": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "059-ppo-and-dpo": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "060-mixtures-of-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "060p-project-serve-a-tiny-model": [
-  "067p-project-serve-a-tiny-model"
+  "068p-project-serve-a-tiny-model"
  ],
  "061-autoencoders-and-vaes": [
-  "068-autoencoders-and-vaes"
+  "069-autoencoders-and-vaes"
  ],
  "062-diffusion-models": [
-  "069-diffusion-models"
+  "070-diffusion-models"
  ],
  "041-recurrent-cells-and-bptt": [
-  "047-recurrent-cells-and-bptt"
+  "048-recurrent-cells-and-bptt"
  ],
  "042-vanishing-gradients-and-clipping": [
-  "048-vanishing-gradients-and-clipping"
+  "049-vanishing-gradients-and-clipping"
  ],
  "043-the-lstm": [
-  "049-the-lstm"
+  "050-the-lstm"
  ],
  "044-lstm-backward-and-the-gru": [
-  "050-lstm-backward-and-the-gru"
+  "051-lstm-backward-and-the-gru"
  ],
  "045-attention-as-soft-lookup": [
-  "051-attention-as-soft-lookup"
+  "052-attention-as-soft-lookup"
  ],
  "046-attention-gradients-and-alignment": [
-  "052-attention-gradients-and-alignment"
+  "053-attention-gradients-and-alignment"
  ],
  "046p-project-spot-defects": [
-  "052p-project-spot-defects"
+  "053p-project-spot-defects"
  ],
  "047-scaled-attention-and-heads": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "048-attention-backward-and-cost": [
-  "054-attention-backward-and-cost"
+  "055-attention-backward-and-cost"
  ],
  "049-online-softmax-and-tiled-attention": [
-  "055-online-softmax-and-tiled-attention"
+  "056-online-softmax-and-tiled-attention"
  ],
  "050-position-encodings": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "051-the-transformer-block": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "052-counts-to-a-language-model": [
-  "058-counts-to-a-language-model"
+  "059-counts-to-a-language-model"
  ],
  "053-next-token-loss-and-safe-steps": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "054-training-loop-and-cost": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "054p-project-train-a-tiny-transformer": [
-  "060p-project-train-a-tiny-transformer"
+  "061p-project-train-a-tiny-transformer"
  ],
  "055-tokenisation": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "056-scaling-laws": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "057-decoding-and-sampling": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "058-fine-tuning-and-lora": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "059-reward-models-and-the-kl-leash": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "060-ppo-and-dpo": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "061-mixtures-of-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "061p-project-serve-a-tiny-model": [
-  "067p-project-serve-a-tiny-model"
+  "068p-project-serve-a-tiny-model"
  ],
  "062-autoencoders-and-vaes": [
-  "068-autoencoders-and-vaes"
+  "069-autoencoders-and-vaes"
  ],
  "063-diffusion-models": [
-  "069-diffusion-models"
+  "070-diffusion-models"
  ],
  "042-recurrent-cells-and-bptt": [
-  "047-recurrent-cells-and-bptt"
+  "048-recurrent-cells-and-bptt"
  ],
  "043-vanishing-gradients-and-clipping": [
-  "048-vanishing-gradients-and-clipping"
+  "049-vanishing-gradients-and-clipping"
  ],
  "044-the-lstm": [
-  "049-the-lstm"
+  "050-the-lstm"
  ],
  "045-lstm-backward-and-the-gru": [
-  "050-lstm-backward-and-the-gru"
+  "051-lstm-backward-and-the-gru"
  ],
  "046-attention-as-soft-lookup": [
-  "051-attention-as-soft-lookup"
+  "052-attention-as-soft-lookup"
  ],
  "047-attention-gradients-and-alignment": [
-  "052-attention-gradients-and-alignment"
+  "053-attention-gradients-and-alignment"
  ],
  "047p-project-spot-defects": [
-  "052p-project-spot-defects"
+  "053p-project-spot-defects"
  ],
  "048-scaled-attention-and-heads": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "049-attention-backward-and-cost": [
-  "054-attention-backward-and-cost"
+  "055-attention-backward-and-cost"
  ],
  "050-online-softmax-and-tiled-attention": [
-  "055-online-softmax-and-tiled-attention"
+  "056-online-softmax-and-tiled-attention"
  ],
  "051-position-encodings": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "052-the-transformer-block": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "053-counts-to-a-language-model": [
-  "058-counts-to-a-language-model"
+  "059-counts-to-a-language-model"
  ],
  "054-next-token-loss-and-safe-steps": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "055-training-loop-and-cost": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "055p-project-train-a-tiny-transformer": [
-  "060p-project-train-a-tiny-transformer"
+  "061p-project-train-a-tiny-transformer"
  ],
  "056-tokenisation": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "057-scaling-laws": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "058-decoding-and-sampling": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "059-fine-tuning-and-lora": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "060-reward-models-and-the-kl-leash": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "061-ppo-and-dpo": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "062-mixtures-of-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "062p-project-serve-a-tiny-model": [
-  "067p-project-serve-a-tiny-model"
+  "068p-project-serve-a-tiny-model"
  ],
  "063-autoencoders-and-vaes": [
-  "068-autoencoders-and-vaes"
+  "069-autoencoders-and-vaes"
  ],
  "064-diffusion-models": [
-  "069-diffusion-models"
+  "070-diffusion-models"
  ],
  "043-recurrent-cells-and-bptt": [
-  "047-recurrent-cells-and-bptt"
+  "048-recurrent-cells-and-bptt"
  ],
  "044-vanishing-gradients-and-clipping": [
-  "048-vanishing-gradients-and-clipping"
+  "049-vanishing-gradients-and-clipping"
  ],
  "045-the-lstm": [
-  "049-the-lstm"
+  "050-the-lstm"
  ],
  "046-lstm-backward-and-the-gru": [
-  "050-lstm-backward-and-the-gru"
+  "051-lstm-backward-and-the-gru"
  ],
  "047-attention-as-soft-lookup": [
-  "051-attention-as-soft-lookup"
+  "052-attention-as-soft-lookup"
  ],
  "048-attention-gradients-and-alignment": [
-  "052-attention-gradients-and-alignment"
+  "053-attention-gradients-and-alignment"
  ],
  "048p-project-spot-defects": [
-  "052p-project-spot-defects"
+  "053p-project-spot-defects"
  ],
  "049-scaled-attention-and-heads": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "050-attention-backward-and-cost": [
-  "054-attention-backward-and-cost"
+  "055-attention-backward-and-cost"
  ],
  "051-online-softmax-and-tiled-attention": [
-  "055-online-softmax-and-tiled-attention"
+  "056-online-softmax-and-tiled-attention"
  ],
  "052-position-encodings": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "053-the-transformer-block": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "054-counts-to-a-language-model": [
-  "058-counts-to-a-language-model"
+  "059-counts-to-a-language-model"
  ],
  "055-next-token-loss-and-safe-steps": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "056-training-loop-and-cost": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "056p-project-train-a-tiny-transformer": [
-  "060p-project-train-a-tiny-transformer"
+  "061p-project-train-a-tiny-transformer"
  ],
  "057-tokenisation": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "058-scaling-laws": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "059-decoding-and-sampling": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "060-fine-tuning-and-lora": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "061-reward-models-and-the-kl-leash": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "062-ppo-and-dpo": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "063-mixtures-of-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "063p-project-serve-a-tiny-model": [
-  "067p-project-serve-a-tiny-model"
+  "068p-project-serve-a-tiny-model"
  ],
  "064-autoencoders-and-vaes": [
-  "068-autoencoders-and-vaes"
+  "069-autoencoders-and-vaes"
  ],
  "065-diffusion-models": [
-  "069-diffusion-models"
+  "070-diffusion-models"
  ],
  "014-scoring-classifiers": [
   "016-scoring-classifiers"
@@ -1714,172 +1714,172 @@
   "018-gda-logistic-and-naive-bayes"
  ],
  "017-support-vector-machines": [
-  "019-support-vector-machines"
+  "020-support-vector-machines"
  ],
  "018-kernels-and-validity": [
-  "020-kernels-and-validity"
+  "021-kernels-and-validity"
  ],
  "019-kernel-ridge-and-random-features": [
-  "021-kernel-ridge-and-random-features"
+  "022-kernel-ridge-and-random-features"
  ],
  "019p-project-spam-filter": [
-  "022p-project-spam-filter"
+  "023p-project-spam-filter"
  ],
  "020-impurity-and-best-split": [
-  "023-impurity-and-best-split"
+  "024-impurity-and-best-split"
  ],
  "021-grow-and-prune-trees": [
-  "024-grow-and-prune-trees"
+  "025-grow-and-prune-trees"
  ],
  "022-averaging-and-bagging": [
-  "025-averaging-and-bagging"
+  "026-averaging-and-bagging"
  ],
  "023-gradient-boosting": [
-  "026-gradient-boosting"
+  "027-gradient-boosting"
  ],
  "024-principal-components": [
-  "027-principal-components"
+  "028-principal-components"
  ],
  "025-power-iteration-and-probabilistic-pca": [
-  "028-power-iteration-and-probabilistic-pca"
+  "029-power-iteration-and-probabilistic-pca"
  ],
  "026-k-means": [
-  "029-k-means"
+  "030-k-means"
  ],
  "027-gaussian-mixtures-and-em": [
-  "030-gaussian-mixtures-and-em"
+  "031-gaussian-mixtures-and-em"
  ],
  "027p-project-segment-customers": [
-  "030p-project-segment-customers"
+  "031p-project-segment-customers"
  ],
  "028-multilayer-perceptrons": [
-  "031-multilayer-perceptrons"
+  "032-multilayer-perceptrons"
  ],
  "029-backpropagation": [
-  "032-backpropagation"
+  "033-backpropagation"
  ],
  "030-softmax-and-whole-network-gradients": [
-  "033-softmax-and-whole-network-gradients"
+  "034-softmax-and-whole-network-gradients"
  ],
  "031-sgd-adam-and-schedules": [
-  "034-sgd-adam-and-schedules"
+  "035-sgd-adam-and-schedules"
  ],
  "032-signal-size-and-initialisation": [
-  "035-signal-size-and-initialisation"
+  "036-signal-size-and-initialisation"
  ],
  "033-normalisation-layers": [
-  "036-normalisation-layers"
+  "037-normalisation-layers"
  ],
  "034-weight-decay-and-early-stopping": [
-  "037-weight-decay-and-early-stopping"
+  "038-weight-decay-and-early-stopping"
  ],
  "035-dropout-and-label-smoothing": [
-  "038-dropout-and-label-smoothing"
+  "039-dropout-and-label-smoothing"
  ],
  "036-debugging-and-tuning": [
-  "039-debugging-and-tuning"
+  "040-debugging-and-tuning"
  ],
  "036p-project-read-digits": [
-  "039p-project-read-digits"
+  "040p-project-read-digits"
  ],
  "037-from-the-engine-to-pytorch": [
-  "040-from-the-engine-to-pytorch"
+  "041-from-the-engine-to-pytorch"
  ],
  "038-convolution-and-receptive-field": [
-  "041-convolution-and-receptive-field"
+  "042-convolution-and-receptive-field"
  ],
  "039-im2col-and-convolution-backward": [
-  "042-im2col-and-convolution-backward"
+  "043-im2col-and-convolution-backward"
  ],
  "040-residual-networks": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "041-augmentation-transfer-and-vit": [
-  "044-augmentation-transfer-and-vit"
+  "045-augmentation-transfer-and-vit"
  ],
  "042-detection-and-segmentation": [
-  "045-detection-and-segmentation"
+  "046-detection-and-segmentation"
  ],
  "043-contrastive-learning": [
-  "046-contrastive-learning"
+  "047-contrastive-learning"
  ],
  "044-recurrent-cells-and-bptt": [
-  "047-recurrent-cells-and-bptt"
+  "048-recurrent-cells-and-bptt"
  ],
  "045-vanishing-gradients-and-clipping": [
-  "048-vanishing-gradients-and-clipping"
+  "049-vanishing-gradients-and-clipping"
  ],
  "046-the-lstm": [
-  "049-the-lstm"
+  "050-the-lstm"
  ],
  "047-lstm-backward-and-the-gru": [
-  "050-lstm-backward-and-the-gru"
+  "051-lstm-backward-and-the-gru"
  ],
  "048-attention-as-soft-lookup": [
-  "051-attention-as-soft-lookup"
+  "052-attention-as-soft-lookup"
  ],
  "049-attention-gradients-and-alignment": [
-  "052-attention-gradients-and-alignment"
+  "053-attention-gradients-and-alignment"
  ],
  "049p-project-spot-defects": [
-  "052p-project-spot-defects"
+  "053p-project-spot-defects"
  ],
  "050-scaled-attention-and-heads": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "051-attention-backward-and-cost": [
-  "054-attention-backward-and-cost"
+  "055-attention-backward-and-cost"
  ],
  "052-online-softmax-and-tiled-attention": [
-  "055-online-softmax-and-tiled-attention"
+  "056-online-softmax-and-tiled-attention"
  ],
  "053-position-encodings": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "054-the-transformer-block": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "055-counts-to-a-language-model": [
-  "058-counts-to-a-language-model"
+  "059-counts-to-a-language-model"
  ],
  "056-next-token-loss-and-safe-steps": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "057-training-loop-and-cost": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "057p-project-train-a-tiny-transformer": [
-  "060p-project-train-a-tiny-transformer"
+  "061p-project-train-a-tiny-transformer"
  ],
  "058-tokenisation": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "059-scaling-laws": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "060-decoding-and-sampling": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "061-fine-tuning-and-lora": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "062-reward-models-and-the-kl-leash": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "063-ppo-and-dpo": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "064-mixtures-of-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "064p-project-serve-a-tiny-model": [
-  "067p-project-serve-a-tiny-model"
+  "068p-project-serve-a-tiny-model"
  ],
  "065-autoencoders-and-vaes": [
-  "068-autoencoders-and-vaes"
+  "069-autoencoders-and-vaes"
  ],
  "066-diffusion-models": [
-  "069-diffusion-models"
+  "070-diffusion-models"
  ],
  "013-learning-curves-and-winners-curse": [
   "014-learning-curves-and-winners-curse"
@@ -1897,330 +1897,501 @@
   "018-gda-logistic-and-naive-bayes"
  ],
  "018-support-vector-machines": [
-  "019-support-vector-machines"
+  "020-support-vector-machines"
  ],
  "019-kernels-and-validity": [
-  "020-kernels-and-validity"
+  "021-kernels-and-validity"
  ],
  "020-kernel-ridge-and-random-features": [
-  "021-kernel-ridge-and-random-features"
+  "022-kernel-ridge-and-random-features"
  ],
  "020p-project-spam-filter": [
-  "022p-project-spam-filter"
+  "023p-project-spam-filter"
  ],
  "021-impurity-and-best-split": [
-  "023-impurity-and-best-split"
+  "024-impurity-and-best-split"
  ],
  "022-grow-and-prune-trees": [
-  "024-grow-and-prune-trees"
+  "025-grow-and-prune-trees"
  ],
  "023-averaging-and-bagging": [
-  "025-averaging-and-bagging"
+  "026-averaging-and-bagging"
  ],
  "024-gradient-boosting": [
-  "026-gradient-boosting"
+  "027-gradient-boosting"
  ],
  "025-principal-components": [
-  "027-principal-components"
+  "028-principal-components"
  ],
  "026-power-iteration-and-probabilistic-pca": [
-  "028-power-iteration-and-probabilistic-pca"
+  "029-power-iteration-and-probabilistic-pca"
  ],
  "027-k-means": [
-  "029-k-means"
+  "030-k-means"
  ],
  "028-gaussian-mixtures-and-em": [
-  "030-gaussian-mixtures-and-em"
+  "031-gaussian-mixtures-and-em"
  ],
  "028p-project-segment-customers": [
-  "030p-project-segment-customers"
+  "031p-project-segment-customers"
  ],
  "029-multilayer-perceptrons": [
-  "031-multilayer-perceptrons"
+  "032-multilayer-perceptrons"
  ],
  "030-backpropagation": [
-  "032-backpropagation"
+  "033-backpropagation"
  ],
  "031-softmax-and-whole-network-gradients": [
-  "033-softmax-and-whole-network-gradients"
+  "034-softmax-and-whole-network-gradients"
  ],
  "032-sgd-adam-and-schedules": [
-  "034-sgd-adam-and-schedules"
+  "035-sgd-adam-and-schedules"
  ],
  "033-signal-size-and-initialisation": [
-  "035-signal-size-and-initialisation"
+  "036-signal-size-and-initialisation"
  ],
  "034-normalisation-layers": [
-  "036-normalisation-layers"
+  "037-normalisation-layers"
  ],
  "035-weight-decay-and-early-stopping": [
-  "037-weight-decay-and-early-stopping"
+  "038-weight-decay-and-early-stopping"
  ],
  "036-dropout-and-label-smoothing": [
-  "038-dropout-and-label-smoothing"
+  "039-dropout-and-label-smoothing"
  ],
  "037-debugging-and-tuning": [
-  "039-debugging-and-tuning"
+  "040-debugging-and-tuning"
  ],
  "037p-project-read-digits": [
-  "039p-project-read-digits"
+  "040p-project-read-digits"
  ],
  "038-from-the-engine-to-pytorch": [
-  "040-from-the-engine-to-pytorch"
+  "041-from-the-engine-to-pytorch"
  ],
  "039-convolution-and-receptive-field": [
-  "041-convolution-and-receptive-field"
+  "042-convolution-and-receptive-field"
  ],
  "040-im2col-and-convolution-backward": [
-  "042-im2col-and-convolution-backward"
+  "043-im2col-and-convolution-backward"
  ],
  "041-residual-networks": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "042-augmentation-transfer-and-vit": [
-  "044-augmentation-transfer-and-vit"
+  "045-augmentation-transfer-and-vit"
  ],
  "043-detection-and-segmentation": [
-  "045-detection-and-segmentation"
+  "046-detection-and-segmentation"
  ],
  "044-contrastive-learning": [
-  "046-contrastive-learning"
+  "047-contrastive-learning"
  ],
  "045-recurrent-cells-and-bptt": [
-  "047-recurrent-cells-and-bptt"
+  "048-recurrent-cells-and-bptt"
  ],
  "046-vanishing-gradients-and-clipping": [
-  "048-vanishing-gradients-and-clipping"
+  "049-vanishing-gradients-and-clipping"
  ],
  "047-the-lstm": [
-  "049-the-lstm"
+  "050-the-lstm"
  ],
  "048-lstm-backward-and-the-gru": [
-  "050-lstm-backward-and-the-gru"
+  "051-lstm-backward-and-the-gru"
  ],
  "049-attention-as-soft-lookup": [
-  "051-attention-as-soft-lookup"
+  "052-attention-as-soft-lookup"
  ],
  "050-attention-gradients-and-alignment": [
-  "052-attention-gradients-and-alignment"
+  "053-attention-gradients-and-alignment"
  ],
  "050p-project-spot-defects": [
-  "052p-project-spot-defects"
+  "053p-project-spot-defects"
  ],
  "051-scaled-attention-and-heads": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "052-attention-backward-and-cost": [
-  "054-attention-backward-and-cost"
+  "055-attention-backward-and-cost"
  ],
  "053-online-softmax-and-tiled-attention": [
-  "055-online-softmax-and-tiled-attention"
+  "056-online-softmax-and-tiled-attention"
  ],
  "054-position-encodings": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "055-the-transformer-block": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "056-counts-to-a-language-model": [
-  "058-counts-to-a-language-model"
+  "059-counts-to-a-language-model"
  ],
  "057-next-token-loss-and-safe-steps": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "058-training-loop-and-cost": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "058p-project-train-a-tiny-transformer": [
-  "060p-project-train-a-tiny-transformer"
+  "061p-project-train-a-tiny-transformer"
  ],
  "059-tokenisation": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "060-scaling-laws": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "061-decoding-and-sampling": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "062-fine-tuning-and-lora": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "063-reward-models-and-the-kl-leash": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "064-ppo-and-dpo": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "065-mixtures-of-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "065p-project-serve-a-tiny-model": [
-  "067p-project-serve-a-tiny-model"
+  "068p-project-serve-a-tiny-model"
  ],
  "066-autoencoders-and-vaes": [
-  "068-autoencoders-and-vaes"
+  "069-autoencoders-and-vaes"
  ],
  "067-diffusion-models": [
-  "069-diffusion-models"
+  "070-diffusion-models"
  ],
  "021p-project-spam-filter": [
-  "022p-project-spam-filter"
+  "023p-project-spam-filter"
  ],
  "022-impurity-and-best-split": [
-  "023-impurity-and-best-split"
+  "024-impurity-and-best-split"
  ],
  "023-grow-and-prune-trees": [
-  "024-grow-and-prune-trees"
+  "025-grow-and-prune-trees"
  ],
  "024-averaging-and-bagging": [
-  "025-averaging-and-bagging"
+  "026-averaging-and-bagging"
  ],
  "025-gradient-boosting": [
-  "026-gradient-boosting"
+  "027-gradient-boosting"
  ],
  "026-principal-components": [
-  "027-principal-components"
+  "028-principal-components"
  ],
  "027-power-iteration-and-probabilistic-pca": [
-  "028-power-iteration-and-probabilistic-pca"
+  "029-power-iteration-and-probabilistic-pca"
  ],
  "028-k-means": [
-  "029-k-means"
+  "030-k-means"
  ],
  "029-gaussian-mixtures-and-em": [
-  "030-gaussian-mixtures-and-em"
+  "031-gaussian-mixtures-and-em"
  ],
  "029p-project-segment-customers": [
-  "030p-project-segment-customers"
+  "031p-project-segment-customers"
  ],
  "030-multilayer-perceptrons": [
-  "031-multilayer-perceptrons"
+  "032-multilayer-perceptrons"
  ],
  "031-backpropagation": [
-  "032-backpropagation"
+  "033-backpropagation"
  ],
  "032-softmax-and-whole-network-gradients": [
-  "033-softmax-and-whole-network-gradients"
+  "034-softmax-and-whole-network-gradients"
  ],
  "033-sgd-adam-and-schedules": [
-  "034-sgd-adam-and-schedules"
+  "035-sgd-adam-and-schedules"
  ],
  "034-signal-size-and-initialisation": [
-  "035-signal-size-and-initialisation"
+  "036-signal-size-and-initialisation"
  ],
  "035-normalisation-layers": [
-  "036-normalisation-layers"
+  "037-normalisation-layers"
  ],
  "036-weight-decay-and-early-stopping": [
-  "037-weight-decay-and-early-stopping"
+  "038-weight-decay-and-early-stopping"
  ],
  "037-dropout-and-label-smoothing": [
-  "038-dropout-and-label-smoothing"
+  "039-dropout-and-label-smoothing"
  ],
  "038-debugging-and-tuning": [
-  "039-debugging-and-tuning"
+  "040-debugging-and-tuning"
  ],
  "038p-project-read-digits": [
-  "039p-project-read-digits"
+  "040p-project-read-digits"
  ],
  "039-from-the-engine-to-pytorch": [
-  "040-from-the-engine-to-pytorch"
+  "041-from-the-engine-to-pytorch"
  ],
  "040-convolution-and-receptive-field": [
-  "041-convolution-and-receptive-field"
+  "042-convolution-and-receptive-field"
  ],
  "041-im2col-and-convolution-backward": [
-  "042-im2col-and-convolution-backward"
+  "043-im2col-and-convolution-backward"
  ],
  "042-residual-networks": [
-  "043-residual-networks"
+  "044-residual-networks"
  ],
  "043-augmentation-transfer-and-vit": [
-  "044-augmentation-transfer-and-vit"
+  "045-augmentation-transfer-and-vit"
  ],
  "044-detection-and-segmentation": [
-  "045-detection-and-segmentation"
+  "046-detection-and-segmentation"
  ],
  "045-contrastive-learning": [
-  "046-contrastive-learning"
+  "047-contrastive-learning"
  ],
  "046-recurrent-cells-and-bptt": [
-  "047-recurrent-cells-and-bptt"
+  "048-recurrent-cells-and-bptt"
  ],
  "047-vanishing-gradients-and-clipping": [
-  "048-vanishing-gradients-and-clipping"
+  "049-vanishing-gradients-and-clipping"
  ],
  "048-the-lstm": [
-  "049-the-lstm"
+  "050-the-lstm"
  ],
  "049-lstm-backward-and-the-gru": [
-  "050-lstm-backward-and-the-gru"
+  "051-lstm-backward-and-the-gru"
  ],
  "050-attention-as-soft-lookup": [
-  "051-attention-as-soft-lookup"
+  "052-attention-as-soft-lookup"
  ],
  "051-attention-gradients-and-alignment": [
-  "052-attention-gradients-and-alignment"
+  "053-attention-gradients-and-alignment"
  ],
  "051p-project-spot-defects": [
-  "052p-project-spot-defects"
+  "053p-project-spot-defects"
  ],
  "052-scaled-attention-and-heads": [
-  "053-scaled-attention-and-heads"
+  "054-scaled-attention-and-heads"
  ],
  "053-attention-backward-and-cost": [
-  "054-attention-backward-and-cost"
+  "055-attention-backward-and-cost"
  ],
  "054-online-softmax-and-tiled-attention": [
-  "055-online-softmax-and-tiled-attention"
+  "056-online-softmax-and-tiled-attention"
  ],
  "055-position-encodings": [
-  "056-position-encodings"
+  "057-position-encodings"
  ],
  "056-the-transformer-block": [
-  "057-the-transformer-block"
+  "058-the-transformer-block"
  ],
  "057-counts-to-a-language-model": [
-  "058-counts-to-a-language-model"
+  "059-counts-to-a-language-model"
  ],
  "058-next-token-loss-and-safe-steps": [
-  "059-next-token-loss-and-safe-steps"
+  "060-next-token-loss-and-safe-steps"
  ],
  "059-training-loop-and-cost": [
-  "060-training-loop-and-cost"
+  "061-training-loop-and-cost"
  ],
  "059p-project-train-a-tiny-transformer": [
-  "060p-project-train-a-tiny-transformer"
+  "061p-project-train-a-tiny-transformer"
  ],
  "060-tokenisation": [
-  "061-tokenisation"
+  "062-tokenisation"
  ],
  "061-scaling-laws": [
-  "062-scaling-laws"
+  "063-scaling-laws"
  ],
  "062-decoding-and-sampling": [
-  "063-decoding-and-sampling"
+  "064-decoding-and-sampling"
  ],
  "063-fine-tuning-and-lora": [
-  "064-fine-tuning-and-lora"
+  "065-fine-tuning-and-lora"
  ],
  "064-reward-models-and-the-kl-leash": [
-  "065-reward-models-and-the-kl-leash"
+  "066-reward-models-and-the-kl-leash"
  ],
  "065-ppo-and-dpo": [
-  "066-ppo-and-dpo"
+  "067-ppo-and-dpo"
  ],
  "066-mixtures-of-experts": [
-  "067-mixtures-of-experts"
+  "068-mixtures-of-experts"
  ],
  "066p-project-serve-a-tiny-model": [
-  "067p-project-serve-a-tiny-model"
+  "068p-project-serve-a-tiny-model"
  ],
  "067-autoencoders-and-vaes": [
-  "068-autoencoders-and-vaes"
+  "069-autoencoders-and-vaes"
  ],
  "068-diffusion-models": [
-  "069-diffusion-models"
+  "070-diffusion-models"
+ ],
+ "019-support-vector-machines": [
+  "020-support-vector-machines"
+ ],
+ "020-kernels-and-validity": [
+  "021-kernels-and-validity"
+ ],
+ "021-kernel-ridge-and-random-features": [
+  "022-kernel-ridge-and-random-features"
+ ],
+ "022-gaussian-processes": [
+  "023-gaussian-processes"
+ ],
+ "022p-project-spam-filter": [
+  "023p-project-spam-filter"
+ ],
+ "023-impurity-and-best-split": [
+  "024-impurity-and-best-split"
+ ],
+ "024-grow-and-prune-trees": [
+  "025-grow-and-prune-trees"
+ ],
+ "025-averaging-and-bagging": [
+  "026-averaging-and-bagging"
+ ],
+ "026-gradient-boosting": [
+  "027-gradient-boosting"
+ ],
+ "027-principal-components": [
+  "028-principal-components"
+ ],
+ "028-power-iteration-and-probabilistic-pca": [
+  "029-power-iteration-and-probabilistic-pca"
+ ],
+ "029-k-means": [
+  "030-k-means"
+ ],
+ "030-gaussian-mixtures-and-em": [
+  "031-gaussian-mixtures-and-em"
+ ],
+ "030p-project-segment-customers": [
+  "031p-project-segment-customers"
+ ],
+ "031-multilayer-perceptrons": [
+  "032-multilayer-perceptrons"
+ ],
+ "032-backpropagation": [
+  "033-backpropagation"
+ ],
+ "033-softmax-and-whole-network-gradients": [
+  "034-softmax-and-whole-network-gradients"
+ ],
+ "034-sgd-adam-and-schedules": [
+  "035-sgd-adam-and-schedules"
+ ],
+ "035-signal-size-and-initialisation": [
+  "036-signal-size-and-initialisation"
+ ],
+ "036-normalisation-layers": [
+  "037-normalisation-layers"
+ ],
+ "037-weight-decay-and-early-stopping": [
+  "038-weight-decay-and-early-stopping"
+ ],
+ "038-dropout-and-label-smoothing": [
+  "039-dropout-and-label-smoothing"
+ ],
+ "039-debugging-and-tuning": [
+  "040-debugging-and-tuning"
+ ],
+ "039p-project-read-digits": [
+  "040p-project-read-digits"
+ ],
+ "040-from-the-engine-to-pytorch": [
+  "041-from-the-engine-to-pytorch"
+ ],
+ "041-convolution-and-receptive-field": [
+  "042-convolution-and-receptive-field"
+ ],
+ "042-im2col-and-convolution-backward": [
+  "043-im2col-and-convolution-backward"
+ ],
+ "043-residual-networks": [
+  "044-residual-networks"
+ ],
+ "044-augmentation-transfer-and-vit": [
+  "045-augmentation-transfer-and-vit"
+ ],
+ "045-detection-and-segmentation": [
+  "046-detection-and-segmentation"
+ ],
+ "046-contrastive-learning": [
+  "047-contrastive-learning"
+ ],
+ "047-recurrent-cells-and-bptt": [
+  "048-recurrent-cells-and-bptt"
+ ],
+ "048-vanishing-gradients-and-clipping": [
+  "049-vanishing-gradients-and-clipping"
+ ],
+ "049-the-lstm": [
+  "050-the-lstm"
+ ],
+ "050-lstm-backward-and-the-gru": [
+  "051-lstm-backward-and-the-gru"
+ ],
+ "051-attention-as-soft-lookup": [
+  "052-attention-as-soft-lookup"
+ ],
+ "052-attention-gradients-and-alignment": [
+  "053-attention-gradients-and-alignment"
+ ],
+ "052p-project-spot-defects": [
+  "053p-project-spot-defects"
+ ],
+ "053-scaled-attention-and-heads": [
+  "054-scaled-attention-and-heads"
+ ],
+ "054-attention-backward-and-cost": [
+  "055-attention-backward-and-cost"
+ ],
+ "055-online-softmax-and-tiled-attention": [
+  "056-online-softmax-and-tiled-attention"
+ ],
+ "056-position-encodings": [
+  "057-position-encodings"
+ ],
+ "057-the-transformer-block": [
+  "058-the-transformer-block"
+ ],
+ "058-counts-to-a-language-model": [
+  "059-counts-to-a-language-model"
+ ],
+ "059-next-token-loss-and-safe-steps": [
+  "060-next-token-loss-and-safe-steps"
+ ],
+ "060-training-loop-and-cost": [
+  "061-training-loop-and-cost"
+ ],
+ "060p-project-train-a-tiny-transformer": [
+  "061p-project-train-a-tiny-transformer"
+ ],
+ "061-tokenisation": [
+  "062-tokenisation"
+ ],
+ "062-scaling-laws": [
+  "063-scaling-laws"
+ ],
+ "063-decoding-and-sampling": [
+  "064-decoding-and-sampling"
+ ],
+ "064-fine-tuning-and-lora": [
+  "065-fine-tuning-and-lora"
+ ],
+ "065-reward-models-and-the-kl-leash": [
+  "066-reward-models-and-the-kl-leash"
+ ],
+ "066-ppo-and-dpo": [
+  "067-ppo-and-dpo"
+ ],
+ "067-mixtures-of-experts": [
+  "068-mixtures-of-experts"
+ ],
+ "067p-project-serve-a-tiny-model": [
+  "068p-project-serve-a-tiny-model"
+ ],
+ "068-autoencoders-and-vaes": [
+  "069-autoencoders-and-vaes"
+ ],
+ "069-diffusion-models": [
+  "070-diffusion-models"
  ]
 }

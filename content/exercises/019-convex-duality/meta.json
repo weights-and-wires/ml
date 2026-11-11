@@ -1,0 +1,16 @@
+{
+  "id": "019-convex-duality",
+  "title": "Price the rules, bound the score, and measure the gap",
+  "brief": "Build the Lagrangian, the KKT residuals, the dual of an equality-constrained quadratic and of ridge regression, and the lasso duality gap.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "lagrangian is f(x) plus the sum of lam_i * g_i(x) plus the sum of nu_j * h_j(x). For f(x) = x^2, g(x) = 1 - x, lam = [2], x = 3 it returns 9 + 2 * (-2) = 5.",
+    "For min 0.5 |x|^2 subject to x1 + x2 = 1, qp_dual should return nu = -0.5, a dual value of 0.25, and x = [0.5, 0.5]. Solve (A Q^-1 A^T) nu = -(b + A Q^-1 c).",
+    "ridge_dual on X = [[1], [2]], y = [1, 2], lam = 1 gives a = [1/6, 1/3] and w = [5/6]. K is X @ X.T and the system is (K + lam I) a = y.",
+    "For the lasso gap with X = [[1], [2]], y = [1, 2], lam = 1: at w = 0 the residual is y, X^T r = 5, the scale is 0.2, the dual value is 0.9, and the gap is 2.5 - 0.9 = 1.6."
+  ]
+}

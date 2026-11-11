@@ -1,0 +1,13 @@
+{
+  "id": "023-gaussian-processes",
+  "title": "Double every score",
+  "brief": "Multiply every entry of an array by 2. This draft holds the exercise until the lesson is written.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "Multiply the array by 2. Adding 2 passes one check and fails the rest."
+  ]
+}

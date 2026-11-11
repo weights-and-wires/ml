@@ -1,0 +1,16 @@
+{
+  "id": "027-gradient-boosting",
+  "title": "Boost stumps by fitting what is still wrong",
+  "brief": "Write the negative gradients of two losses, a Newton leaf, and the regularised split gain, then run gradient boosting with stumps.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "squared_error_neg_grad returns y - F, because the slope of 0.5 * (y - F) ** 2 in F is F - y. The absolute-error version returns np.sign(y - F).",
+    "gradient_boost starts from F = np.zeros(n). Each round sets target = neg_grad(y, F), fits _fit_stump(X, target), and updates F = F + learning_rate * _predict_stump(stump, X). Round 1 under squared error fits y itself.",
+    "Append {\"target\": target, \"prediction\": F.copy()} to the history. Without .copy(), an in-place update changes every earlier entry. On the hand example, F after round 1 with learning_rate 0.5 is [1, 1, 4.5, 4.5].",
+    "newton_leaf_value returns -sum(g) / (sum(h) + lam). g is the uphill slope, so for squared error it is F - y. On the left two flats, lam 0 gives 2 and lam 1 gives 4/3. split_gain is 0.5 * (left score + right score - parent score) - gamma, and each score is (sum of g) ** 2 / (sum of h + lam)."
+  ]
+}

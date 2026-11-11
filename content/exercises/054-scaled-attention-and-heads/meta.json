@@ -1,0 +1,18 @@
+{
+  "id": "054-scaled-attention-and-heads",
+  "title": "Scale, split into heads, and mask the future",
+  "brief": "Write the pieces of a soft lookup, measure how the spread of dot products grows with the key width, and build scaled dot-product attention. Then add the causal mask and multi-head attention.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "dot_scores is one line: q @ k.T. Row i, column j is the dot product of query i with key j, so the result has shape (T_q, T_k).",
+    "softmax: subtract np.max(x, axis=axis, keepdims=True) before np.exp, then divide by the sum of the exponentials along the same axis with keepdims=True.",
+    "blend_values is weights @ v. With weights [1, 0] you get exactly the first row of v. attention_score_scale(d_k) is 1.0 / np.sqrt(d_k); for d_k = 64 it returns 0.125.",
+    "score_std: make rng = np.random.default_rng(seed), draw q and k with rng.normal(size=(n, d_k)), take np.sum(q * k, axis=1), and return float(np.std(...)).",
+    "scaled_dot_product_attention: scores = dot_scores(q, k) * attention_score_scale(q.shape[-1]), add mask if given, then softmax along the last axis, then blend_values. Return both the output and the weights.",
+    "causal_mask: start from np.zeros((T, T)) and set mask[np.triu_indices(T, k=1)] = -np.inf. Use k=1 so the diagonal stays 0.",
+    "split_heads: d_k = d // heads, and head i is x[:, i * d_k:(i + 1) * d_k]. Columns, not rows. Raise ValueError when heads does not divide d.",
+    "multi_head_attention: project once with x @ Wq, x @ Wk, x @ Wv, split each into heads, run scaled_dot_product_attention on the i-th slices of all three with the same mask, np.concatenate the outputs along axis=-1, then multiply by Wo."
+  ]
+}
