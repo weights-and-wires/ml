@@ -1468,7 +1468,7 @@
   "083-autoencoders-and-vaes"
  ],
  "062-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "041-recurrent-cells-and-bptt": [
   "052-recurrent-cells-and-bptt"
@@ -1546,7 +1546,7 @@
   "083-autoencoders-and-vaes"
  ],
  "063-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "042-recurrent-cells-and-bptt": [
   "052-recurrent-cells-and-bptt"
@@ -1624,7 +1624,7 @@
   "083-autoencoders-and-vaes"
  ],
  "064-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "043-recurrent-cells-and-bptt": [
   "052-recurrent-cells-and-bptt"
@@ -1702,7 +1702,7 @@
   "083-autoencoders-and-vaes"
  ],
  "065-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "014-scoring-classifiers": [
   "016-scoring-classifiers"
@@ -1879,7 +1879,7 @@
   "083-autoencoders-and-vaes"
  ],
  "066-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "013-learning-curves-and-winners-curse": [
   "014-learning-curves-and-winners-curse"
@@ -2062,7 +2062,7 @@
   "083-autoencoders-and-vaes"
  ],
  "067-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "021p-project-spam-filter": [
   "023p-project-spam-filter"
@@ -2221,7 +2221,7 @@
   "083-autoencoders-and-vaes"
  ],
  "068-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "019-support-vector-machines": [
   "020-support-vector-machines"
@@ -2392,7 +2392,7 @@
   "083-autoencoders-and-vaes"
  ],
  "069-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "031p-project-segment-customers": [
   "033p-project-segment-customers"
@@ -2524,7 +2524,7 @@
   "083-autoencoders-and-vaes"
  ],
  "070-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "030-k-means": [
   "031-k-means"
@@ -2665,7 +2665,7 @@
   "083-autoencoders-and-vaes"
  ],
  "071-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "035-backpropagation": [
   "036-backpropagation"
@@ -2791,7 +2791,7 @@
   "083-autoencoders-and-vaes"
  ],
  "072-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "043p-project-read-digits": [
   "044p-project-read-digits"
@@ -2893,7 +2893,7 @@
   "083-autoencoders-and-vaes"
  ],
  "073-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "057p-project-spot-defects": [
   "058p-project-spot-defects"
@@ -2953,7 +2953,7 @@
   "083-autoencoders-and-vaes"
  ],
  "074-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "064-counts-to-a-language-model": [
   "067-counts-to-a-language-model"
@@ -2995,7 +2995,7 @@
   "083-autoencoders-and-vaes"
  ],
  "075-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "065-counts-to-a-language-model": [
   "067-counts-to-a-language-model"
@@ -3037,7 +3037,7 @@
   "083-autoencoders-and-vaes"
  ],
  "076-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "066-counts-to-a-language-model": [
   "067-counts-to-a-language-model"
@@ -3079,7 +3079,7 @@
   "083-autoencoders-and-vaes"
  ],
  "077-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "069p-project-train-a-tiny-transformer": [
   "070p-project-train-a-tiny-transformer"
@@ -3112,7 +3112,7 @@
   "083-autoencoders-and-vaes"
  ],
  "078-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "072-scaling-laws": [
   "073-scaling-laws"
@@ -3139,7 +3139,7 @@
   "083-autoencoders-and-vaes"
  ],
  "079-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "074-decoding-and-sampling": [
   "075-decoding-and-sampling"
@@ -3163,7 +3163,7 @@
   "083-autoencoders-and-vaes"
  ],
  "080-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "076-fine-tuning-and-lora": [
   "077-fine-tuning-and-lora"
@@ -3184,7 +3184,7 @@
   "083-autoencoders-and-vaes"
  ],
  "081-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "078-reward-models-and-the-kl-leash": [
   "079-reward-models-and-the-kl-leash"
@@ -3202,7 +3202,7 @@
   "083-autoencoders-and-vaes"
  ],
  "082-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
  ],
  "081p-project-serve-a-tiny-model": [
   "082p-project-serve-a-tiny-model"
@@ -3211,6 +3211,9 @@
   "083-autoencoders-and-vaes"
  ],
  "083-diffusion-models": [
-  "084-diffusion-models"
+  "085-diffusion-models"
+ ],
+ "084-diffusion-models": [
+  "085-diffusion-models"
  ]
 }
