@@ -1,6 +1,6 @@
 ---
 title: "Diffusion models: add noise, then walk it back"
-slug: 084-diffusion-models
+slug: 085-diffusion-models
 part: "Part 8 — Generative models"
 summary: "Noise a two-blob cloud on a schedule, predict that noise, and walk a standard normal back onto the blobs."
 minutes: 75
@@ -15,7 +15,7 @@ prereqs:
   - 032-gaussian-mixtures-and-em
   - 034-multilayer-perceptrons
   - 083-autoencoders-and-vaes
-exercise: 084-diffusion-models
+exercise: 085-diffusion-models
 ---
 
 # Diffusion models: add noise, then walk it back

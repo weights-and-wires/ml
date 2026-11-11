@@ -1,13 +1,13 @@
 # Curriculum
 
-84 chapters in 8 parts, and 8 projects in a section of their own. Each
+85 chapters in 8 parts, and 8 projects in a section of their own. Each
 project lists the chapter to finish before you start it. Each row is one Markdown file under
 `content/lessons/` and one directory under `content/exercises/`. The `Needs GPU`
 column marks the exercises that run on RunPod rather than in the app container.
 
 Each chapter teaches one topic: two or three closely related ideas in one arc,
 with one exercise. The 33 lessons of the first edition were split into 132
-one-idea chapters, merged into 117, and then merged again into 55. One added chapter brings the count to 56, scoring classifiers brings it to 57, and debugging and tuning a network brings it to 58. The map from your engine to PyTorch brings it to 59. A count model and word vectors bring it to 60. Autoencoders and variational autoencoders bring it to 61, in an eighth part. Diffusion models bring it to 62. Online softmax and tiled attention bring it to 63. Augmentation, transfer, separable convolutions, and patch embedding bring it to 64. Detection and segmentation brings it to 65. Contrastive learning brings it to 66. Learning theory brings it to 67. Feature pipelines and data leakage bring it to 68. Gaussian processes bring it to 69. Convex optimisation and Lagrange duality brings it to 70. Nearest neighbours and matrix factorisation bring it to 71. ICA and t-SNE bring it to 72. Approximation theory brings it to 73. Uncertainty and conformal prediction brings it to 74. Graph neural networks bring it to 75. Modern transformer design choices bring it to 76. Encoders and cross-attention bring it to 77. State-space models and linear attention bring it to 78. Gradient accumulation and activation checkpointing bring it to 79. Pretraining data brings it to 80. Optimiser scaling rules bring it to 81. Evaluating language models brings it to 82. Distillation brings it to 83. Interpretability brings it to 84.
+one-idea chapters, merged into 117, and then merged again into 55. One added chapter brings the count to 56, scoring classifiers brings it to 57, and debugging and tuning a network brings it to 58. The map from your engine to PyTorch brings it to 59. A count model and word vectors bring it to 60. Autoencoders and variational autoencoders bring it to 61, in an eighth part. Diffusion models bring it to 62. Online softmax and tiled attention bring it to 63. Augmentation, transfer, separable convolutions, and patch embedding bring it to 64. Detection and segmentation brings it to 65. Contrastive learning brings it to 66. Learning theory brings it to 67. Feature pipelines and data leakage bring it to 68. Gaussian processes bring it to 69. Convex optimisation and Lagrange duality brings it to 70. Nearest neighbours and matrix factorisation bring it to 71. ICA and t-SNE bring it to 72. Approximation theory brings it to 73. Uncertainty and conformal prediction brings it to 74. Graph neural networks bring it to 75. Modern transformer design choices bring it to 76. Encoders and cross-attention bring it to 77. State-space models and linear attention bring it to 78. Gradient accumulation and activation checkpointing bring it to 79. Pretraining data brings it to 80. Optimiser scaling rules bring it to 81. Evaluating language models brings it to 82. Distillation brings it to 83. Interpretability brings it to 84. GANs and the scores for generators bring it to 85.
 `content/renames.json` maps each old lesson and chapter to the chapter that
 replaced it, so readers keep their progress.
 
@@ -133,7 +133,8 @@ replaced it, so readers keep their progress.
 | Slug | Title | Exercise delivers | Needs GPU |
 |---|---|---|---|
 | `083-autoencoders-and-vaes` | Autoencoders and variational autoencoders | Write the diagonal-Gaussian KL and its gradient, reparameterise a sample, check the ELBO against a known log probability, recover a principal component with a linear autoencoder, and train a tiny VAE. | No |
-| `084-diffusion-models` | Diffusion models: add noise, then walk it back | Write the cumulative noise schedule and the closed-form noisy sample, the noise-prediction loss and its gradient, one ancestral step and one deterministic step, ancestral samples from an exact two-bell denoiser, and a classifier-free guidance step. | No |
+| `084-gans-and-evaluating-generators` | GANs, and how to judge a generator | Write the optimal discriminator and the Jensen-Shannon link, the discriminator and the saturating and non-saturating generator losses with their gradients, a matrix square root and the Frechet distance, and train a one-dimensional GAN. | No |
+| `085-diffusion-models` | Diffusion models: add noise, then walk it back | Write the cumulative noise schedule and the closed-form noisy sample, the noise-prediction loss and its gradient, one ancestral step and one deterministic step, ancestral samples from an exact two-bell denoiser, and a classifier-free guidance step. | No |
 
 ## Projects
 
