@@ -1,5 +1,5 @@
 {
-  "id": "074-decoding-and-sampling",
+  "id": "075-decoding-and-sampling",
   "title": "Cache keys and values, sample a token, search a beam, and verify a draft",
   "brief": "Count flops against bytes for decoding, size and build a KV cache, turn scores into a token with temperature, top-k, and top-p, search with a beam, and write the accept-or-replace rule of speculative decoding.",
   "needs_gpu": false,

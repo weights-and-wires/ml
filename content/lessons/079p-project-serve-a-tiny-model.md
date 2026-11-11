@@ -1,6 +1,6 @@
 ---
 title: "Serve a small language model"
-slug: 078p-project-serve-a-tiny-model
+slug: 079p-project-serve-a-tiny-model
 part: "Part 7 — Large language models"
 kind: project
 summary: Ship a tiny transformer with a tokeniser, KV cache, sampling, speculative decoding, and a LoRA adapter, proving each stage against its slow twin.
@@ -13,9 +13,9 @@ objectives:
   - Serve a customer's LoRA adapter on the fly and merged, with identical outputs both ways.
 prereqs:
   - 071-tokenisation
-  - 074-decoding-and-sampling
-  - 075-fine-tuning-and-lora
-exercise: 078p-project-serve-a-tiny-model
+  - 075-decoding-and-sampling
+  - 076-fine-tuning-and-lora
+exercise: 079p-project-serve-a-tiny-model
 ---
 
 # Serve a small language model
@@ -42,10 +42,10 @@ A good answer clears four end-to-end tests. Cached and uncached greedy generatio
 
 - [Byte-pair encoding](/lessons/071-tokenisation) gives you the loop that learns merges from pair counts, with ties broken by the smaller pair, the replay of merges in learned order, and the byte-level decode that makes the round trip exact.
 - [Fertility and fairness](/lessons/071-tokenisation) gives you tokens per word as the price a language pays.
-- [The KV cache](/lessons/074-decoding-and-sampling) gives you the stored keys and values that make one step cost one token.
-- [Temperature and sampling](/lessons/074-decoding-and-sampling) gives you the sampler: temperature, top-k, top-p, and a seeded draw.
-- [Speculative decoding](/lessons/074-decoding-and-sampling) gives you the accept-or-replace rule that keeps the target's distribution.
-- [LoRA and merging](/lessons/075-fine-tuning-and-lora) give you the low-rank update, on the fly and folded into the weight.
+- [The KV cache](/lessons/075-decoding-and-sampling) gives you the stored keys and values that make one step cost one token.
+- [Temperature and sampling](/lessons/075-decoding-and-sampling) gives you the sampler: temperature, top-k, top-p, and a seeded draw.
+- [Speculative decoding](/lessons/075-decoding-and-sampling) gives you the accept-or-replace rule that keeps the target's distribution.
+- [LoRA and merging](/lessons/076-fine-tuning-and-lora) give you the low-rank update, on the fly and folded into the weight.
 
 ## Meet the data
 
@@ -142,12 +142,12 @@ The starter gives you `make_data`, the transformer `forward`, `KVCache`, `new_ca
 2. **`encode(text, merges)`.** For each piece, start from its UTF-8 bytes and replay merge 0, then merge 1, and so on, with `merge_pair`. Join the pieces' ids. This is [encoding and decoding](/lessons/071-tokenisation). The usual mistake is replaying the merges in the wrong order, or checking every merge once per piece instead of once per merge in sequence. `encode("", merges)` is `[]`.
 3. **`decode(ids, vocab)`.** Join `vocab[i]` for each id and decode the bytes as UTF-8 with `errors="replace"`. The replacement matters here and not in the chapter, because a model can write any ids in any order, and a lone continuation byte would crash a strict decode in the middle of a response.
 4. **`fertility(text, merges)`.** Tokens per whitespace-separated word, from [fertility and fairness](/lessons/071-tokenisation). It is one line, and the check wants it to be higher outside the training domain, as in Figure 1.
-5. **`decode_step(params, token, cache, linear)`.** Run one token through the transformer, reading everything earlier from the cache. Take the position from `cache.length` before you append. For each layer, compute `q`, `k`, and `v` for the one token, reshape each to `(n_head, 16)`, append `k` and `v`, fetch the whole cache, and attend. No mask is needed, because the cache holds only the past and the present. Every weight goes through `linear(x, W, (layer, name))`, because step 11 swaps that hook. This is [the KV cache](/lessons/074-decoding-and-sampling) with several heads. The usual mistake is a position embedding of 0 for every token, which gives plausible but wrong logits.
-6. **`next_token_probs(logits, temperature, top_k, top_p)`.** Divide by the temperature, softmax with the maximum subtracted, keep the top `k`, keep the nucleus up to and including the token that crosses `top_p`, and renormalise. Temperature 0 returns a one-hot vector at the argmax. This is [temperature and sampling](/lessons/074-decoding-and-sampling). Speculative decoding needs the probabilities themselves, so write this function and let step 7 build on it.
+5. **`decode_step(params, token, cache, linear)`.** Run one token through the transformer, reading everything earlier from the cache. Take the position from `cache.length` before you append. For each layer, compute `q`, `k`, and `v` for the one token, reshape each to `(n_head, 16)`, append `k` and `v`, fetch the whole cache, and attend. No mask is needed, because the cache holds only the past and the present. Every weight goes through `linear(x, W, (layer, name))`, because step 11 swaps that hook. This is [the KV cache](/lessons/075-decoding-and-sampling) with several heads. The usual mistake is a position embedding of 0 for every token, which gives plausible but wrong logits.
+6. **`next_token_probs(logits, temperature, top_k, top_p)`.** Divide by the temperature, softmax with the maximum subtracted, keep the top `k`, keep the nucleus up to and including the token that crosses `top_p`, and renormalise. Temperature 0 returns a one-hot vector at the argmax. This is [temperature and sampling](/lessons/075-decoding-and-sampling). Speculative decoding needs the probabilities themselves, so write this function and let step 7 build on it.
 7. **`sample_token(logits, rng, ...)` and `generate(...)`.** `sample_token` returns the argmax at temperature 0 and otherwise draws with `rng.choice(len(probs), p=probs)`. `generate` runs the prompt through `decode_step`, then repeats: sample, append, feed the token back. With `use_cache=False` it calls `forward` on the whole sequence each step. The usual mistake is feeding the prompt's last token twice, or never feeding the sampled token back, which freezes the output on one token.
-8. **`residual_distribution(p, q)` and `speculative_round(target_fn, draft_fn, context, k, rng)`.** The residual is `max(p - q, 0)` divided by its sum, with a copy of `p` when the sum is 0. In a round, the draft proposes `k` tokens and remembers each row as `q`. The target is called once on `context + drafted`, and its row `len(context) - 1 + i` is `p` for draft token `i`. Accept token `x` when `rng.uniform() < min(1, p[x] / q[x])`. On the first rejection, draw from the residual and stop. If all `k` pass, draw a bonus token from the last row. Return `(tokens, n_accepted, n_checked)`. The usual mistake is replacing from `p`, which looks right on one example and fails over thousands. This is [speculative decoding](/lessons/074-decoding-and-sampling).
+8. **`residual_distribution(p, q)` and `speculative_round(target_fn, draft_fn, context, k, rng)`.** The residual is `max(p - q, 0)` divided by its sum, with a copy of `p` when the sum is 0. In a round, the draft proposes `k` tokens and remembers each row as `q`. The target is called once on `context + drafted`, and its row `len(context) - 1 + i` is `p` for draft token `i`. Accept token `x` when `rng.uniform() < min(1, p[x] / q[x])`. On the first rejection, draw from the residual and stop. If all `k` pass, draw a bonus token from the last row. Return `(tokens, n_accepted, n_checked)`. The usual mistake is replacing from `p`, which looks right on one example and fails over thousands. This is [speculative decoding](/lessons/075-decoding-and-sampling).
 9. **`speculative_generate(target_fn, draft_fn, prompt, n_new, k, rng)`.** Call `speculative_round` until `n_new` tokens exist, cut to exactly `n_new`, and return `(tokens, stats)` with the keys `accepted`, `checked`, `target_passes`, and `acceptance_rate`. Divide accepted by checked, and count a checked token whether or not it passed. The usual mistake is dividing by `k` per round, which counts draft tokens that were thrown away after an earlier rejection and understates the rate.
-10. **`lora_linear(x, W, A, B, alpha, r)` and `merge_lora(W, A, B, alpha, r)`.** The first computes `x @ W.T + (alpha / r) * (x @ A.T) @ B.T` without ever forming the update. The second returns `W + (alpha / r) * B @ A`. These are [the LoRA chapter](/lessons/075-fine-tuning-and-lora). The usual mistake is scaling by `alpha` alone. The chapter's 2 by 2 example gives `[[7, 1]]` and `[[3, 4], [0, 1]]`.
+10. **`lora_linear(x, W, A, B, alpha, r)` and `merge_lora(W, A, B, alpha, r)`.** The first computes `x @ W.T + (alpha / r) * (x @ A.T) @ B.T` without ever forming the update. The second returns `W + (alpha / r) * B @ A`. These are [the LoRA chapter](/lessons/076-fine-tuning-and-lora). The usual mistake is scaling by `alpha` alone. The chapter's 2 by 2 example gives `[[7, 1]]` and `[[3, 4], [0, 1]]`.
 11. **`make_lora_linear(adapter)` and `merge_adapter(params, adapter)`.** The first returns a hook that applies the adapter for keys it holds and a plain `x @ W.T` for the rest. The second deep-copies `params` and replaces each adapted weight with its merge. The usual mistake is writing into `params` in place, which silently adapts the base model for every later request.
 12. **`complete(prompt, merges, vocab, params, n_new, rng, ...)`.** Encode, pick the merged or hooked model, generate with the cache, and decode the prompt plus the written ids. The prompt text comes back unchanged at the front.
 

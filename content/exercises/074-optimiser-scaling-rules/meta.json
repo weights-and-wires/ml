@@ -1,0 +1,16 @@
+{
+  "id": "074-optimiser-scaling-rules",
+  "title": "Scale a learning rate with width, and orthogonalise an update",
+  "brief": "Write the muP learning rate and initialisation, check that one Adam step moves activations by a width-independent amount, sweep learning rates to see them transfer, then build a Newton-Schulz orthogonaliser and the Muon step.",
+  "needs_gpu": false,
+  "timeout": 90,
+  "packages": ["numpy"],
+  "hints": [
+    "adam_lr_for_width returns base_lr for \"input\". For \"hidden\" and \"output\" it returns base_lr * base_width / width. At base_lr 1e-3, base_width 32, and width 512 that is 6.25e-05. Divide by the ratio, not by its square root.",
+    "mup_init draws one matrix per consecutive pair of widths, in order. The std is 1 / np.sqrt(fan_in) for every matrix except the last, where it is 1 / fan_in. Here fan_in is widths[i] and the matrix has shape (widths[i+1], widths[i]).",
+    "activation_update_size follows the recipe in its docstring: build the weights, draw x then y from the same rng, call loss_and_grads, call adam_step once with zero moments and t = 1, call loss_and_grads again on the new weights, and take sqrt(mean(delta**2)) of the change in pre[1]. Under SP the result grows about tenfold from width 32 to 512. Under muP it stays near 0.011.",
+    "best_lr averages train_loss over the seeds for each rate in the grid, replaces any non-finite loss with 1e9, and returns the rate at np.argmin of the averages. At width 32 the best rate under muP is 2^-5.",
+    "newton_schulz: X = G / (norm(G) + 1e-7), transpose when X has more rows than columns, then loop: S = X @ X.T; X = a*X + b*(S @ X) + c*(S @ S @ X). For diag(3, 1) the singular values after 1 step are 0.7518 and 0.9447, and after 5 steps they are 0.7530 and 1.1337.",
+    "muon_step: M_new = beta * M + G, then W_new = W - lr * newton_schulz(M_new). Return the tuple (W_new, M_new). The update's spectral norm stays between about 0.7 and 1.2 times lr, however large G is."
+  ]
+}
