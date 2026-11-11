@@ -1,0 +1,17 @@
+{
+  "id": "029-multilayer-perceptrons",
+  "title": "Build a multilayer perceptron and count what it costs",
+  "brief": "Write ReLU, GELU, and their slopes, merge affine layers, run a forward pass, count the pieces of a folded network, build a hinge network through any knots, and count its parameters, flops, and stored activations.",
+  "needs_gpu": false,
+  "timeout": 40,
+  "packages": ["numpy"],
+  "hints": [
+    "relu is np.maximum(x, 0.0). relu_grad returns floats: (x > 0).astype(float). A boolean array fails the finite-difference comparison.",
+    "compose_affine: the first layer's matrix is on the right of the product, W2 @ W1, and b1 goes through the second layer as W2 @ b1.",
+    "Compute u = sqrt(2/pi) * (x + 0.044715 * x**3) once, then t = np.tanh(u). gelu is 0.5 * x * (1 + t), and gelu_grad adds 0.5 * x * (1 - t**2) times the slope of u, sqrt(2/pi) * (1 + 3 * 0.044715 * x**2).",
+    "In mlp_forward, h @ W.T + b keeps the rows of W as units. Pick the bend with if/elif on the name and raise ValueError for anything else.",
+    "In count_linear_regions_1d, inside one stretch every unit's reading is slope * x + intercept. A ReLU unit changes behaviour at x = -intercept / slope, and only a root strictly inside the stretch counts. Test the sign at the stretch's midpoint, and merge equal neighbours at the end.",
+    "sawtooth_network's middle layers fold the previous tent's combination 2 h1 - 4 h2 into their own weights: W = [[2, -4], [2, -4]] and b = [0, -0.5].",
+    "Per layer, parameters are out * in + out. Flops are 2 * in * out, plus out for the bias, plus out times the bend cost: relu 1, gelu 9, identity 0. Stored activations are the input size plus every layer's W.shape[0]."
+  ]
+}
