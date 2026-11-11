@@ -1,6 +1,6 @@
 ---
 title: Reward models and the KL leash
-slug: 077-reward-models-and-the-kl-leash
+slug: 078-reward-models-and-the-kl-leash
 part: "Part 7 — Large language models"
 summary: Train a scorer from "B beats A" with the Bradley-Terry loss, then keep a model near its reference with a KL leash and a closed-form best policy.
 minutes: 80
@@ -12,11 +12,11 @@ objectives:
   - Write the leashed objective, expected reward minus beta times KL, and compute the best policy for three answers.
   - Explain what beta controls, and why the normaliser Z(x) cannot be computed over all sentences.
 prereqs:
-  - 076-fine-tuning-and-lora
+  - 077-fine-tuning-and-lora
   - 008-sigmoid-and-log-loss
   - 037-softmax-and-whole-network-gradients
   - 068-next-token-loss-and-safe-steps
-exercise: 077-reward-models-and-the-kl-leash
+exercise: 078-reward-models-and-the-kl-leash
 ---
 
 # Reward models and the KL leash
@@ -343,7 +343,7 @@ Figure 4. The best policy for the same rewards at five values of β. A small β 
 
 The dial also shows what the leash cannot do. If the reward model scored the padded answer 3 (and helpful 1, terse 0), the same formula at $\beta = 1$ would give the padded answer 0.708, and at $\beta = 5$ it gets 0.286. A leash does not know which reward is right. It limits how fast you can chase one, so $\beta$ has to be chosen against the size of the rewards you trust.
 
-$Z$ sums over every possible answer. With three answers that is 1.859, but a real answer is a sequence of tokens, and with 50,000 tokens and 100 positions there are about $10^{470}$ sequences. The best policy exists, and you cannot write it down by summing. A later chapter on [PPO and DPO](/lessons/078-ppo-and-dpo) reaches it by sampling and then rewrites the problem so that $Z$ cancels.
+$Z$ sums over every possible answer. With three answers that is 1.859, but a real answer is a sequence of tokens, and with 50,000 tokens and 100 positions there are about $10^{470}$ sequences. The best policy exists, and you cannot write it down by summing. A later chapter on [PPO and DPO](/lessons/079-ppo-and-dpo) reaches it by sampling and then rewrites the problem so that $Z$ cancels.
 
 > [!KEY]
 > Without a limit, a policy exploits the reward model's blind spots. The fix is to maximise reward minus $\beta$ times the KL distance from the reference. The winner is the reference reweighted by $e^{r/\beta}$, divided by the total $Z$, and $\beta$ decides how far it may move.
