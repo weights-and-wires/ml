@@ -98,27 +98,27 @@
   "063-the-transformer-block"
  ],
  "27-training-a-transformer": [
-  "065-next-token-loss-and-safe-steps",
-  "066-training-loop-and-cost"
+  "066-next-token-loss-and-safe-steps",
+  "067-training-loop-and-cost"
  ],
  "28-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "29-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "30-inference-and-decoding": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "31-parameter-efficient-tuning": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "32-alignment": [
-  "071-reward-models-and-the-kl-leash",
-  "072-ppo-and-dpo"
+  "072-reward-models-and-the-kl-leash",
+  "073-ppo-and-dpo"
  ],
  "33-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "007-lost-digits": [
   "004-stable-least-squares"
@@ -457,109 +457,109 @@
   "063-the-transformer-block"
  ],
  "105-next-token-loss": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "106-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "107-the-training-loop": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "108-cost-of-training": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "108p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "109-bytes-and-the-vocabulary-trade": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "110-byte-pair-encoding": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "110-training-bpe": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "111-encode-and-decode": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "112-fertility-and-fairness": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "113-power-laws-log-log": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "114-loss-from-size-and-data": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "115-compute-optimal-models": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "115-counting-parameters-and-flops": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "116-compute-optimal-split": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "117-decoding-and-the-kv-cache": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "117-why-decoding-waits-on-memory": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "118-the-kv-cache": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "119-temperature-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "120-speculative-decoding": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "121-fine-tuning-memory-bill": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "122-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "122-lora-layer": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "123-merging-and-serving": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "124-low-rank-reach-and-training": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "125-reward-from-preferences": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "126-kl-leash-and-optimal-policy": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "127-ppo-the-sampling-loop": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "128-dpo-implicit-reward": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "129-top-k-routing": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "130-router-gradient": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "131-balancing-the-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "131-load-balancing": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "132-capacity-and-dropping": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "132p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "001-scoring-a-guess": [
   "001-loss-and-honest-scores"
@@ -844,73 +844,73 @@
   "063-the-transformer-block"
  ],
  "095-next-token-loss": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "096-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "097-the-training-loop": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "098-cost-of-training": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "099-bytes-and-the-vocabulary-trade": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "100-byte-pair-encoding": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "101-fertility-and-fairness": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "102-power-laws-log-log": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "103-loss-from-size-and-data": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "104-compute-optimal-models": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "105-decoding-and-the-kv-cache": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "106-temperature-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "107-speculative-decoding": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "108-fine-tuning-memory-bill": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "109-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "110-low-rank-reach-and-training": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "111-reward-from-preferences": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "112-kl-leash-and-optimal-policy": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "113-ppo-the-sampling-loop": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "114-dpo-implicit-reward": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "115-top-k-routing": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "116-router-gradient": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "117-balancing-the-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "004p-project-explore-before-you-model": [
   "002p-project-explore-before-you-model"
@@ -931,10 +931,10 @@
   "058p-project-spot-defects"
  ],
  "098p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "117p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "011-cross-validation-and-leave-one-out": [
   "012-cross-validation-and-leave-one-out"
@@ -1057,37 +1057,37 @@
   "063-the-transformer-block"
  ],
  "047-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "048-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "048p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "049-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "050-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "051-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "052-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "053-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "054-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "055-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "055p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "014-bayes-rule-and-gaussian-classes": [
   "017-bayes-rule-and-gaussian-classes"
@@ -1204,37 +1204,37 @@
   "063-the-transformer-block"
  ],
  "048-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "049-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "049p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "050-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "051-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "052-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "053-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "054-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "055-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "056-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "056p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "035p-project-read-digits": [
   "044p-project-read-digits"
@@ -1282,37 +1282,37 @@
   "063-the-transformer-block"
  ],
  "049-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "050-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "050p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "051-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "052-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "053-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "054-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "055-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "056-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "057-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "057p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "037-convolution-and-receptive-field": [
   "046-convolution-and-receptive-field"
@@ -1357,70 +1357,70 @@
   "063-the-transformer-block"
  ],
  "050-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "051-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "051p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "052-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "053-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "054-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "055-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "056-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "057-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "058-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "058p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "051-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "052-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "052p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "053-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "054-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "055-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "056-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "057-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "058-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "059-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "059p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "049-position-encodings": [
   "062-position-encodings"
@@ -1429,46 +1429,46 @@
   "063-the-transformer-block"
  ],
  "051-counts-to-a-language-model": [
-  "064-counts-to-a-language-model"
+  "065-counts-to-a-language-model"
  ],
  "052-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "053-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "053p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "054-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "055-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "056-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "057-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "058-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "059-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "060-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "060p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "061-autoencoders-and-vaes": [
-  "074-autoencoders-and-vaes"
+  "075-autoencoders-and-vaes"
  ],
  "062-diffusion-models": [
-  "075-diffusion-models"
+  "076-diffusion-models"
  ],
  "041-recurrent-cells-and-bptt": [
   "052-recurrent-cells-and-bptt"
@@ -1507,46 +1507,46 @@
   "063-the-transformer-block"
  ],
  "052-counts-to-a-language-model": [
-  "064-counts-to-a-language-model"
+  "065-counts-to-a-language-model"
  ],
  "053-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "054-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "054p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "055-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "056-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "057-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "058-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "059-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "060-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "061-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "061p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "062-autoencoders-and-vaes": [
-  "074-autoencoders-and-vaes"
+  "075-autoencoders-and-vaes"
  ],
  "063-diffusion-models": [
-  "075-diffusion-models"
+  "076-diffusion-models"
  ],
  "042-recurrent-cells-and-bptt": [
   "052-recurrent-cells-and-bptt"
@@ -1585,46 +1585,46 @@
   "063-the-transformer-block"
  ],
  "053-counts-to-a-language-model": [
-  "064-counts-to-a-language-model"
+  "065-counts-to-a-language-model"
  ],
  "054-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "055-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "055p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "056-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "057-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "058-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "059-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "060-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "061-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "062-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "062p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "063-autoencoders-and-vaes": [
-  "074-autoencoders-and-vaes"
+  "075-autoencoders-and-vaes"
  ],
  "064-diffusion-models": [
-  "075-diffusion-models"
+  "076-diffusion-models"
  ],
  "043-recurrent-cells-and-bptt": [
   "052-recurrent-cells-and-bptt"
@@ -1663,46 +1663,46 @@
   "063-the-transformer-block"
  ],
  "054-counts-to-a-language-model": [
-  "064-counts-to-a-language-model"
+  "065-counts-to-a-language-model"
  ],
  "055-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "056-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "056p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "057-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "058-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "059-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "060-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "061-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "062-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "063-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "063p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "064-autoencoders-and-vaes": [
-  "074-autoencoders-and-vaes"
+  "075-autoencoders-and-vaes"
  ],
  "065-diffusion-models": [
-  "075-diffusion-models"
+  "076-diffusion-models"
  ],
  "014-scoring-classifiers": [
   "016-scoring-classifiers"
@@ -1840,46 +1840,46 @@
   "063-the-transformer-block"
  ],
  "055-counts-to-a-language-model": [
-  "064-counts-to-a-language-model"
+  "065-counts-to-a-language-model"
  ],
  "056-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "057-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "057p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "058-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "059-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "060-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "061-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "062-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "063-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "064-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "064p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "065-autoencoders-and-vaes": [
-  "074-autoencoders-and-vaes"
+  "075-autoencoders-and-vaes"
  ],
  "066-diffusion-models": [
-  "075-diffusion-models"
+  "076-diffusion-models"
  ],
  "013-learning-curves-and-winners-curse": [
   "014-learning-curves-and-winners-curse"
@@ -2023,46 +2023,46 @@
   "063-the-transformer-block"
  ],
  "056-counts-to-a-language-model": [
-  "064-counts-to-a-language-model"
+  "065-counts-to-a-language-model"
  ],
  "057-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "058-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "058p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "059-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "060-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "061-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "062-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "063-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "064-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "065-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "065p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "066-autoencoders-and-vaes": [
-  "074-autoencoders-and-vaes"
+  "075-autoencoders-and-vaes"
  ],
  "067-diffusion-models": [
-  "075-diffusion-models"
+  "076-diffusion-models"
  ],
  "021p-project-spam-filter": [
   "023p-project-spam-filter"
@@ -2182,46 +2182,46 @@
   "063-the-transformer-block"
  ],
  "057-counts-to-a-language-model": [
-  "064-counts-to-a-language-model"
+  "065-counts-to-a-language-model"
  ],
  "058-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "059-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "059p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "060-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "061-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "062-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "063-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "064-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "065-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "066-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "066p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "067-autoencoders-and-vaes": [
-  "074-autoencoders-and-vaes"
+  "075-autoencoders-and-vaes"
  ],
  "068-diffusion-models": [
-  "075-diffusion-models"
+  "076-diffusion-models"
  ],
  "019-support-vector-machines": [
   "020-support-vector-machines"
@@ -2353,46 +2353,46 @@
   "063-the-transformer-block"
  ],
  "058-counts-to-a-language-model": [
-  "064-counts-to-a-language-model"
+  "065-counts-to-a-language-model"
  ],
  "059-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "060-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "060p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "061-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "062-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "063-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "064-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "065-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "066-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "067-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "067p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "068-autoencoders-and-vaes": [
-  "074-autoencoders-and-vaes"
+  "075-autoencoders-and-vaes"
  ],
  "069-diffusion-models": [
-  "075-diffusion-models"
+  "076-diffusion-models"
  ],
  "031p-project-segment-customers": [
   "033p-project-segment-customers"
@@ -2485,46 +2485,46 @@
   "063-the-transformer-block"
  ],
  "059-counts-to-a-language-model": [
-  "064-counts-to-a-language-model"
+  "065-counts-to-a-language-model"
  ],
  "060-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "061-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "061p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "062-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "063-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "064-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "065-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "066-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "067-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "068-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "068p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "069-autoencoders-and-vaes": [
-  "074-autoencoders-and-vaes"
+  "075-autoencoders-and-vaes"
  ],
  "070-diffusion-models": [
-  "075-diffusion-models"
+  "076-diffusion-models"
  ],
  "030-k-means": [
   "031-k-means"
@@ -2626,46 +2626,46 @@
   "063-the-transformer-block"
  ],
  "060-counts-to-a-language-model": [
-  "064-counts-to-a-language-model"
+  "065-counts-to-a-language-model"
  ],
  "061-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "062-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "062p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "063-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "064-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "065-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "066-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "067-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "068-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "069-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "069p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "070-autoencoders-and-vaes": [
-  "074-autoencoders-and-vaes"
+  "075-autoencoders-and-vaes"
  ],
  "071-diffusion-models": [
-  "075-diffusion-models"
+  "076-diffusion-models"
  ],
  "035-backpropagation": [
   "036-backpropagation"
@@ -2752,46 +2752,46 @@
   "063-the-transformer-block"
  ],
  "061-counts-to-a-language-model": [
-  "064-counts-to-a-language-model"
+  "065-counts-to-a-language-model"
  ],
  "062-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "063-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "063p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "064-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "065-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "066-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "067-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "068-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "069-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "070-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "070p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "071-autoencoders-and-vaes": [
-  "074-autoencoders-and-vaes"
+  "075-autoencoders-and-vaes"
  ],
  "072-diffusion-models": [
-  "075-diffusion-models"
+  "076-diffusion-models"
  ],
  "043p-project-read-digits": [
   "044p-project-read-digits"
@@ -2854,46 +2854,46 @@
   "063-the-transformer-block"
  ],
  "062-counts-to-a-language-model": [
-  "064-counts-to-a-language-model"
+  "065-counts-to-a-language-model"
  ],
  "063-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "064-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "064p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "065-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "066-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "067-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "068-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "069-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "070-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "071-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "071p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "072-autoencoders-and-vaes": [
-  "074-autoencoders-and-vaes"
+  "075-autoencoders-and-vaes"
  ],
  "073-diffusion-models": [
-  "075-diffusion-models"
+  "076-diffusion-models"
  ],
  "057p-project-spot-defects": [
   "058p-project-spot-defects"
@@ -2914,45 +2914,87 @@
   "063-the-transformer-block"
  ],
  "063-counts-to-a-language-model": [
-  "064-counts-to-a-language-model"
+  "065-counts-to-a-language-model"
  ],
  "064-next-token-loss-and-safe-steps": [
-  "065-next-token-loss-and-safe-steps"
+  "066-next-token-loss-and-safe-steps"
  ],
  "065-training-loop-and-cost": [
-  "066-training-loop-and-cost"
+  "067-training-loop-and-cost"
  ],
  "065p-project-train-a-tiny-transformer": [
-  "066p-project-train-a-tiny-transformer"
+  "067p-project-train-a-tiny-transformer"
  ],
  "066-tokenisation": [
-  "067-tokenisation"
+  "068-tokenisation"
  ],
  "067-scaling-laws": [
-  "068-scaling-laws"
+  "069-scaling-laws"
  ],
  "068-decoding-and-sampling": [
-  "069-decoding-and-sampling"
+  "070-decoding-and-sampling"
  ],
  "069-fine-tuning-and-lora": [
-  "070-fine-tuning-and-lora"
+  "071-fine-tuning-and-lora"
  ],
  "070-reward-models-and-the-kl-leash": [
-  "071-reward-models-and-the-kl-leash"
+  "072-reward-models-and-the-kl-leash"
  ],
  "071-ppo-and-dpo": [
-  "072-ppo-and-dpo"
+  "073-ppo-and-dpo"
  ],
  "072-mixtures-of-experts": [
-  "073-mixtures-of-experts"
+  "074-mixtures-of-experts"
  ],
  "072p-project-serve-a-tiny-model": [
-  "073p-project-serve-a-tiny-model"
+  "074p-project-serve-a-tiny-model"
  ],
  "073-autoencoders-and-vaes": [
-  "074-autoencoders-and-vaes"
+  "075-autoencoders-and-vaes"
  ],
  "074-diffusion-models": [
-  "075-diffusion-models"
+  "076-diffusion-models"
+ ],
+ "064-counts-to-a-language-model": [
+  "065-counts-to-a-language-model"
+ ],
+ "065-next-token-loss-and-safe-steps": [
+  "066-next-token-loss-and-safe-steps"
+ ],
+ "066-training-loop-and-cost": [
+  "067-training-loop-and-cost"
+ ],
+ "066p-project-train-a-tiny-transformer": [
+  "067p-project-train-a-tiny-transformer"
+ ],
+ "067-tokenisation": [
+  "068-tokenisation"
+ ],
+ "068-scaling-laws": [
+  "069-scaling-laws"
+ ],
+ "069-decoding-and-sampling": [
+  "070-decoding-and-sampling"
+ ],
+ "070-fine-tuning-and-lora": [
+  "071-fine-tuning-and-lora"
+ ],
+ "071-reward-models-and-the-kl-leash": [
+  "072-reward-models-and-the-kl-leash"
+ ],
+ "072-ppo-and-dpo": [
+  "073-ppo-and-dpo"
+ ],
+ "073-mixtures-of-experts": [
+  "074-mixtures-of-experts"
+ ],
+ "073p-project-serve-a-tiny-model": [
+  "074p-project-serve-a-tiny-model"
+ ],
+ "074-autoencoders-and-vaes": [
+  "075-autoencoders-and-vaes"
+ ],
+ "075-diffusion-models": [
+  "076-diffusion-models"
  ]
 }
