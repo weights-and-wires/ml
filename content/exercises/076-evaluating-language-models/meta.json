@@ -1,0 +1,18 @@
+{
+  "id": "076-evaluating-language-models",
+  "title": "Score a language model honestly",
+  "brief": "Write bits per byte, a multiple-choice scorer, the unbiased pass@k estimator, bootstrap and paired bootstrap intervals, and an n-gram contamination check.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "Bits per byte is total_nats / (n_bytes * ln 2). A uniform model over 256 byte values has total_nats = n_bytes * ln 256, so it scores 8.0.",
+    "For options with totals [-6, -9, -12] and lengths [3, 6, 12], the raw argmax is option 0, and the per-byte scores [-2, -1.5, -1] give option 2.",
+    "pass_at_k(5, 2, 2): i runs over 4 and 5, so the product is (1 - 2/4) * (1 - 2/5) = 0.3 and the answer is 0.7. If n - c < k the factor i = k is exactly zero and the answer is 1.",
+    "Draw idx = rng.integers(0, n, size=(B, n)) once. scores[idx] has shape (B, n), and its mean over axis 1 is B resampled scores. Take np.percentile of those.",
+    "For the paired version, apply the same idx to both score arrays and take the difference of the two means on each resample.",
+    "Put every n-gram of every training document in one set of tuples. For test 'a b c d e', train 'x b c d y', n = 3, only ('b', 'c', 'd') is shared, so the overlap is 1/3."
+  ]
+}

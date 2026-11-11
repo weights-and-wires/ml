@@ -1,6 +1,6 @@
 ---
 title: Fine-tuning on a budget with LoRA
-slug: 076-fine-tuning-and-lora
+slug: 077-fine-tuning-and-lora
 part: "Part 7 — Large language models"
 summary: Training a parameter costs 16 bytes, so LoRA trains a low-rank update, merges it for serving, and loses only the singular values it drops.
 minutes: 75
@@ -16,7 +16,7 @@ prereqs:
   - 075-decoding-and-sampling
   - 004-stable-least-squares
   - 028-principal-components
-exercise: 076-fine-tuning-and-lora
+exercise: 077-fine-tuning-and-lora
 ---
 
 # Fine-tuning on a budget with LoRA

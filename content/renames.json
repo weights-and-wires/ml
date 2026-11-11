@@ -111,14 +111,14 @@
   "075-decoding-and-sampling"
  ],
  "31-parameter-efficient-tuning": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "32-alignment": [
-  "077-reward-models-and-the-kl-leash",
-  "078-ppo-and-dpo"
+  "078-reward-models-and-the-kl-leash",
+  "079-ppo-and-dpo"
  ],
  "33-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "007-lost-digits": [
   "004-stable-least-squares"
@@ -517,49 +517,49 @@
   "075-decoding-and-sampling"
  ],
  "121-fine-tuning-memory-bill": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "122-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "122-lora-layer": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "123-merging-and-serving": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "124-low-rank-reach-and-training": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "125-reward-from-preferences": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "126-kl-leash-and-optimal-policy": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "127-ppo-the-sampling-loop": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "128-dpo-implicit-reward": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "129-top-k-routing": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "130-router-gradient": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "131-balancing-the-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "131-load-balancing": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "132-capacity-and-dropping": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "132p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "001-scoring-a-guess": [
   "001-loss-and-honest-scores"
@@ -883,34 +883,34 @@
   "075-decoding-and-sampling"
  ],
  "108-fine-tuning-memory-bill": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "109-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "110-low-rank-reach-and-training": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "111-reward-from-preferences": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "112-kl-leash-and-optimal-policy": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "113-ppo-the-sampling-loop": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "114-dpo-implicit-reward": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "115-top-k-routing": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "116-router-gradient": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "117-balancing-the-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "004p-project-explore-before-you-model": [
   "002p-project-explore-before-you-model"
@@ -934,7 +934,7 @@
   "070p-project-train-a-tiny-transformer"
  ],
  "117p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "011-cross-validation-and-leave-one-out": [
   "012-cross-validation-and-leave-one-out"
@@ -1075,19 +1075,19 @@
   "075-decoding-and-sampling"
  ],
  "052-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "053-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "054-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "055-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "055p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "014-bayes-rule-and-gaussian-classes": [
   "017-bayes-rule-and-gaussian-classes"
@@ -1222,19 +1222,19 @@
   "075-decoding-and-sampling"
  ],
  "053-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "054-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "055-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "056-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "056p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "035p-project-read-digits": [
   "044p-project-read-digits"
@@ -1300,19 +1300,19 @@
   "075-decoding-and-sampling"
  ],
  "054-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "055-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "056-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "057-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "057p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "037-convolution-and-receptive-field": [
   "046-convolution-and-receptive-field"
@@ -1375,19 +1375,19 @@
   "075-decoding-and-sampling"
  ],
  "055-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "056-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "057-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "058-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "058p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "051-next-token-loss-and-safe-steps": [
   "068-next-token-loss-and-safe-steps"
@@ -1408,19 +1408,19 @@
   "075-decoding-and-sampling"
  ],
  "056-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "057-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "058-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "059-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "059p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "049-position-encodings": [
   "062-position-encodings"
@@ -1450,25 +1450,25 @@
   "075-decoding-and-sampling"
  ],
  "057-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "058-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "059-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "060-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "060p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "061-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "062-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "041-recurrent-cells-and-bptt": [
   "052-recurrent-cells-and-bptt"
@@ -1528,25 +1528,25 @@
   "075-decoding-and-sampling"
  ],
  "058-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "059-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "060-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "061-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "061p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "062-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "063-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "042-recurrent-cells-and-bptt": [
   "052-recurrent-cells-and-bptt"
@@ -1606,25 +1606,25 @@
   "075-decoding-and-sampling"
  ],
  "059-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "060-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "061-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "062-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "062p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "063-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "064-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "043-recurrent-cells-and-bptt": [
   "052-recurrent-cells-and-bptt"
@@ -1684,25 +1684,25 @@
   "075-decoding-and-sampling"
  ],
  "060-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "061-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "062-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "063-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "063p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "064-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "065-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "014-scoring-classifiers": [
   "016-scoring-classifiers"
@@ -1861,25 +1861,25 @@
   "075-decoding-and-sampling"
  ],
  "061-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "062-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "063-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "064-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "064p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "065-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "066-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "013-learning-curves-and-winners-curse": [
   "014-learning-curves-and-winners-curse"
@@ -2044,25 +2044,25 @@
   "075-decoding-and-sampling"
  ],
  "062-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "063-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "064-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "065-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "065p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "066-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "067-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "021p-project-spam-filter": [
   "023p-project-spam-filter"
@@ -2203,25 +2203,25 @@
   "075-decoding-and-sampling"
  ],
  "063-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "064-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "065-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "066-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "066p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "067-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "068-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "019-support-vector-machines": [
   "020-support-vector-machines"
@@ -2374,25 +2374,25 @@
   "075-decoding-and-sampling"
  ],
  "064-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "065-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "066-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "067-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "067p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "068-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "069-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "031p-project-segment-customers": [
   "033p-project-segment-customers"
@@ -2506,25 +2506,25 @@
   "075-decoding-and-sampling"
  ],
  "065-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "066-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "067-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "068-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "068p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "069-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "070-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "030-k-means": [
   "031-k-means"
@@ -2647,25 +2647,25 @@
   "075-decoding-and-sampling"
  ],
  "066-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "067-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "068-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "069-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "069p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "070-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "071-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "035-backpropagation": [
   "036-backpropagation"
@@ -2773,25 +2773,25 @@
   "075-decoding-and-sampling"
  ],
  "067-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "068-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "069-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "070-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "070p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "071-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "072-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "043p-project-read-digits": [
   "044p-project-read-digits"
@@ -2875,25 +2875,25 @@
   "075-decoding-and-sampling"
  ],
  "068-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "069-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "070-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "071-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "071p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "072-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "073-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "057p-project-spot-defects": [
   "058p-project-spot-defects"
@@ -2935,25 +2935,25 @@
   "075-decoding-and-sampling"
  ],
  "069-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "070-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "071-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "072-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "072p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "073-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "074-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "064-counts-to-a-language-model": [
   "067-counts-to-a-language-model"
@@ -2977,25 +2977,25 @@
   "075-decoding-and-sampling"
  ],
  "070-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "071-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "072-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "073-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "073p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "074-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "075-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "065-counts-to-a-language-model": [
   "067-counts-to-a-language-model"
@@ -3019,25 +3019,25 @@
   "075-decoding-and-sampling"
  ],
  "071-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "072-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "073-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "074-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "074p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "075-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "076-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "066-counts-to-a-language-model": [
   "067-counts-to-a-language-model"
@@ -3061,25 +3061,25 @@
   "075-decoding-and-sampling"
  ],
  "072-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "073-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "074-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "075-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "075p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "076-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "077-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "069p-project-train-a-tiny-transformer": [
   "070p-project-train-a-tiny-transformer"
@@ -3094,25 +3094,25 @@
   "075-decoding-and-sampling"
  ],
  "073-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "074-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "075-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "076-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "076p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "077-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "078-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "072-scaling-laws": [
   "073-scaling-laws"
@@ -3121,48 +3121,69 @@
   "075-decoding-and-sampling"
  ],
  "074-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "075-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "076-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "077-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "077p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "078-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "079-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
  ],
  "074-decoding-and-sampling": [
   "075-decoding-and-sampling"
  ],
  "075-fine-tuning-and-lora": [
-  "076-fine-tuning-and-lora"
+  "077-fine-tuning-and-lora"
  ],
  "076-reward-models-and-the-kl-leash": [
-  "077-reward-models-and-the-kl-leash"
+  "078-reward-models-and-the-kl-leash"
  ],
  "077-ppo-and-dpo": [
-  "078-ppo-and-dpo"
+  "079-ppo-and-dpo"
  ],
  "078-mixtures-of-experts": [
-  "079-mixtures-of-experts"
+  "080-mixtures-of-experts"
  ],
  "078p-project-serve-a-tiny-model": [
-  "079p-project-serve-a-tiny-model"
+  "080p-project-serve-a-tiny-model"
  ],
  "079-autoencoders-and-vaes": [
-  "080-autoencoders-and-vaes"
+  "081-autoencoders-and-vaes"
  ],
  "080-diffusion-models": [
-  "081-diffusion-models"
+  "082-diffusion-models"
+ ],
+ "076-fine-tuning-and-lora": [
+  "077-fine-tuning-and-lora"
+ ],
+ "077-reward-models-and-the-kl-leash": [
+  "078-reward-models-and-the-kl-leash"
+ ],
+ "078-ppo-and-dpo": [
+  "079-ppo-and-dpo"
+ ],
+ "079-mixtures-of-experts": [
+  "080-mixtures-of-experts"
+ ],
+ "079p-project-serve-a-tiny-model": [
+  "080p-project-serve-a-tiny-model"
+ ],
+ "080-autoencoders-and-vaes": [
+  "081-autoencoders-and-vaes"
+ ],
+ "081-diffusion-models": [
+  "082-diffusion-models"
  ]
 }

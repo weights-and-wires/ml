@@ -1,6 +1,6 @@
 ---
 title: "Autoencoders and variational autoencoders"
-slug: 080-autoencoders-and-vaes
+slug: 081-autoencoders-and-vaes
 part: "Part 8 — Generative models"
 summary: "A linear autoencoder keeps the first principal component, and a VAE draws rows by climbing a bound on the log probability."
 minutes: 75
@@ -14,7 +14,7 @@ objectives:
 prereqs:
   - 028-principal-components
   - 032-gaussian-mixtures-and-em
-exercise: 080-autoencoders-and-vaes
+exercise: 081-autoencoders-and-vaes
 ---
 
 # Autoencoders and variational autoencoders
