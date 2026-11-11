@@ -1,0 +1,21 @@
+{
+  "id": "046-convolution-and-receptive-field",
+  "title": "Slide a filter, count the weights, and count the view",
+  "brief": "Write a sliding filter, count weights, output sizes, and receptive fields, then send max-pool and average-pool gradients back.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "conv2d_single: for each output position (i, j), multiply the k by k patch x[i:i + k, j:j + k] by w entry by entry, sum, and add b. The kernel is not flipped.",
+    "conv2d_naive: pad first with np.pad, then loop over image, output channel, row, and column. For each position, sum w[o] * patch over all input channels and kernel cells, then add b[o].",
+    "param_counts: dense is n_in * n_out + n_out. A convolution is c_out * c_in * k * k + c_out. A depthwise separable layer is c_in * k * k for the per-channel filters, plus c_in * c_out for the 1 by 1 mix, plus c_out biases.",
+    "The reach of a dilated kernel is dilation * (kernel_size - 1) + 1. Subtract it from size + 2 * padding, divide by the stride with //, and add 1.",
+    "receptive_field_per_layer: keep two numbers, r (the field) and jump (the distance in input pixels between neighbouring units). For each layer, r += (k - 1) * jump first, append r, and only then jump *= stride.",
+    "max_pool_forward: loop over output positions, slice the window x[:, :, top:top + pool_size, left:left + pool_size], and take .max(axis=(2, 3)) so each channel keeps its own maximum.",
+    "max_pool_backward: start from zeros shaped like x. Flatten each window in row-major order, take np.argmax (the first maximum), and add dout at that input cell. Use += so overlapping windows accumulate.",
+    "average_pool_forward: the output is window.mean(axis=(2, 3)), over the same windows as max_pool_forward.",
+    "average_pool_backward: add dout / (pool_size * pool_size) to every cell of the window. Divide by the number of cells, not by the side length, and use += when windows overlap."
+  ]
+}

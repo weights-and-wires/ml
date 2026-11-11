@@ -1,7 +1,7 @@
 # Machine learning
 
 A hands-on course that teaches machine learning to undergraduates by having them
-build it. Seventy-three chapters run from scoring a guess to a diffusion model. Each one
+build it. Seventy-four chapters run from scoring a guess to a diffusion model. Each one
 teaches a single topic, two or three closely related ideas in one arc: it starts from a concrete
 question, shows a picture, works a small example by hand, and only then gives
 the formula and walks you through implementing it, in an editor beside the
@@ -32,7 +32,7 @@ computes it. Each lesson ends with a step-by-step guide to its exercise.
 
 | Path | Contents |
 |---|---|
-| `content/lessons/` | Seventy-three chapters and eight projects, in Markdown with YAML front matter and inline SVG figures. |
+| `content/lessons/` | Seventy-four chapters and eight projects, in Markdown with YAML front matter and inline SVG figures. |
 | `content/renames.json` | Each slug from earlier editions and the chapters that replaced it, so progress carries over. |
 | `content/exercises/` | One directory per exercise: a starter file, checks, and a worked solution. |
 | `backend/` | FastAPI: auth, content, progress, drafts, and the run stream. |
@@ -58,9 +58,9 @@ bagging and boosting, PCA and the SVD, ICA and t-SNE, k-means, EM for Gaussian
 mixtures, and nearest neighbours with matrix factorisation.
 
 **Part 4 — Neural networks.** Why layers need a bend, how many units a curve
-costs, backpropagation, SGD and
-Adam, initialisation and normalisation, regularisation, and debugging and tuning
-a network before the digit project.
+costs, backpropagation, SGD and Adam, initialisation and normalisation,
+regularisation, debugging and tuning a network, and uncertainty with conformal
+prediction before the digit project.
 
 **Part 5 — Vision and sequences.** The map from your own tensor onto PyTorch,
 then convolutions, residual networks, augmentation, transfer learning, patch
@@ -176,7 +176,7 @@ existing progress identities, for example `ifkash:enderboi,ananya:michu`.
 
 ## The GPU backend
 
-One chapter, `064-training-loop-and-cost`, is marked `gpu: true`. Its checks run on the CPU like every other exercise, and
+One chapter, `065-training-loop-and-cost`, is marked `gpu: true`. Its checks run on the CPU like every other exercise, and
 the GPU is there for the larger run in the starter file's `__main__` block.
 
 `backend/app/runner/runpod.py` sends a submission to a RunPod serverless
