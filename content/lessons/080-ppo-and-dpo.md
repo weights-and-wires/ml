@@ -1,6 +1,6 @@
 ---
 title: "PPO and DPO: two ways to reach the leashed optimum"
-slug: 079-ppo-and-dpo
+slug: 080-ppo-and-dpo
 part: "Part 7 — Large language models"
 summary: PPO reaches the best leashed policy by sampling, an advantage, and a clip. DPO reads a reward off the policy and trains on pairs directly.
 minutes: 80
@@ -13,14 +13,14 @@ objectives:
   - State how the per-answer advantage relates to generalised advantage estimation, and show that with one terminal reward and gamma = lambda = 1 it is the reward minus the value guess at every token.
   - Compare the two methods by the models they keep in memory and whether they generate text during training.
 prereqs:
-  - 078-reward-models-and-the-kl-leash
+  - 079-reward-models-and-the-kl-leash
   - 068-next-token-loss-and-safe-steps
-exercise: 079-ppo-and-dpo
+exercise: 080-ppo-and-dpo
 ---
 
 # PPO and DPO: two ways to reach the leashed optimum
 
-The [previous chapter on reward models and the KL leash](/lessons/078-reward-models-and-the-kl-leash) found the best policy for reward minus a leash: the reference model, reweighted by $e^{r/\beta}$ and divided by a total $Z$. You cannot build that policy directly, because $Z$ adds up every possible answer, and for a real language model there are about $10^{470}$ answers of 100 tokens. You do have two things, though: a reward model, and preference pairs such as "the helpful mortgage answer beats the padded one".
+The [previous chapter on reward models and the KL leash](/lessons/079-reward-models-and-the-kl-leash) found the best policy for reward minus a leash: the reference model, reweighted by $e^{r/\beta}$ and divided by a total $Z$. You cannot build that policy directly, because $Z$ adds up every possible answer, and for a real language model there are about $10^{470}$ answers of 100 tokens. You do have two things, though: a reward model, and preference pairs such as "the helpful mortgage answer beats the padded one".
 
 So the question is how to move toward the best policy with only those. Two obvious tries break. Fine-tune on the highest-scoring sample, and you ignore the losers and ignore how much better the winner was. Push up the reward of every sampled answer by plain gradient ascent, and one lucky sample with a huge score drags the whole model along a direction that was true only for that sample.
 

@@ -1,5 +1,5 @@
 {
-  "id": "081-autoencoders-and-vaes",
+  "id": "082-autoencoders-and-vaes",
   "title": "Autoencoders and variational autoencoders",
   "brief": "Write the diagonal-Gaussian KL and its gradient, reparameterise a sample, check the ELBO on a linear-Gaussian model, recover a principal component with a linear autoencoder, and train a tiny VAE.",
   "needs_gpu": false,
