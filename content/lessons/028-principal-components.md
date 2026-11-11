@@ -359,7 +359,7 @@ W = U.T / np.sqrt(lam + eps)[:, None]    # PCA; use U @ W for ZCA
 Z = Xc @ W.T
 ```
 
-The $\epsilon$ guards tiny eigenvalues. A direction with variance $10^{-12}$ is noise, and dividing by its square root multiplies it by $10^{6}$. With $\epsilon = 10^{-5}$ no gain exceeds about 316, and whitened variances become $\lambda_i/(\lambda_i + \epsilon)$. Whitening reappears in [normalisation layers](/lessons/040-normalisation-layers), which rescale activations but do not decorrelate them, and in [autoencoders and VAEs](/lessons/081-autoencoders-and-vaes), whose latent prior has identity covariance.
+The $\epsilon$ guards tiny eigenvalues. A direction with variance $10^{-12}$ is noise, and dividing by its square root multiplies it by $10^{6}$. With $\epsilon = 10^{-5}$ no gain exceeds about 316, and whitened variances become $\lambda_i/(\lambda_i + \epsilon)$. Whitening reappears in [normalisation layers](/lessons/040-normalisation-layers), which rescale activations but do not decorrelate them, and in [autoencoders and VAEs](/lessons/082-autoencoders-and-vaes), whose latent prior has identity covariance.
 
 > [!RECAP]
 > - Centre first. A score is a shadow, `Xc @ u`, and its variance is `scores @ scores / (n - 1)`.
