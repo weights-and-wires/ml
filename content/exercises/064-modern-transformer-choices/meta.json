@@ -1,0 +1,20 @@
+{
+  "id": "064-modern-transformer-choices",
+  "title": "Build RMSNorm, grouped-query attention, and a parameter counter",
+  "brief": "Write RMSNorm with its backward pass, grouped-query attention, the key-value cache size and a parameter count that matches real configs, and a pre-norm and post-norm stack whose depth behaviour you measure.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": [
+    "numpy",
+    "torch"
+  ],
+  "hints": [
+    "rmsnorm divides each row by sqrt(mean(x * x) + eps), with the mean over the last axis and keepdims=True, then multiplies by gain. Do not subtract the mean: for [1, 2, 3, 6] the answer is [0.2828, 0.5657, 0.8485, 1.6971].",
+    "For the backward pass, let xhat = x / sqrt(mean(x * x) + eps) and u = dy * gain. Then dx = (u - xhat * mean(u * xhat, axis=-1, keepdims=True)) / sqrt(mean(x * x) + eps), and dgain is the sum of dy * xhat over every row.",
+    "In gqa_attention, repeat each key-value head per_group = H // n_groups times in place, with np.repeat(k, per_group, axis=0). np.tile gives the interleaved order, so head 1 would read group 1 instead of group 0. Then add the causal mask, take a stable softmax over the last axis, and multiply by the repeated v.",
+    "kv_cache_bytes is 2 (keys and values) times n_layers, n_kv_heads, d_head, seq_len, and bytes_per_value. For 32 layers, 8 heads, d_head 128, and 1 token in 16-bit numbers, that is 131072.",
+    "One block holds d * H * d_head + 2 * d * G * d_head + H * d_head * d attention weights, 2 or 3 times d * d_ff feed-forward weights, and 2 norms. Add n_layers blocks, one final norm, one embedding table of vocab * d, and a second vocab * d table unless the embeddings are tied. Bias adds H * d_head + 2 * G * d_head + d to attention.",
+    "In residual_stack, a pre-norm layer adds f(rmsnorm(x)) to the raw x. A post-norm layer normalises the sum x + f(x). Store what the backward pass needs: for pre-norm the raw input x and the hidden pre-activation a, for post-norm the sum z and a.",
+    "Going backward through a pre-norm layer, dx = dout + rmsnorm_backward(mlp_backward(dout, ...), x, gain)[0]. Through a post-norm layer, first dz = rmsnorm_backward(dout, z, gain)[0], then dx = dz + mlp_backward(dz, ...)."
+  ]
+}
