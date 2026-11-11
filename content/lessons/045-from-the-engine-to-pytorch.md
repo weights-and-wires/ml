@@ -19,7 +19,7 @@ exercise: 045-from-the-engine-to-pytorch
 
 # From your engine to PyTorch
 
-You trained [a digit reader](/lessons/044p-project-read-digits) by writing every slope yourself. That project stays in numpy, because the point was to see the arithmetic. The convolution and recurrent chapters still ask you to derive a slope when the slope is the idea. Later, [the training step](/lessons/068-training-loop-and-cost) stops writing slopes and calls PyTorch.
+You trained [a digit reader](/lessons/044p-project-read-digits) by writing every slope yourself. That project stays in numpy, because the point was to see the arithmetic. The convolution and recurrent chapters still ask you to derive a slope when the slope is the idea. Later, [the training step](/lessons/069-training-loop-and-cost) stops writing slopes and calls PyTorch.
 
 PyTorch records the same tape as the tensor in [backpropagation](/lessons/036-backpropagation). It stores a value, it stores a slope, and it walks that slope back through every operation. The names differ, and a few defaults differ with them. This chapter is the map from your names to those calls, plus a training loop small enough to check by hand.
 

@@ -1,0 +1,17 @@
+{
+  "id": "069-training-loop-and-cost",
+  "title": "Write the AdamW step, the training step, and the cost estimates",
+  "brief": "Write one AdamW update, wire loss, backward, clip, schedule, and update into train_step, then estimate a run's flops and memory and simulate loss scaling through float16.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy", "torch"],
+  "hints": [
+    "adamw_update: m = beta1 * m + (1 - beta1) * grad and v = beta2 * v + (1 - beta2) * grad ** 2. Then m_hat = m / (1 - beta1 ** step), v_hat = v / (1 - beta2 ** step), and theta = theta * (1 - lr * weight_decay) - lr * m_hat / (v_hat ** 0.5 + eps). Raise ValueError for step < 1, because 1 - beta ** 0 is zero.",
+    "The worked example: theta 1, grad 0.5, step 1, lr 0.1, weight_decay 0.1 gives m = 0.05, v = 0.0125, m_hat = 0.5, v_hat = 0.25, and a new theta of 0.89.",
+    "train_step: forward with model_fn(params, batch['inputs']), causal_lm_loss against batch['targets'], loss.backward(). Collect every params[name].grad into one list and call clip_global_norm once. Ask warmup_cosine_lr for step = opt_state['step'] + 1.",
+    "Do the update inside torch.no_grad(), call adamw_update for each name with weight_decay 0 for names in config['no_decay'], and store theta.detach().requires_grad_() so each returned weight is a fresh leaf.",
+    "training_flops is 6 * params * tokens: 2 per weight per token forward, and 4 backward.",
+    "training_memory_bytes is params * bytes_per_number * copies. The defaults are 4 bytes and 4 copies (weights, gradients, m, v), so a million weights need 16 million bytes.",
+    "scaled_grad_survives: stored = fp16_roundtrip(true_grad * scale), then return stored / scale. The division is in float64 here, standing in for the fp32 unscale. At scale 1 the gradient 1e-8 rounds to zero, and 1e5 overflows to infinity."
+  ]
+}
