@@ -1,0 +1,235 @@
+"""Reference solution for the ICA and t-SNE exercise."""
+
+from __future__ import annotations
+
+import numpy as np
+
+
+def whiten(X: np.ndarray, eps: float = 1e-10) -> np.ndarray:
+    """PCA-whiten the rows of X. Given in full, as in the principal components chapter.
+
+    Args:
+        X: Data of shape (n, d).
+        eps: Added to each eigenvalue before the square root.
+
+    Returns:
+        Centred data of shape (n, d) whose covariance is the identity.
+    """
+    Xc = X - X.mean(axis=0)
+    lam, U = np.linalg.eigh(Xc.T @ Xc / len(Xc))
+    return Xc @ U / np.sqrt(lam + eps)
+
+
+def contrast_terms(u: np.ndarray, g: str) -> tuple[np.ndarray, np.ndarray]:
+    """Return g(u) and g'(u) for a contrast.
+
+    Args:
+        u: Projections, any shape.
+        g: "logcosh" (g = tanh, g' = 1 - tanh^2) or "kurtosis" (g = u^3, g' = 3 u^2).
+
+    Returns:
+        A pair (g(u), g'(u)), each with the shape of u.
+    """
+    u = np.asarray(u, dtype=float)
+    if g == "logcosh":
+        t = np.tanh(u)
+        return t, 1.0 - t**2
+    if g == "kurtosis":
+        return u**3, 3.0 * u**2
+    raise ValueError(f"unknown contrast {g!r}")
+
+
+def fastica_one_unit(Xw: np.ndarray, w0: np.ndarray, g: str = "logcosh", steps: int = 100) -> np.ndarray:
+    """Run the one-unit FastICA fixed-point update on whitened data.
+
+    Args:
+        Xw: Whitened data, shape (n, d).
+        w0: Starting direction, shape (d,).
+        g: Contrast name for contrast_terms.
+        steps: Number of updates.
+
+    Returns:
+        A unit vector of shape (d,).
+    """
+    w = w0 / np.linalg.norm(w0)
+    for _ in range(steps):
+        gu, gpu = contrast_terms(Xw @ w, g)
+        w = Xw.T @ gu / len(Xw) - gpu.mean() * w
+        w = w / np.linalg.norm(w)
+    return w
+
+
+def fastica(Xw: np.ndarray, k: int, rng: np.random.Generator, g: str = "logcosh", steps: int = 200) -> np.ndarray:
+    """Find k unmixing directions one at a time, with deflation.
+
+    Args:
+        Xw: Whitened data, shape (n, d).
+        k: Number of directions.
+        rng: Random generator for the starting directions.
+        g: Contrast name.
+        steps: Updates per direction.
+
+    Returns:
+        W of shape (k, d) with orthonormal rows. The sources are Xw @ W.T.
+    """
+    d = Xw.shape[1]
+    W = np.zeros((k, d))
+    for i in range(k):
+        w = rng.normal(size=d)
+        w = w / np.linalg.norm(w)
+        for _ in range(steps):
+            gu, gpu = contrast_terms(Xw @ w, g)
+            w = Xw.T @ gu / len(Xw) - gpu.mean() * w
+            w = w - W[:i].T @ (W[:i] @ w)
+            w = w / np.linalg.norm(w)
+        W[i] = w
+    return W
+
+
+def conditional_p(D: np.ndarray, betas: np.ndarray) -> np.ndarray:
+    """Turn squared distances into conditional probabilities p(j | i).
+
+    Args:
+        D: Squared distances, shape (n, n).
+        betas: Precision 1 / (2 sigma_i^2) per row, shape (n,).
+
+    Returns:
+        P of shape (n, n), zero diagonal, each row summing to 1.
+    """
+    n = len(D)
+    logits = -D * betas[:, None]
+    np.fill_diagonal(logits, -np.inf)
+    logits = logits - logits.max(axis=1, keepdims=True)
+    P = np.exp(logits)
+    return P / P.sum(axis=1, keepdims=True)
+
+
+def perplexity_bandwidths(D: np.ndarray, perplexity: float, tol: float = 1e-6, iters: int = 200) -> np.ndarray:
+    """Find each row's beta so that its entropy in bits equals log2(perplexity).
+
+    Args:
+        D: Squared distances, shape (n, n).
+        perplexity: Target perplexity, between 1 and n - 1.
+        tol: Stop when the entropy is this close to the target.
+        iters: Maximum bisection steps per row.
+
+    Returns:
+        betas of shape (n,).
+    """
+    n = len(D)
+    target = np.log2(perplexity)
+    betas = np.ones(n)
+    for i in range(n):
+        lo, hi, beta = 0.0, np.inf, 1.0
+        row = np.delete(D[i], i)
+        for _ in range(iters):
+            logits = -row * beta
+            logits -= logits.max()
+            p = np.exp(logits)
+            p /= p.sum()
+            H = -np.sum(p[p > 0] * np.log2(p[p > 0]))
+            if abs(H - target) < tol:
+                break
+            if H > target:
+                lo = beta
+                beta = beta * 2 if np.isinf(hi) else (lo + hi) / 2
+            else:
+                hi = beta
+                beta = (lo + hi) / 2
+        betas[i] = beta
+    return betas
+
+
+def joint_p(D: np.ndarray, perplexity: float) -> np.ndarray:
+    """Symmetrise the conditionals into one joint distribution.
+
+    Args:
+        D: Squared distances, shape (n, n).
+        perplexity: Target perplexity.
+
+    Returns:
+        P of shape (n, n), symmetric, zero diagonal, summing to 1.
+    """
+    Pc = conditional_p(D, perplexity_bandwidths(D, perplexity))
+    return (Pc + Pc.T) / (2 * len(D))
+
+
+def student_q(Y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Student-t (one degree of freedom) similarities of the map points.
+
+    Args:
+        Y: Map points, shape (n, 2).
+
+    Returns:
+        (Q, inv): inv[i, j] = 1 / (1 + |y_i - y_j|^2) with a zero diagonal, and
+        Q = inv / inv.sum(). Both have shape (n, n).
+    """
+    sq = np.sum(Y**2, axis=1)
+    d2 = sq[:, None] + sq[None, :] - 2 * Y @ Y.T
+    inv = 1.0 / (1.0 + d2)
+    np.fill_diagonal(inv, 0.0)
+    return inv / inv.sum(), inv
+
+
+def kl_divergence(P: np.ndarray, Q: np.ndarray) -> float:
+    """KL(P || Q) over the off-diagonal entries, skipping entries where P is 0."""
+    mask = P > 0
+    return float(np.sum(P[mask] * np.log(P[mask] / Q[mask])))
+
+
+def tsne_grad(P: np.ndarray, Y: np.ndarray) -> np.ndarray:
+    """Gradient of KL(P || Q) with respect to the map points.
+
+    Args:
+        P: Joint probabilities, shape (n, n).
+        Y: Map points, shape (n, 2).
+
+    Returns:
+        Gradient of shape (n, 2).
+    """
+    Q, inv = student_q(Y)
+    M = (P - Q) * inv
+    return 4.0 * (M.sum(axis=1)[:, None] * Y - M @ Y)
+
+
+def tsne_embed(
+    P: np.ndarray,
+    Y0: np.ndarray,
+    steps: int = 300,
+    lr: float = 100.0,
+    momentum: float = 0.8,
+    exaggeration: float = 12.0,
+    exag_steps: int = 100,
+) -> np.ndarray:
+    """Gradient descent with momentum on the KL, with early exaggeration.
+
+    Args:
+        P: Joint probabilities, shape (n, n).
+        Y0: Starting map, shape (n, 2).
+        steps: Total updates.
+        lr: Step size.
+        momentum: Weight on the previous update.
+        exaggeration: Factor that multiplies P for the first exag_steps updates.
+        exag_steps: How many updates use the exaggerated P.
+
+    Returns:
+        The final map, shape (n, 2).
+    """
+    Y = Y0.copy()
+    v = np.zeros_like(Y)
+    for t in range(steps):
+        scale = exaggeration if t < exag_steps else 1.0
+        v = momentum * v - lr * tsne_grad(scale * P, Y)
+        Y = Y + v
+        Y = Y - Y.mean(axis=0)
+    return Y
+
+
+if __name__ == "__main__":
+    rng = np.random.default_rng(0)
+    S = np.column_stack([rng.uniform(-1, 1, 500), rng.laplace(size=500)])
+    X = S @ np.array([[1.0, 0.5], [0.4, 1.0]]).T
+    Xw = whiten(X)
+    W = fastica(Xw, 2, rng)
+    print("unmixing rows:\n", W)
+    print("corr with sources:\n", np.round(np.corrcoef((Xw @ W.T).T, S.T)[:2, 2:], 3))

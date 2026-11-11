@@ -1,0 +1,16 @@
+{
+  "id": "030-ica-and-t-sne",
+  "title": "Unmix sources with FastICA, then draw clusters with t-SNE",
+  "brief": "Write the FastICA update with deflation, find each point's bandwidth by binary search on perplexity, and descend the t-SNE gradient.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "The kurtosis contrast is g(u) = u^3 with g'(u) = 3 u^2. For u = (1.0, 2.0) that gives g = (1, 8) and g' = (3, 12).",
+    "The FastICA update is w_plus = mean of x * g(w.x) over the rows, minus mean(g'(w.x)) times w. On the four points (+-sqrt2, 0) and (0, +-sqrt2) with w0 = (0.6, 0.8) and kurtosis, w_plus = (-1.368, -1.376) before you divide by its length.",
+    "For deflation, subtract the part of w that lies along the rows already found, w - W_found.T @ (W_found @ w), then rescale to length 1. Do it inside the loop, after every update.",
+    "Row i keeps p(j | i) proportional to exp(-beta_i * D[i, j]) for j != i. With beta = 1 and distances (1, 4) the row is (0.9526, 0.0474). Subtract the row's largest logit before exp so nothing underflows.",
+    "Bisect on beta. If the entropy in bits is above log2(perplexity) the row is too flat, so raise beta; if it is below, lower beta. Double beta while the upper bound is still infinite. Use np.log2 for the entropy, never np.log.",
+    "With M = (P - Q) * inv, the gradient is 4 * (M.sum(axis=1)[:, None] * Y - M @ Y). Points at (0, 0), (1, 0), (2, 0) have inv off-diagonals 0.5, 0.2 and Q = (0.2083, 0.0833) for the near and far pairs."
+  ]
+}
