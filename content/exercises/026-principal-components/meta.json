@@ -1,0 +1,22 @@
+{
+  "id": "026-principal-components",
+  "title": "Find the directions of greatest spread, then compress",
+  "brief": "Centre a cloud, read every direction from the SVD and the covariance, rebuild from k directions and confirm the error is the dropped squared singular values, then whiten with PCA and ZCA.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "center returns both the centred data and the mean you subtracted: X.mean(axis=0), then X - mean.",
+    "variance_along: scores = Xc @ u, then scores @ scores / (n - 1).",
+    "shadow_split: kept = sum of squared scores. For lost, subtract each shadow from its point with Xc - np.outer(scores, u), then sum the squares of what is left.",
+    "np.linalg.svd returns V transposed. The components are Vt[:k].T, the scores are Xc @ components, and explained_variance is s[:k] ** 2 / (n - 1).",
+    "np.linalg.eigh returns eigenvalues smallest first. Reverse both the eigenvalues and the columns of the eigenvectors, then keep k.",
+    "explained_variance_ratio: s = np.linalg.svd(Xc, compute_uv=False), then s ** 2 / np.sum(s ** 2). Keep all min(n, d) values.",
+    "reconstruct is one line: mean + scores @ components.T.",
+    "reconstruction_error: components, scores, _ = pca_svd(X, k); X_hat = reconstruct(X.mean(axis=0), components, scores); then np.sum((X - X_hat) ** 2).",
+    "standardise: (X - X.mean(axis=0)) / std with std = X.std(axis=0, ddof=1). Where std is 0, divide by 1 instead so the column stays at 0.",
+    "whiten: Xc, _ = center(X); lam, U = covariance_eigh(X, d); scale = 1 / np.sqrt(lam + eps). PCA is W = scale[:, None] * U.T, ZCA is U @ W, and Z = Xc @ W.T."
+  ]
+}
