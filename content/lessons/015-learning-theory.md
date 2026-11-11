@@ -342,7 +342,7 @@ $$
 
 solves the 30 equations with the shortest weight vector. Read it aloud: solve a 30 by 30 system against the labels, then map back to $p$ weights. Extra features let the shortest solution spread small weights across many features instead of huge opposing weights on a few. Below $p = n$ the matching formula is $(F^{\top}F)^{-1}F^{\top}y$. Both are `np.linalg.pinv(F) @ y`.
 
-The peak is a property of one count: the number of weights equals the number of points. A small ridge penalty, from [ridge regression](/lessons/006-ridge-regression), flattens it by stopping the solve from dividing by a tiny number. When the solution is chosen by length, counting weights is the wrong measure of capacity, and the length of $w$ is the better one. [Weight decay](/lessons/040-weight-decay-and-early-stopping) works on that idea.
+The peak is a property of one count: the number of weights equals the number of points. A small ridge penalty, from [ridge regression](/lessons/006-ridge-regression), flattens it by stopping the solve from dividing by a tiny number. When the solution is chosen by length, counting weights is the wrong measure of capacity, and the length of $w$ is the better one. [Weight decay](/lessons/041-weight-decay-and-early-stopping) works on that idea.
 
 > [!KEY]
 > Test error of min-norm least squares on random features spikes where $p = n$, because the fit must match noisy labels with a nearly singular square matrix. Past that point, more features give the shortest solution more room, and test error falls again.

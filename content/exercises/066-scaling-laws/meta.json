@@ -1,0 +1,17 @@
+{
+  "id": "066-scaling-laws",
+  "title": "Fit a scaling law, price a run, and split its budget",
+  "brief": "Fit and extrapolate a power law on log axes, split a loss into a floor and two penalties, count the weights that multiply, price training in flops and days, then find the best split of a budget between model size and data.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "fit_power_law works on logs: u = np.log(x), v = np.log(y). Subtract each mean, then k = sum(uc * vc) / sum(uc**2). The intercept is v.mean() - k * u.mean(), and c is np.exp of that intercept, not the intercept itself. extrapolate fits first, then returns c * np.asarray(x_new, dtype=float)**k.",
+    "Unpack the tuple in the documented order: E, A, B, alpha, beta = coeffs. The size penalty is A / N**alpha and the data penalty is B / D**beta. Do not call float() on N or D, because grid_optimal passes arrays to predict_loss. marginal_gain is predict_loss(N, D, coeffs) - predict_loss(factor * N, D, coeffs).",
+    "Per block, attention holds 4 * d_model**2 weights (Q, K, V, and the output matrix) and the feed-forward holds 2 * d_model * d_ff. Multiply both by layers. The embeddings are vocab * d_model + seq_len * d_model, counted once.",
+    "training_flops should convert to float before multiplying: 6.0 * float(params) * float(tokens). With numpy int64 inputs a plain 6 * params * tokens wraps around at about 9.2e18. training_days divides by flops_per_second, then by 86400.",
+    "With a = beta / (alpha + beta) and G = (alpha * A / (beta * B)) ** (1 / (alpha + beta)), the best size is N* = G * 6**(-a) * compute**a. Then D* = compute / (6 * N*), so that 6 * N* * D* equals the budget exactly.",
+    "grid_optimal builds a log-spaced array of N values, sets D = compute / (6 * N) for each, evaluates predict_loss on the arrays, and takes the N with the smallest loss. np.argmin does the last step.",
+    "lifetime_flops adds two bills: 6 * N * D_train for training and 2 * N * served_tokens for answering. Convert to float first so numpy integers cannot wrap around."
+  ]
+}

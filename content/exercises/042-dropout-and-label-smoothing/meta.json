@@ -1,0 +1,18 @@
+{
+  "id": "042-dropout-and-label-smoothing",
+  "title": "Switch units off, then ask for a little less certainty",
+  "brief": "Draw a keep-mask, apply inverted dropout and send the gradient back through it, then build the smoothed target, its loss, and its gradient.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "A unit is kept when its random draw is below 1 - p, so the mask is (rng.random(shape) < 1 - p). Convert the booleans to floats so you can multiply with them.",
+    "dropout_forward should call dropout_mask(x.shape, p, rng) and then compute x * mask / (1 - p). At training=False return x and np.ones_like(x) without touching rng.",
+    "The backward pass is the same elementwise multiply applied to dout: dout * mask / (1 - p), with the mask the forward pass returned.",
+    "np.eye(num_classes)[targets] gives the one-hot rows. Scale them by 1 - eps, then add eps / num_classes to every entry.",
+    "The loss is the mean over rows of -(y_smooth * log_p).sum(axis=1). Use the provided log_softmax so large scores do not overflow.",
+    "The gradient is (p - y_smooth) / N with p = np.exp(log_softmax(logits)). Every row of the result sums to 0."
+  ]
+}
