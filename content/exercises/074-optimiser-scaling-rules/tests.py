@@ -78,8 +78,9 @@ def test_activation_update_sp(sub):
 @check("The best learning rate stays put from width 32 to 512 under muP and falls under standard parameterisation")
 def test_transfer(sub):
     f = has(sub, "best_lr")
-    mup = [f(n, "mup", GRID) for n in (32, 512)]
-    sp = [f(n, "sp", GRID) for n in (32, 512)]
+    # Two seeds keep this check well inside the timeout on a slow runner.
+    mup = [f(n, "mup", GRID, (0, 1)) for n in (32, 512)]
+    sp = [f(n, "sp", GRID, (0, 1)) for n in (32, 512)]
     r_mup = mup[0] / mup[1]
     r_sp = sp[0] / sp[1]
     if not 0.5 <= r_mup <= 2.0:

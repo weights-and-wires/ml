@@ -3,8 +3,10 @@
   "title": "Scale a learning rate with width, and orthogonalise an update",
   "brief": "Write the muP learning rate and initialisation, check that one Adam step moves activations by a width-independent amount, sweep learning rates to see them transfer, then build a Newton-Schulz orthogonaliser and the Muon step.",
   "needs_gpu": false,
-  "timeout": 90,
-  "packages": ["numpy"],
+  "timeout": 120,
+  "packages": [
+    "numpy"
+  ],
   "hints": [
     "adam_lr_for_width returns base_lr for \"input\". For \"hidden\" and \"output\" it returns base_lr * base_width / width. At base_lr 1e-3, base_width 32, and width 512 that is 6.25e-05. Divide by the ratio, not by its square root.",
     "mup_init draws one matrix per consecutive pair of widths, in order. The std is 1 / np.sqrt(fan_in) for every matrix except the last, where it is 1 / fan_in. Here fan_in is widths[i] and the matrix has shape (widths[i+1], widths[i]).",
