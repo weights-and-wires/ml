@@ -1,0 +1,17 @@
+{
+  "id": "035-approximation-theory",
+  "title": "Count the pieces: error rates, grids, and depth",
+  "brief": "Build the tent map and the sawtooth, count straight pieces on a grid, compare shallow and deep unit counts, then measure interpolation error and the cells a grid needs.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "tent(x) = 2 relu(x) - 4 relu(x - 0.5). At x = 0.75 that is 1.5 - 1.0 = 0.5. If a value ever exceeds 1, the tent is scaled wrong.",
+    "count_pieces: slopes = diff(f(xs)) / diff(xs), then count where diff(slopes) is bigger than tol. A line has 0 changes and 1 piece, a tent has 1 change and 2 pieces.",
+    "interp_error: knots = linspace(a, b, n_knots), chord = np.interp(fine, knots, f(knots)). For x^2 on [0, 1] with 3 knots the answer is 0.0625.",
+    "loglog_slope: np.polyfit(np.log(ns), np.log(errs), 1)[0]. For errs = 5 / ns**2 the slope is exactly -2.",
+    "pieces_for_error(0.01, 8) is ceil(sqrt(8 / 0.08)) = 10. Subtract 1e-9 before ceil so 10.0000000001 does not become 11."
+  ]
+}
