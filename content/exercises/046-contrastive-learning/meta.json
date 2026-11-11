@@ -1,0 +1,19 @@
+{
+  "id": "046-contrastive-learning",
+  "title": "Build InfoNCE, its gradient, CLIP's loss, and a contrastive encoder",
+  "brief": "Write InfoNCE as a row-wise softmax over cosine similarities, its gradient through the normalisation, CLIP's symmetric loss, and the alignment and uniformity scores. Then train a linear encoder on planted clusters and score it with k-nearest neighbours.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "Divide each row by its length: z / np.linalg.norm(z, axis=1, keepdims=True). Every other function starts from these unit rows, so a row of [3, 4] must become [0.6, 0.8].",
+    "The logits are n1 @ n2.T / tau, where n1 and n2 are the unit rows. Row i holds the similarity of example i in view 1 to every example in view 2, and the positive sits on the diagonal. Subtract each row's maximum before you exponentiate.",
+    "The loss for row i is logsumexp(logits[i]) - logits[i, i]. Take the mean over rows. When every embedding is the same, every logit in a row is equal, so each row's loss is log N.",
+    "Let P be the row softmax of the logits and G = (P - I) / (N * tau). Then the gradient with respect to the unit rows is dn1 = G @ n2 and dn2 = G.T @ n1.",
+    "Normalising throws away the part of the gradient along the row, and divides what is left by the row's length: dz = (dn - n * sum(n * dn, axis=1, keepdims=True)) / norm(z). Test it by checking that each row of dz is perpendicular to that row of z.",
+    "CLIP's loss reads the same similarity matrix twice: once along its rows, for each image, and once along its columns, for each caption. Columns of img @ txt.T are rows of txt @ img.T, so the second term is info_nce(txt, img, tau).",
+    "alignment is the mean over rows of the squared distance between unit rows. uniformity is np.log(np.mean(np.exp(-t * d2))) over the pairs i < j, where d2 is the squared distance between two unit rows. Two opposite unit vectors give d2 = 4 and uniformity -8 at t = 2.",
+    "For train_encoder, one step is: draw views from make_views(rng), set z1 = v1 @ W and z2 = v2 @ W, get dz1 and dz2 from info_nce_grad, and update W -= lr * (v1.T @ dz1 + v2.T @ dz2). Initialise W with 0.1 * rng.normal(size=(d_in, d_out)).",
+    "For knn_accuracy, normalise both sets, take cosine similarities with test_rows @ train_rows.T, take the k largest per row with np.argsort(-sim, axis=1, kind='stable')[:, :k], and vote with np.bincount."
+  ]
+}

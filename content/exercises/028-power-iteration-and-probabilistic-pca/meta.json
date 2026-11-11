@@ -1,0 +1,19 @@
+{
+  "id": "028-power-iteration-and-probabilistic-pca",
+  "title": "Find the top direction by products, then fit probabilistic PCA and factor analysis",
+  "brief": "Read an eigenvalue with the Rayleigh quotient, find eigenvectors by multiplying and deflating, then write the E-step, the M-step, and the log-likelihood of probabilistic PCA and of factor analysis, which gives each column its own noise variance.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "rayleigh_quotient is one line: v @ A @ v / (v @ v).",
+    "power_iteration: start from np.ones(d) / np.sqrt(d), then loop `v = A @ v; v = v / np.linalg.norm(v)`. Rescale inside the loop, every step.",
+    "deflate: A - eigenvalue * np.outer(v, v). np.outer builds a (d, d) matrix; v @ v is only a number.",
+    "ppca_e_step: M_inv = np.linalg.inv(W.T @ W + sigma2 * np.eye(k)); Ez = Xc @ W @ M_inv; Ezz_sum = n * sigma2 * M_inv + Ez.T @ Ez.",
+    "ppca_m_step: W_new = (Xc.T @ Ez) @ np.linalg.inv(Ezz_sum). Then sigma2 = (sum(Xc**2) - 2 * sum(Ez * (Xc @ W_new)) + trace(Ezz_sum @ W_new.T @ W_new)) / (n * d), using W_new in every term.",
+    "ppca_loglik: C = W @ W.T + sigma2 * I, S = Xc.T @ Xc / n, then -0.5 * n * (d * log(2 pi) + slogdet(C)[1] + trace(solve(C, S))).",
+    "fa_e_step: P = W / psi[:, None]; M_inv = inv(I + W.T @ P); Ez = Xc @ P @ M_inv; Ezz_sum = n * M_inv + Ez.T @ Ez. Keep the n * M_inv term.",
+    "fa_m_step: cross = Xc.T @ Ez; W_new = cross @ inv(Ezz_sum); psi_new = (sum(Xc**2, axis=0) - sum(W_new * cross, axis=1)) / n, clipped at 1e-6. One value per column, not their average.",
+    "fa_loglik: the same as ppca_loglik with C = W @ W.T + np.diag(psi)."
+  ]
+}
