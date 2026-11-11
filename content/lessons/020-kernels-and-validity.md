@@ -236,7 +236,7 @@ ok = symmetric and evals[0] >= -tol
 
 ## Centre a Gram matrix
 
-[Principal components](/lessons/026-principal-components) computes scores from the centred points. With only a Gram matrix, centre the table instead. Let $H$ be the identity with $1/n$ subtracted from every entry, let $r_i$ be the mean of row $i$ of a symmetric $K$, and let $\bar K$ be the mean of every entry.
+[Principal components](/lessons/027-principal-components) computes scores from the centred points. With only a Gram matrix, centre the table instead. Let $H$ be the identity with $1/n$ subtracted from every entry, let $r_i$ be the mean of row $i$ of a symmetric $K$, and let $\bar K$ be the mean of every entry.
 
 $$
 (HKH)_{ij} = K_{ij} - r_i - r_j + \bar K.
