@@ -1,0 +1,17 @@
+{
+  "id": "044-uncertainty-and-conformal-prediction",
+  "title": "Read an ensemble's spread, then wrap a model in a coverage guarantee",
+  "brief": "Compute the mean and variance of an ensemble and of MC dropout passes, then build split conformal intervals and prediction sets with the (n + 1) correction.",
+  "needs_gpu": false,
+  "timeout": 20,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "Stack the predictions with np.stack([m(X) for m in models]). The result has shape (M, n), so reduce with axis=0 to average over models, not over inputs.",
+    "mc_dropout_predict is the same reduction as ensemble_predict, with the passes [forward(X, p, rng) for _ in range(n)] in place of the models. Pass the same rng to every call.",
+    "For 9 scores and alpha = 0.2, k = ceil(10 * 0.8) = 8, so the answer is np.sort(scores)[7]. Compute k with math.ceil, and return np.inf when k is larger than n.",
+    "The interval is pred_test - q and pred_test + q, where q = conformal_quantile(np.abs(y_cal - pred_cal), alpha).",
+    "Score each calibration example with 1 - probs_cal[np.arange(n), y_cal]. A class joins the set when 1 - probs_test <= q."
+  ]
+}

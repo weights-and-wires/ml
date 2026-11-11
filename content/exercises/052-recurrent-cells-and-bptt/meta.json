@@ -1,0 +1,17 @@
+{
+  "id": "052-recurrent-cells-and-bptt",
+  "title": "Build a recurrent cell and backpropagate through time",
+  "brief": "Write one step of a recurrent cell, run it over a sequence, and read out the last state for a loss. Then write the gradient of one step and the backward loop that adds each step's own loss to the carry from later steps. Every output is checked against finite differences.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "rnn_cell_forward is one line: np.tanh(x_t @ W_xh.T + h_prev @ W_hh.T + b). The weights are stored as (output, input), so each one needs a .T when the rows of x_t are examples.",
+    "rnn_forward keeps a running h_prev. Start it at h0, update it with the cell at every step, and store the new value in row t. Do not store h0.",
+    "In last_step_loss_and_dH, the gradient of 0.5 * sum((y_hat - y)**2) with respect to y_hat is (y_hat - y). Send it back through the linear readout by multiplying by W_hy, and put the result in the last row of a zero array.",
+    "tanh_backward needs no z. If h = tanh(z), the slope of tanh at z is 1 - h**2, so the answer is dh * (1 - h**2).",
+    "step_backward starts with dz = tanh_backward(dh_t, h_t). Then dx_t = dz @ W_xh, dh_prev = dz @ W_hh, dW_xh = dz.T @ x_t, dW_hh = dz.T @ h_prev, and db = dz.sum(axis=0).",
+    "bptt carries a gradient from later steps. At step t, pass dH[t] + carry to step_backward, keep the dh_prev it returns as the new carry, and add its weight gradients to running totals.",
+    "The previous state at step t is h_seq[t - 1], except at t = 0, where it is h0. Using h_seq[t] there is the usual bug."
+  ]
+}
