@@ -1,0 +1,20 @@
+{
+  "id": "032-nearest-neighbours-and-matrix-factorisation",
+  "title": "Predict from neighbours, then from a low-rank model",
+  "brief": "Write k-NN with vectorised squared distances, measure distance concentration, then fit a ratings table by alternating least squares and beat the baselines on held-out entries.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "pairwise_sq_dists: (A**2).sum(axis=1)[:, None] - 2 * A @ B.T + (B**2).sum(axis=1)[None, :] has shape (n, m). Rounding can leave -1e-16 entries, so clip at 0 with np.maximum.",
+    "knn_predict: np.argsort(d, axis=1, kind='stable')[:, :k] gives the k nearest training indices per query, with ties going to the lower index. Count votes with np.bincount(ytr[row], minlength=n_classes) and take argmax, which returns the smallest label on a tie. knn_regress takes ytr[idx].mean(axis=1).",
+    "loo_knn_error: compute pairwise_sq_dists(X, X), then set the diagonal to np.inf before sorting, so no row is its own neighbour. With the diagonal left at 0, k=1 always returns the row's own label.",
+    "distance_ratio: draw X = rng.uniform(size=(n, d)) first and then q = rng.uniform(size=(1, d)). Take the square root of the (1, n) squared distances and return min over max.",
+    "masked_loss: multiply the residual R - U @ V.T by M before squaring, so unobserved entries contribute 0. Add lam * (sum of U**2 + sum of V**2). For R = [[2, 7], [3, 4]], M = [[1, 0], [1, 1]], U = [[1], [2]], V = [[1], [1]] and lam = 1 the answer is 6 + 7 = 13.",
+    "als_step: for row i, obs = M[i] > 0 and Vo = V[obs]. Solve (Vo.T @ Vo + lam * np.eye(k)) u = Vo.T @ R[i, obs] with np.linalg.solve. For R = [[2, 0, 5]], M = [[1, 0, 1]], V = [[1], [2], [3]] and lam = 1 the solve is (1 + 9 + 1) u = 2 + 15, so u = 17/11. A row with no observations gives u = 0.",
+    "fit_als: start U and V as 0.1 * rng.normal(...), U first. In each sweep call als_step(R, M, U, V, lam) for U, then als_step(R.T, M.T, V, U, lam) for V, because the same code solves for the columns of the table. Append masked_loss after each sweep.",
+    "user_bias_baseline: mu = sum(R * M) / sum(M). A user's offset is sum((R - mu) * M) over their row, divided by their count (0 when the count is 0). The table is mu plus the offset, repeated across columns."
+  ]
+}
