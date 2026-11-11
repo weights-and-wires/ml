@@ -207,7 +207,7 @@ Read it aloud as "the spread of the sheet, plus the same fuzz in every direction
 
 Fitting has a chicken-and-egg problem. If you knew each point's hidden $z$, fitting $W$ would be an ordinary regression of $x$ on $z$, and $\sigma^2$ would be the average squared leftover. If you knew $W$ and $\sigma^2$, you could guess each $z$. You know neither.
 
-So start with a guess for $W$ and $\sigma^2$, then alternate. A guess is soft: for each point you keep a bell-shaped belief about $z$ rather than one value. This is the idea behind [k-means](/lessons/030-k-means) with soft guesses in place of hard ones, and [Gaussian mixtures](/lessons/031-gaussian-mixtures-and-em) develop it in general. The method is **expectation-maximisation**, or EM. An **expectation** is a weighted average, so the E-step computes the average of what you need from the hidden values, and the M-step picks the model that maximises the likelihood given those averages.
+So start with a guess for $W$ and $\sigma^2$, then alternate. A guess is soft: for each point you keep a bell-shaped belief about $z$ rather than one value. This is the idea behind [k-means](/lessons/031-k-means) with soft guesses in place of hard ones, and [Gaussian mixtures](/lessons/032-gaussian-mixtures-and-em) develop it in general. The method is **expectation-maximisation**, or EM. An **expectation** is a weighted average, so the E-step computes the average of what you need from the hidden values, and the M-step picks the model that maximises the likelihood given those averages.
 
 **The E-step.** Given $W$ and $\sigma^2$, define the small $k \times k$ matrix $M = W^{\top} W + \sigma^2 I$. Then, for centred data $X_c$ with $n$ rows:
 
@@ -337,7 +337,7 @@ W_new = cross @ np.linalg.inv(Ezz_sum)
 psi_new = (np.sum(Xc**2, axis=0) - np.sum(W_new * cross, axis=1)) / n
 ```
 
-The likelihood is the same formula with $C = WW^{\top} + \Psi$. Independent, non-Gaussian sources (ICA) are a later topic.
+The likelihood is the same formula with $C = WW^{\top} + \Psi$. Independent, non-Gaussian sources are the subject of [ICA and t-SNE](/lessons/030-ica-and-t-sne).
 
 > [!KEY]
 > PCA can carry fuzz inside it, and factor analysis lets each column have its own. The model says each point is a hidden coordinate on a sheet, pushed through $W$, plus Gaussian fuzz of variance $\sigma^2$. You cannot see the coordinates, so EM guesses them (E-step) and refits $W$ and $\sigma^2$ from the guesses (M-step), and the log-likelihood rises every round until the plane matches the one that power iteration and the SVD find.
