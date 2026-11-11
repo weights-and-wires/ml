@@ -1,5 +1,5 @@
 {
-  "id": "076-ppo-and-dpo",
+  "id": "077-ppo-and-dpo",
   "title": "Build the PPO clip and the DPO loss",
   "brief": "Compute PPO's probability ratio, advantage, and clipped objective, then build the DPO implicit reward, loss, and gradient on top of the Bradley-Terry functions.",
   "needs_gpu": false,

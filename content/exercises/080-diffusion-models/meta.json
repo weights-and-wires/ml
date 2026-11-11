@@ -1,5 +1,5 @@
 {
-  "id": "079-diffusion-models",
+  "id": "080-diffusion-models",
   "title": "Diffusion models: add noise, then walk it back",
   "brief": "Write the cumulative noise schedule and the closed-form noisy sample, the noise-prediction loss and its gradient, one ancestral step and one deterministic step, ancestral samples from an exact two-bell denoiser, and a classifier-free guidance step.",
   "needs_gpu": false,
