@@ -1,0 +1,17 @@
+{
+  "id": "058-graph-neural-networks",
+  "title": "Build a graph convolution, check it is permutation-safe, and watch it over-smooth",
+  "brief": "Write the symmetric normalised adjacency, a GCN layer and its gradients, sum, mean, and max message passing, and a graph readout. Then measure over-smoothing and train a two-layer GCN on a two-community graph from six labels.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "Add the identity first: A_loop = A + np.eye(n). Take the row sums d of A_loop, then each entry is A_loop[i, j] / sqrt(d[i] * d[j]). On a star with a centre and three leaves, d is [2, 4, 2, 2] for leaves and centre, and the centre-leaf entry is 1 / sqrt(8) = 0.3536.",
+    "A row-normalised matrix, A_loop / d[:, None], gives 0.5 from the centre to a leaf row and 0.25 the other way, so it is not symmetric. The symmetric version has one number per edge. A_hat @ np.sqrt(d) equals np.sqrt(d) is a quick test.",
+    "gcn_layer is three lines: out = A_hat @ H @ W, then np.maximum(out, 0) when relu is True. For gcn_layer_backward, first zero the gradient where the pre-activation was not positive. Then dW = (A_hat @ H).T @ d_pre and dH = A_hat.T @ d_pre @ W.T.",
+    "For message_pass, row i of A marks the neighbours of node i, so np.flatnonzero(A[i]) gives their indices. Take H[nbrs].sum(axis=0), .mean(axis=0), or .max(axis=0). On the star with scalar features [1, 0, 1, 2], the centre receives sum 4, mean 1.3333, max 2.",
+    "readout reduces over the node axis, axis=0, so the answer has shape (d,). Permuting rows of H then changes nothing, because sum, mean, and max do not depend on order.",
+    "For oversmoothing_curve, loop layers + 1 times: measure first, then replace X with A_hat @ X. To measure, multiply row i by 1 / sqrt(A[i].sum() + 1), then average max - min over the columns. Without the rescaling the spread settles at a nonzero value, because the limit is proportional to sqrt(d + 1).",
+    "For train_gcn, the forward pass is H1 = gcn_layer(A_hat, X, W1) and logits = gcn_layer(A_hat, H1, W2, relu=False). The gradient of the mean softmax cross-entropy at the labelled rows is (softmax - onehot) / len(train_idx), and it is zero at the other rows. Send it back through the second layer first, then the first."
+  ]
+}

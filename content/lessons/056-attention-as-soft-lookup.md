@@ -189,7 +189,7 @@ Because the weights are non-negative and sum to 1, the context is a convex combi
 
 ## Scoring with a dot product, and with a matrix
 
-A key that points where the query points scores high, so the dot product is a reasonable measure of a match. It also grows with the length of the vectors, a fact that matters in a [later chapter](/lessons/058-scaled-attention-and-heads).
+A key that points where the query points scores high, so the dot product is a reasonable measure of a match. It also grows with the length of the vectors, a fact that matters in a [later chapter](/lessons/059-scaled-attention-and-heads).
 
 The plain dot product needs the query and the keys to have the same width, and it treats every coordinate the same way. A decoder state and an encoder state often differ in both width and meaning. So you can put a matrix $W$, shaped `(d_s, d_h)`, between them:
 

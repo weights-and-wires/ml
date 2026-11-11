@@ -1,0 +1,16 @@
+{
+  "id": "071-reward-models-and-the-kl-leash",
+  "title": "Train a scorer on 'B beats A', then put the model on a leash",
+  "brief": "Build the Bradley-Terry loss and gradient for a reward model, then compute KL divergence, the best policy for a reward on a KL leash, and the penalised objective that proves nothing beats it.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": ["numpy"],
+  "hints": [
+    "preference_probability: z = reward_chosen - reward_rejected, then np.exp(-np.logaddexp(0, -z)). That is 1 / (1 + exp(-z)) written so that a gap of -800 does not overflow.",
+    "bradley_terry_loss is the mean of np.logaddexp(0, -z), which equals -log(sigmoid(z)). A tie must give log 2.",
+    "The gradient with respect to reward_chosen is (preference_probability(...) - 1) / n. The gradient with respect to reward_rejected is the negation, because the loss depends only on the difference.",
+    "kl_divergence: where p is 0 the term is 0. Use safe_p = np.where(p > 0, p, 1.0) inside the log so the unused branch never evaluates log(0), then np.where(p > 0, p * np.log(safe_p / q), 0.0) and sum over axis=-1.",
+    "optimal_policy: logits = ref_logprobs + rewards / beta, subtract logits.max(axis=-1, keepdims=True), exponentiate, divide by the sum over axis=-1 with keepdims=True.",
+    "penalised_objective: np.sum(probs * rewards, axis=-1) - beta * kl_divergence(probs, ref_probs). The policy goes first in the KL."
+  ]
+}
