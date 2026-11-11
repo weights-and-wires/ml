@@ -1,6 +1,6 @@
 ---
 title: "Serve a small language model"
-slug: 081p-project-serve-a-tiny-model
+slug: 082p-project-serve-a-tiny-model
 part: "Part 7 — Large language models"
 kind: project
 summary: Ship a tiny transformer with a tokeniser, KV cache, sampling, speculative decoding, and a LoRA adapter, proving each stage against its slow twin.
@@ -15,7 +15,7 @@ prereqs:
   - 071-tokenisation
   - 075-decoding-and-sampling
   - 077-fine-tuning-and-lora
-exercise: 081p-project-serve-a-tiny-model
+exercise: 082p-project-serve-a-tiny-model
 ---
 
 # Serve a small language model

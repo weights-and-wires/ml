@@ -1,6 +1,6 @@
 ---
 title: "Diffusion models: add noise, then walk it back"
-slug: 083-diffusion-models
+slug: 084-diffusion-models
 part: "Part 8 — Generative models"
 summary: "Noise a two-blob cloud on a schedule, predict that noise, and walk a standard normal back onto the blobs."
 minutes: 75
@@ -14,15 +14,15 @@ objectives:
 prereqs:
   - 032-gaussian-mixtures-and-em
   - 034-multilayer-perceptrons
-  - 082-autoencoders-and-vaes
-exercise: 083-diffusion-models
+  - 083-autoencoders-and-vaes
+exercise: 084-diffusion-models
 ---
 
 # Diffusion models: add noise, then walk it back
 
 You marked two kinds of flower on a map. One kind grows on the west side of a field and the other on the east side, and each patch is a blob of dots. You want another dot that could have been one of those flowers: on a blob, not in the empty middle, and not out in the grass where nothing grows.
 
-The chapter on [variational autoencoders](/lessons/082-autoencoders-and-vaes) draws a code from a standard bell and decodes it. This chapter skips the decoder. Add Gaussian noise until the two blobs melt into one bell, then walk a draw from that bell backwards until it sits on a blob. One jump from pure noise fails: the clean dot and the noise share almost no information, so the guess averages the blobs into the empty middle. A short step stays local, because a slightly noisy dot still sits near the dot it came from.
+The chapter on [variational autoencoders](/lessons/083-autoencoders-and-vaes) draws a code from a standard bell and decodes it. This chapter skips the decoder. Add Gaussian noise until the two blobs melt into one bell, then walk a draw from that bell backwards until it sits on a blob. One jump from pure noise fails: the clean dot and the noise share almost no information, so the guess averages the blobs into the empty middle. A short step stays local, because a slightly noisy dot still sits near the dot it came from.
 
 ## What you already know
 

@@ -559,7 +559,7 @@
   "081-mixtures-of-experts"
  ],
  "132p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "001-scoring-a-guess": [
   "001-loss-and-honest-scores"
@@ -934,7 +934,7 @@
   "070p-project-train-a-tiny-transformer"
  ],
  "117p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "011-cross-validation-and-leave-one-out": [
   "012-cross-validation-and-leave-one-out"
@@ -1087,7 +1087,7 @@
   "081-mixtures-of-experts"
  ],
  "055p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "014-bayes-rule-and-gaussian-classes": [
   "017-bayes-rule-and-gaussian-classes"
@@ -1234,7 +1234,7 @@
   "081-mixtures-of-experts"
  ],
  "056p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "035p-project-read-digits": [
   "044p-project-read-digits"
@@ -1312,7 +1312,7 @@
   "081-mixtures-of-experts"
  ],
  "057p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "037-convolution-and-receptive-field": [
   "046-convolution-and-receptive-field"
@@ -1387,7 +1387,7 @@
   "081-mixtures-of-experts"
  ],
  "058p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "051-next-token-loss-and-safe-steps": [
   "068-next-token-loss-and-safe-steps"
@@ -1420,7 +1420,7 @@
   "081-mixtures-of-experts"
  ],
  "059p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "049-position-encodings": [
   "062-position-encodings"
@@ -1462,13 +1462,13 @@
   "081-mixtures-of-experts"
  ],
  "060p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "061-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "062-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "041-recurrent-cells-and-bptt": [
   "052-recurrent-cells-and-bptt"
@@ -1540,13 +1540,13 @@
   "081-mixtures-of-experts"
  ],
  "061p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "062-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "063-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "042-recurrent-cells-and-bptt": [
   "052-recurrent-cells-and-bptt"
@@ -1618,13 +1618,13 @@
   "081-mixtures-of-experts"
  ],
  "062p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "063-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "064-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "043-recurrent-cells-and-bptt": [
   "052-recurrent-cells-and-bptt"
@@ -1696,13 +1696,13 @@
   "081-mixtures-of-experts"
  ],
  "063p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "064-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "065-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "014-scoring-classifiers": [
   "016-scoring-classifiers"
@@ -1873,13 +1873,13 @@
   "081-mixtures-of-experts"
  ],
  "064p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "065-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "066-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "013-learning-curves-and-winners-curse": [
   "014-learning-curves-and-winners-curse"
@@ -2056,13 +2056,13 @@
   "081-mixtures-of-experts"
  ],
  "065p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "066-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "067-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "021p-project-spam-filter": [
   "023p-project-spam-filter"
@@ -2215,13 +2215,13 @@
   "081-mixtures-of-experts"
  ],
  "066p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "067-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "068-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "019-support-vector-machines": [
   "020-support-vector-machines"
@@ -2386,13 +2386,13 @@
   "081-mixtures-of-experts"
  ],
  "067p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "068-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "069-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "031p-project-segment-customers": [
   "033p-project-segment-customers"
@@ -2518,13 +2518,13 @@
   "081-mixtures-of-experts"
  ],
  "068p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "069-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "070-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "030-k-means": [
   "031-k-means"
@@ -2659,13 +2659,13 @@
   "081-mixtures-of-experts"
  ],
  "069p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "070-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "071-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "035-backpropagation": [
   "036-backpropagation"
@@ -2785,13 +2785,13 @@
   "081-mixtures-of-experts"
  ],
  "070p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "071-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "072-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "043p-project-read-digits": [
   "044p-project-read-digits"
@@ -2887,13 +2887,13 @@
   "081-mixtures-of-experts"
  ],
  "071p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "072-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "073-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "057p-project-spot-defects": [
   "058p-project-spot-defects"
@@ -2947,13 +2947,13 @@
   "081-mixtures-of-experts"
  ],
  "072p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "073-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "074-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "064-counts-to-a-language-model": [
   "067-counts-to-a-language-model"
@@ -2989,13 +2989,13 @@
   "081-mixtures-of-experts"
  ],
  "073p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "074-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "075-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "065-counts-to-a-language-model": [
   "067-counts-to-a-language-model"
@@ -3031,13 +3031,13 @@
   "081-mixtures-of-experts"
  ],
  "074p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "075-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "076-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "066-counts-to-a-language-model": [
   "067-counts-to-a-language-model"
@@ -3073,13 +3073,13 @@
   "081-mixtures-of-experts"
  ],
  "075p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "076-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "077-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "069p-project-train-a-tiny-transformer": [
   "070p-project-train-a-tiny-transformer"
@@ -3106,13 +3106,13 @@
   "081-mixtures-of-experts"
  ],
  "076p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "077-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "078-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "072-scaling-laws": [
   "073-scaling-laws"
@@ -3133,13 +3133,13 @@
   "081-mixtures-of-experts"
  ],
  "077p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "078-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "079-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "074-decoding-and-sampling": [
   "075-decoding-and-sampling"
@@ -3157,13 +3157,13 @@
   "081-mixtures-of-experts"
  ],
  "078p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "079-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "080-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "076-fine-tuning-and-lora": [
   "077-fine-tuning-and-lora"
@@ -3178,13 +3178,13 @@
   "081-mixtures-of-experts"
  ],
  "079p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "080-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "081-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
  ],
  "078-reward-models-and-the-kl-leash": [
   "079-reward-models-and-the-kl-leash"
@@ -3196,12 +3196,21 @@
   "081-mixtures-of-experts"
  ],
  "080p-project-serve-a-tiny-model": [
-  "081p-project-serve-a-tiny-model"
+  "082p-project-serve-a-tiny-model"
  ],
  "081-autoencoders-and-vaes": [
-  "082-autoencoders-and-vaes"
+  "083-autoencoders-and-vaes"
  ],
  "082-diffusion-models": [
-  "083-diffusion-models"
+  "084-diffusion-models"
+ ],
+ "081p-project-serve-a-tiny-model": [
+  "082p-project-serve-a-tiny-model"
+ ],
+ "082-autoencoders-and-vaes": [
+  "083-autoencoders-and-vaes"
+ ],
+ "083-diffusion-models": [
+  "084-diffusion-models"
  ]
 }

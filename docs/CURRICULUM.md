@@ -1,13 +1,13 @@
 # Curriculum
 
-83 chapters in 8 parts, and 8 projects in a section of their own. Each
+84 chapters in 8 parts, and 8 projects in a section of their own. Each
 project lists the chapter to finish before you start it. Each row is one Markdown file under
 `content/lessons/` and one directory under `content/exercises/`. The `Needs GPU`
 column marks the exercises that run on RunPod rather than in the app container.
 
 Each chapter teaches one topic: two or three closely related ideas in one arc,
 with one exercise. The 33 lessons of the first edition were split into 132
-one-idea chapters, merged into 117, and then merged again into 55. One added chapter brings the count to 56, scoring classifiers brings it to 57, and debugging and tuning a network brings it to 58. The map from your engine to PyTorch brings it to 59. A count model and word vectors bring it to 60. Autoencoders and variational autoencoders bring it to 61, in an eighth part. Diffusion models bring it to 62. Online softmax and tiled attention bring it to 63. Augmentation, transfer, separable convolutions, and patch embedding bring it to 64. Detection and segmentation brings it to 65. Contrastive learning brings it to 66. Learning theory brings it to 67. Feature pipelines and data leakage bring it to 68. Gaussian processes bring it to 69. Convex optimisation and Lagrange duality brings it to 70. Nearest neighbours and matrix factorisation bring it to 71. ICA and t-SNE bring it to 72. Approximation theory brings it to 73. Uncertainty and conformal prediction brings it to 74. Graph neural networks bring it to 75. Modern transformer design choices bring it to 76. Encoders and cross-attention bring it to 77. State-space models and linear attention bring it to 78. Gradient accumulation and activation checkpointing bring it to 79. Pretraining data brings it to 80. Optimiser scaling rules bring it to 81. Evaluating language models brings it to 82. Distillation brings it to 83.
+one-idea chapters, merged into 117, and then merged again into 55. One added chapter brings the count to 56, scoring classifiers brings it to 57, and debugging and tuning a network brings it to 58. The map from your engine to PyTorch brings it to 59. A count model and word vectors bring it to 60. Autoencoders and variational autoencoders bring it to 61, in an eighth part. Diffusion models bring it to 62. Online softmax and tiled attention bring it to 63. Augmentation, transfer, separable convolutions, and patch embedding bring it to 64. Detection and segmentation brings it to 65. Contrastive learning brings it to 66. Learning theory brings it to 67. Feature pipelines and data leakage bring it to 68. Gaussian processes bring it to 69. Convex optimisation and Lagrange duality brings it to 70. Nearest neighbours and matrix factorisation bring it to 71. ICA and t-SNE bring it to 72. Approximation theory brings it to 73. Uncertainty and conformal prediction brings it to 74. Graph neural networks bring it to 75. Modern transformer design choices bring it to 76. Encoders and cross-attention bring it to 77. State-space models and linear attention bring it to 78. Gradient accumulation and activation checkpointing bring it to 79. Pretraining data brings it to 80. Optimiser scaling rules bring it to 81. Evaluating language models brings it to 82. Distillation brings it to 83. Interpretability brings it to 84.
 `content/renames.json` maps each old lesson and chapter to the chapter that
 replaced it, so readers keep their progress.
 
@@ -126,13 +126,14 @@ replaced it, so readers keep their progress.
 | `079-reward-models-and-the-kl-leash` | Reward models and the KL leash | Build the Bradley-Terry loss and gradient for a reward model, then compute KL divergence, the best policy for a reward on a KL leash, and the penalised objective that proves nothing beats it. | No |
 | `080-ppo-and-dpo` | PPO and DPO: two ways to reach the leashed optimum | Compute PPO's probability ratio, advantage, and clipped objective, then build the DPO implicit reward, loss, and gradient on top of the Bradley-Terry functions. | No |
 | `081-mixtures-of-experts` | Mixtures of experts: routing, the router's gradient, and balance | Score and pick the top k experts, compute the router's gradient through the gate weights, build the load-balancing loss, and run a capacity-limited forward pass that drops overflow. | No |
+| `082-interpretability` | Interpretability: probes, attribution, and sparse autoencoders | Fit a logistic probe against shuffled-label and random-network controls, write gradient times input, integrated gradients, and exact Shapley values and check that they sum to f(x) - f(baseline), then train a sparse autoencoder that recovers planted superposed features. | No |
 
 ## Part 8 — Generative models
 
 | Slug | Title | Exercise delivers | Needs GPU |
 |---|---|---|---|
-| `082-autoencoders-and-vaes` | Autoencoders and variational autoencoders | Write the diagonal-Gaussian KL and its gradient, reparameterise a sample, check the ELBO against a known log probability, recover a principal component with a linear autoencoder, and train a tiny VAE. | No |
-| `083-diffusion-models` | Diffusion models: add noise, then walk it back | Write the cumulative noise schedule and the closed-form noisy sample, the noise-prediction loss and its gradient, one ancestral step and one deterministic step, ancestral samples from an exact two-bell denoiser, and a classifier-free guidance step. | No |
+| `083-autoencoders-and-vaes` | Autoencoders and variational autoencoders | Write the diagonal-Gaussian KL and its gradient, reparameterise a sample, check the ELBO against a known log probability, recover a principal component with a linear autoencoder, and train a tiny VAE. | No |
+| `084-diffusion-models` | Diffusion models: add noise, then walk it back | Write the cumulative noise schedule and the closed-form noisy sample, the noise-prediction loss and its gradient, one ancestral step and one deterministic step, ancestral samples from an exact two-bell denoiser, and a classifier-free guidance step. | No |
 
 ## Projects
 
@@ -149,4 +150,4 @@ start once you have finished chapter 10.
 | `044p-project-read-digits` | Train a digit reader from scratch | Build a regularised, gradient-checked, early-stopped network in numpy that reads noisy 10 by 10 digits and clearly beats a linear baseline. | No |
 | `058p-project-spot-defects` | Spot defects on a production line | Write im2col convolution and its backward pass, a residual block, global average pooling, and Adam. Train the network on noisy part photos and check that it beats a flat MLP. | No |
 | `070p-project-train-a-tiny-transformer` | Train a tiny transformer to reverse digits | Build masked attention, positions, pre-norm blocks, an answer-only loss, and a training loop from torch tensors, then check the model on strings it has never seen. | No |
-| `081p-project-serve-a-tiny-model` | Serve a small language model | Build a tokeniser, a KV-cached generator, a sampler, speculative decoding, and LoRA merging around a given tiny transformer, and prove each stage matches the slow, obvious version. | No |
+| `082p-project-serve-a-tiny-model` | Serve a small language model | Build a tokeniser, a KV-cached generator, a sampler, speculative decoding, and LoRA merging around a given tiny transformer, and prove each stage matches the slow, obvious version. | No |
