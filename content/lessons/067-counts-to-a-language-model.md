@@ -34,7 +34,7 @@ You want the next word. After "big dog" the next word is "runs" on every line. A
 
 The obvious rule is a tally: count how often each word follows each other word, and divide. Two things go wrong. A word that has never followed "dog" gets probability 0, and the log of 0 is not a number, so one unseen word makes the line unscorable. And "dog" and "hound" are separate columns. They show up in the same company, between "big" and "runs", but a column of counts cannot treat them as the same kind of word.
 
-This chapter adds a count to every cell, shows that a one-layer softmax is that table written as logarithms, and replaces the one-hot column with a short vector you can train. The [next chapter](/lessons/068-next-token-loss-and-safe-steps) puts the same loss on a transformer. A token here is a whole word. Subword pieces come later ([tokenisation](/lessons/070-tokenisation)).
+This chapter adds a count to every cell, shows that a one-layer softmax is that table written as logarithms, and replaces the one-hot column with a short vector you can train. The [next chapter](/lessons/068-next-token-loss-and-safe-steps) puts the same loss on a transformer. A token here is a whole word. Subword pieces come later ([tokenisation](/lessons/071-tokenisation)).
 
 ## What you already know
 

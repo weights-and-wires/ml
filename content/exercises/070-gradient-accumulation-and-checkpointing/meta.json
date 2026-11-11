@@ -1,0 +1,17 @@
+{
+  "id": "070-gradient-accumulation-and-checkpointing",
+  "title": "Accumulate gradients and checkpoint activations",
+  "brief": "Count activation bytes, accumulate micro-batch gradients into the exact full-batch gradient (even for unequal sizes), then store only segment boundaries and recompute the rest in the backward pass.",
+  "needs_gpu": false,
+  "timeout": 30,
+  "packages": [
+    "numpy"
+  ],
+  "hints": [
+    "activation_bytes: batch * width * layers * bytes_per_number. Eight rows, width 4, three layers in fp32 is 8 * 4 * 3 * 4 = 384 bytes. Doubling the batch doubles it.",
+    "accumulate_grads: weight each micro-batch's mean loss and gradients by its share of all examples, n_i / N, then add. With sizes [1, 3] the weights are 0.25 and 0.75. Averaging the micro-batch means with 1/k each is right only when every size is equal. Summing without any weight is k times too big.",
+    "stored_peak: segments + ceil(layers / segments) - 1. For 16 layers, 4 segments gives 4 + 4 - 1 = 7, and 1 segment or 16 segments gives 16. best_segment_count is a min over range(1, layers + 1) with key (stored_peak, k).",
+    "checkpointed_backward, forward: for each segment, append its input to a list, then run its layers with layer_forward and keep only the last output. Backward: for each segment from the last, rebuild inputs [boundary, f(boundary), ...] for all but the segment's final layer, then call layer_backward from the last layer down.",
+    "Counts: with 16 layers in 4 segments you rebuild 3 inputs per segment, so 12 layer_forward calls in the backward pass, which is layers - segments. The peak is 4 boundaries plus 3 rebuilt inputs, 7."
+  ]
+}

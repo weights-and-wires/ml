@@ -360,7 +360,7 @@ After training, caption embeddings work as a classifier: embed "a photo of a dog
 
 Contrastive methods are one family of self-supervised learning. The other hides part of the input and trains a network to reconstruct it. A masked autoencoder cuts an image into patches, hides most of them (He et al. hide 75 percent), sends the visible patches through an encoder, and asks a small decoder to reproduce the pixels of the hidden patches. The loss is a squared error on the hidden patches.
 
-This family needs no negatives and has no collapse, because the target is the data, and a constant output cannot reproduce it. The price is that the loss rewards getting pixels right, so some capacity goes to detail that a later task may not need. A contrastive loss discards that detail through the augmentations. [The autoencoder chapter](/lessons/077-autoencoders-and-vaes) covers reconstruction in more depth.
+This family needs no negatives and has no collapse, because the target is the data, and a constant output cannot reproduce it. The price is that the loss rewards getting pixels right, so some capacity goes to detail that a later task may not need. A contrastive loss discards that detail through the augmentations. [The autoencoder chapter](/lessons/078-autoencoders-and-vaes) covers reconstruction in more depth.
 
 > [!KEY]
 > You have a way to learn embeddings from unlabelled data. Pick each example's other view out of a batch (InfoNCE), and negatives keep the embeddings spread out, so the encoder cannot collapse. Read the same grid in both directions and you have CLIP. Hide part of the input and reconstruct it, and you have the other family.
