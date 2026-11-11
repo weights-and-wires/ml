@@ -1,6 +1,6 @@
 ---
 title: "Decoding and sampling: cache, temperature, speculation"
-slug: 074-decoding-and-sampling
+slug: 075-decoding-and-sampling
 part: "Part 7 — Large language models"
 summary: Why decoding waits on memory, how a KV cache, temperature sampling, and beam search work, and how a draft model speeds it up without changing the output.
 minutes: 80
@@ -15,7 +15,7 @@ prereqs:
   - 059-scaled-attention-and-heads
   - 069-training-loop-and-cost
   - 068-next-token-loss-and-safe-steps
-exercise: 074-decoding-and-sampling
+exercise: 075-decoding-and-sampling
 ---
 
 # Decoding and sampling: cache, temperature, speculation

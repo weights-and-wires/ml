@@ -1,5 +1,5 @@
 {
-  "id": "076-reward-models-and-the-kl-leash",
+  "id": "077-reward-models-and-the-kl-leash",
   "title": "Train a scorer on 'B beats A', then put the model on a leash",
   "brief": "Build the Bradley-Terry loss and gradient for a reward model, then compute KL divergence, the best policy for a reward on a KL leash, and the penalised objective that proves nothing beats it.",
   "needs_gpu": false,

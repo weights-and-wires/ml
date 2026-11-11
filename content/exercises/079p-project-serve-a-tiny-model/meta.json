@@ -1,5 +1,5 @@
 {
-  "id": "078p-project-serve-a-tiny-model",
+  "id": "079p-project-serve-a-tiny-model",
   "title": "Serve a small language model",
   "brief": "Build a tokeniser, a KV-cached generator, a sampler, speculative decoding, and LoRA merging around a given tiny transformer, and prove each stage matches the slow, obvious version.",
   "needs_gpu": false,

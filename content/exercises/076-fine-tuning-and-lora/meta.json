@@ -1,5 +1,5 @@
 {
-  "id": "075-fine-tuning-and-lora",
+  "id": "076-fine-tuning-and-lora",
   "title": "Budget a fine-tune, build a LoRA layer, and train its factors",
   "brief": "Add up the memory bill with and without frozen weights, write the LoRA forward pass and merge, then truncate an update with the SVD and write the gradients of A and B.",
   "needs_gpu": false,
