@@ -1,0 +1,14 @@
+{
+  "id": "087-diffusion-language-models",
+  "title": "Mask, score, and unmask a token sequence",
+  "brief": "Write the forward masking, the 1/t masked loss with its gradient, the unmasking schedule, and a low-confidence sampler that fills a toy table of logits.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "forward_mask draws one uniform number per position and masks where it is below t. With t = 0 nothing is masked and with t = 1 everything is.",
+    "Pick the log probability of each target with logp[np.arange(L), targets]. Multiply by the boolean mask before summing, then divide by t * L. Worked example: targets get probabilities 0.5 and 0.25 at the two masked positions, so the loss is (ln 2 + ln 4) / (0.5 * 4) = 1.0397.",
+    "The gradient of -log softmax at a masked row is softmax minus one-hot, scaled by 1 / (t * L). Rows that were not masked are zero.",
+    "In the sampler step, rank only the masked positions by confidence, largest first. The number to fill is n_unmasked minus the count already unmasked. With the 8-token toy table and 4 steps, step 1 fills positions 1 and 3."
+  ]
+}
