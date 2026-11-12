@@ -248,6 +248,8 @@ With $n$ training points, $d$ inputs, and $D$ random features, exact kernel ridg
 
 **Too few features, or other kernels.** The Gram matrix is noisy at small $D$, and the fit inherits the noise, so increase $D$ until predictions stop changing. This construction is for the RBF kernel. A Nyström approximation builds features from a random subset of the training points and works for any kernel.
 
+The same prediction with error bars is in [Gaussian processes](/lessons/023-gaussian-processes).
+
 ## The exercise
 
 You build `kernel_ridge_fit`, `kernel_ridge_predict`, `implied_weights`, `representer_check`, `random_fourier_features`, `ridge_on_features`, and `gp_posterior_mean`. The checks confirm that the weights solve $(K + \lambda I)\alpha = y$ on a random positive semidefinite matrix and on the two-point example, that they are a stationary point of the objective checked with finite differences, that the training predictions equal $y - \lambda\alpha$, and that a linear kernel reproduces primal ridge regression. They confirm that $J$ is 2 and 3 on the hand example and that an extra component that vanishes at the training points raises the objective by exactly $\lambda t^2 d^{\top}K_{aa}d$. They check the random features for shape, a shared draw, and the $1/\sqrt{D}$ rate. `ridge_on_features` must have zero gradient at its answer, and its predictions must approach exact kernel ridge predictions as $D$ grows. `gp_posterior_mean` must match `kernel_ridge_predict` when `lam` equals the noise variance, and the variance it returns must be non-negative and near that noise variance at a training point.

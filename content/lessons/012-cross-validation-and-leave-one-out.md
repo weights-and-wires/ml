@@ -325,6 +325,8 @@ Cross-validation with $k$ folds costs $k$ fits, each on $(k-1)/k$ of the data. L
 
 **Preprocessing on all rows.** Centring or scaling with statistics from all $n$ rows leaks the held-out point into the fit, and both methods inherit the leak.
 
+Preprocessing fitted on all rows leaks into every fold; [feature pipelines and leakage](/lessons/013-feature-pipelines-and-leakage) fits it inside each fold.
+
 ## The exercise
 
 You implement `k_fold_indices`, `cross_val_score`, `best_lambda_by_cv`, `hat_matrix`, `leverages`, and `loo_linear_smoother`. The starter's closing program prints the penalty with the lowest training error beside the penalty with the lowest five-fold error on the 60 houses, then compares your shortcut with `loo_by_refitting`.

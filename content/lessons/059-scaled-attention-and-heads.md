@@ -448,6 +448,8 @@ Swap the two tokens of the head example, so the rows are $[0, 1, 1, 1]$ then $[1
 
 The scale assumes entries with roughly zero mean and unit variance. If the learned projections drift so that scores become large anyway, the softmax saturates again even with the division, and some models normalise queries and keys to guard against it. A mask row that is entirely $-\infty$ gives `nan`, which a causal mask never produces, since the diagonal stays open. Heads also do not guarantee that different heads learn different jobs. Training can leave several heads doing nearly the same thing, which wastes width.
 
+Padding masks and attention from one sequence to another are in [encoders and cross-attention](/lessons/065-encoders-and-cross-attention).
+
 ## The exercise
 
 You write `dot_scores`, `softmax`, `blend_values`, `attention_score_scale`, `score_std`, `scaled_dot_product_attention`, `causal_mask`, `split_heads`, and `multi_head_attention`. The checks confirm softmax weights $[0.7311, 0.2689]$ that stay finite at 900, a measured spread near $\sqrt{d_k}$ before scaling and near 1 after, the exact weights for the 64-wide example, and that at width 256 no row is nearly one-hot. For the second half, they confirm the mask structure, column-block slicing, the two-head worked example, and agreement with a head-by-head reference for two and four heads with and without a mask. They also confirm that later tokens never change earlier outputs in any head, and that shuffling the input rows shuffles the outputs.

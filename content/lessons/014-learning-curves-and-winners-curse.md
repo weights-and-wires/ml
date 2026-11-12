@@ -488,6 +488,8 @@ You write six functions, in the order the checks test them. The file also provid
 
 **Reusing the honest score.** If you adjust the recipe after seeing the nested score, you have started a fresh search, and the nested score is no longer honest. Neither bound is tight, so use them to see why the discount grows, not to quote a number.
 
+Bounds on how far a training score can sit from the test score are in [learning theory](/lessons/015-learning-theory).
+
 ## The exercise
 
 You implement `validation_split`, `learning_curve`, `diagnose_curve`, `best_of_m_gap`, `empirical_rademacher`, and `nested_cv_score`. The starter's closing program builds the 60 houses, prints a verdict on the median curve of the straight line and the degree 8 curve, then prints the winner's gap for 1 to 100 models and the lucky and honest scores on the cross-validation houses.

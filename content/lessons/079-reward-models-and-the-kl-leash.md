@@ -382,6 +382,8 @@ A reward model learns from a finite set of comparisons. Where people disagree, o
 
 The leash keeps the policy close to the reference only on average, and the reward model can still be wrong inside that region. In a real system $\text{KL}(\pi \,\|\, \pi_{\text{ref}})$ is estimated from the answers the policy writes, not summed over all answers. Picking $\beta$ is a trial: too small and the model exploits the reward model, too large and it learns nothing.
 
+Held-out and judge-based evaluation is in [evaluating language models](/lessons/076-evaluating-language-models), and [distillation](/lessons/078-distillation) uses the KL with the teacher first.
+
 ## The exercise
 
 You build the six functions above. The checks cover the hand-worked values, ties and huge gaps without overflow, and the gradient against finite differences. They also verify the KL by hand and its zero-probability case, the closed form on the three-answer example, and the limits of large and tiny $\beta$. Two checks test the derivation: no random distribution beats `optimal_policy`, and the penalised objective of `optimal_policy` equals $\beta \log Z$, while every other policy scores $\beta \log Z$ minus $\beta$ times its KL from the best one.

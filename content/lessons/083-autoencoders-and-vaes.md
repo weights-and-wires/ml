@@ -254,6 +254,8 @@ The linear autoencoder is one SVD of the centred matrix, and the KL is one pass 
 > - On the linear-Gaussian model at $x = 2$, the bound equals $\log p(x) = -2.265512$ at the true posterior and equals $-3.072365$ at variance 2.
 > - Forty Adam steps at $\beta = 1$ put decoder samples near the cloud. At $\beta = 20$ the reconstruction cost rises and the KL falls.
 
+[GANs and evaluating generators](/lessons/084-gans-and-evaluating-generators) skips the likelihood altogether, and [interpretability](/lessons/082-interpretability) uses a sparse autoencoder to read a model's features.
+
 ## Build it step by step
 
 The KL checks come first, then the sample, then the bound, then the decoder, then the training run.

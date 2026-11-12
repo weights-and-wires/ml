@@ -393,6 +393,8 @@ The checks test five functions, in this order. The file already holds the functi
 - A loss scale that is too large overflows to infinity. The step must be skipped, not applied.
 - The $6ND$ rule and the $16N$-byte rule are estimates. They leave out attention's extra flops, the activations, and any extra fp32 copies.
 
+When the activations don't fit, [gradient accumulation and checkpointing](/lessons/070-gradient-accumulation-and-checkpointing) trades time for memory.
+
 ## The exercise
 
 You write `adamw_update`, `train_step`, `training_flops`, `training_memory_bytes`, and `scaled_grad_survives`. The checks match the worked update of 0.89 and the second step of 0.7811, the shrink alone when the gradient is zero, and the rule that every weight moves one learning rate whatever its gradient size. They check that step 0 is refused, that `train_step` matches an independent computation with clipped averages and fresh leaves, and that twenty steps push the loss well below $\ln V$. They then compare the flops with $6ND$ and the memory with 16 bytes per weight, and check that a gradient of $10^{-8}$ vanishes at scale 1, returns within 1 percent at scale 1024, and overflows to infinity when the scale is too large. Run trains a tiny transformer on a line of text, prints a sample, and prints the opening estimate with a loss-scaling table.

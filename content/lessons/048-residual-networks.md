@@ -369,6 +369,8 @@ The checks call the functions in this order:
 - Real blocks put normalisation inside the branch, which this chapter leaves out. [The transformer block](/lessons/063-the-transformer-block) builds that version.
 - A multiply-add count is a guide and not a stopwatch, because running time also depends on how much data a layer moves.
 
+Augmentation, transfer, and patch embedding are in [augmentation, transfer, and ViT](/lessons/049-augmentation-transfer-and-vit), and boxes and masks are in [detection and segmentation](/lessons/050-detection-and-segmentation).
+
 ## The exercise
 
 You build `residual_block_forward`, `identity_gap`, `residual_block_backward`, `orthogonal_matrix`, `scalar_gradient_factor`, `gradient_norm_through_stack`, `conv_flops`, `bottleneck_flops`, and `bottleneck_savings`. The checks match the forward pass and every gradient to the worked numbers above, check that a zero branch returns the input, and compare gradients with finite differences. They confirm that the plain stack's length equals $0.1^{\text{depth}}$ and that the residual stack at depth 50 stays between 0.1 and 10, far below the scalar prediction. Last, they match `conv_flops` and `bottleneck_flops` on hand-computed cases, and confirm a ratio near 16.9 at several widths and picture sizes.

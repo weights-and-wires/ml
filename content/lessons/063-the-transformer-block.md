@@ -343,6 +343,8 @@ For $d = 64$ and $d_{\text{ff}} = 192$, $d_h = 128$ and the total is $16384 + 24
 > - The block is `x1 = x + attention(LN1(x))`, then `x2 = x1 + swiglu(LN2(x1))`, with adds to the raw stream. Attention scales by $\sqrt{d_{\text{head}}}$, adds the mask before the softmax, and turns only queries and keys.
 > - A block holds $4d^2 + 3\,d\,d_h + 4d$ parameters, whatever the number of heads.
 
+RMSNorm, grouped-query attention, and weight tying are in [modern transformer choices](/lessons/064-modern-transformer-choices), and the encoder-decoder layer is in [encoders and cross-attention](/lessons/065-encoders-and-cross-attention).
+
 ## Build it step by step
 
 The starter file provides `rope_tables` and `apply_rope`, solved, from the chapter on position encodings. You write six functions, in the order the checks test them.

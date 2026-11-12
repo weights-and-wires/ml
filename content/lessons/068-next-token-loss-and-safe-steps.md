@@ -358,6 +358,8 @@ The function also returns `total`, the norm from before the clip, so you can log
 > - The learning rate ramps up in a straight line over warmup, then glides down along half a cosine to a floor above zero.
 > - The global norm treats every entry of every gradient array as one long vector. Clipping multiplies every array by the same factor, `max_norm / norm`, only when the norm is over the limit, in place, and returns the pre-clip norm.
 
+Perplexity can't compare models with different tokenisers; [evaluating language models](/lessons/076-evaluating-language-models) uses bits per byte instead.
+
 ## Build it step by step
 
 The checks test six functions. The file also holds `causal_lm_loss`, already written, which is the mean of your `per_token_loss`, and `lr_trace`, which lists the schedule at evenly spaced steps so you can see its shape.
