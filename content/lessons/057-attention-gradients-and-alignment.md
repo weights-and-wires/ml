@@ -406,6 +406,8 @@ Attention fixes what the decoder can see, and it still fails in familiar ways:
 - The encoder still reads one step at a time, and attention does not speed that chain up. The next part replaces it with attention itself.
 - The work grows with `T_x * T_y`, because every output step looks at every source position. Compute `W2 @ keys` once and reuse it at every step, since it does not depend on the decoder's state.
 
+The same soft lookup reads a second sequence in [encoders and cross-attention](/lessons/065-encoders-and-cross-attention) and a node's neighbours in [graph neural networks](/lessons/058-graph-neural-networks).
+
 ## The exercise
 
 You build `softmax_backward`, `context_backward`, `attention_backward`, `alignment_matrix`, `mean_summary`, and `decode_with_attention`. The checks confirm that the softmax slopes on the worked example are $2.314$ and $-2.314$, that they sum to zero, and that `softmax_backward`, `context_backward`, and all six gradients of `attention_backward` match finite differences. A single-key case must give zero for every gradient except `dvalues`. For the alignment side, the checks require that every row of the alignment matrix sums to 1 and equals a stack of single `additive_attention` calls, and that `decode_with_attention` copies `[3, 0, 4, 1, 2]` exactly with an alignment matrix within 0.01 of the identity. They also require that `v_sign=+1.0` pushes the diagonal below 0.01, and that the attention decoder tells `[0, 1, 2]` from `[2, 1, 0]` while the mean summary cannot.

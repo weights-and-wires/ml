@@ -575,6 +575,8 @@ The graded sampler calls the denoiser 80 times for one cloud. A deterministic st
 > - Seed 0 of the exact two-blob sampler, 2500 dots, has mean $(0.018944, -0.002615)$ and covariance entries 3.107841, $-0.080120$, 0.942913.
 > - Guidance at scale 3 sends $(1, -0.5)$ and $(0.2, 0)$ to $(2.6, -1.5)$.
 
+FID and the other scores for generated samples are in [GANs and evaluating generators](/lessons/084-gans-and-evaluating-generators).
+
 ## Build it step by step
 
 $t$ counts from 1.

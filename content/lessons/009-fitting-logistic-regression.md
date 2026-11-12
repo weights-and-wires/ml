@@ -350,6 +350,8 @@ With a handful of weights, seven expensive steps beat hundreds of cheap ones. Wi
 - **A rare class.** If 99 of 100 emails are not spam, a model that always says "no" is 99 percent accurate. Compare `train_accuracy` against that baseline, and check each class separately.
 - **Many weights.** The cost of $H$ and the solve grows with $d^2$ and $d^3$. Use gradient descent or L-BFGS.
 
+A logistic regression on a network's hidden states is a probe; see [interpretability](/lessons/082-interpretability).
+
 ## The exercise
 
 You implement `gradient`, `hessian`, `fit_gradient_descent`, `newton_step`, `fit_newton`, and `train_accuracy`. The checks compare `gradient` with finite differences of the loss and with the hand result $[-0.1951,\ 0.3649]$, and confirm that a small step against it lowers the loss. They compare `hessian` with finite differences of `gradient`, with the hand values above, and with the symmetry and positive-semidefinite rules. They check that `history[0]` equals $n\ln 2$ and that the descent loop stops on `tol`, and that `newton_step` solves $H\delta = g$ and reproduces the step $(-2, 2)$. They run `fit_newton` against gradient descent on the same seeded data and check that it finishes in under ten passes at a stationary point. The last checks confirm that accuracy beats the baseline, that on separable data the unpenalised descent weights keep growing while the ridge weights stay small, and that Newton handles a perfect split with and without a real ridge fee and a matrix with a duplicate column.

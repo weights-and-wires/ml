@@ -433,6 +433,8 @@ A small $r$ cannot reach an update that is full rank. A matrix that permutes 64 
 
 Few trainable parameters limit how far the weights move, but they do not choose which skill moves, so mix in general data when you tune on one narrow task.
 
+The other way to get a small model is to train one on a large model's outputs; see [distillation](/lessons/078-distillation).
+
 ## The exercise
 
 You write the nine functions above. The checks confirm that the five pieces sum to 16 and that the frozen-model bill is 14.98 GB for the 1 percent example. They check `lora_init`, the 2 by 2 example through `lora_forward` and `merge_lora`, and that merged and split outputs match. They also check the Eckart-Young error and the energy, and that `lora_gradients` matches the worked example, finite differences, and the first-order step formula.

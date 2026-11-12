@@ -578,6 +578,8 @@ A bigger vocabulary $V$ gives fewer tokens for the same text, which makes attent
 - Training recounts every pair after every merge, which is slow for thousands of merges. Practical tokenisers update only the counts next to each merge, and encode with a table of merge ranks instead of one pass per merge. Training is greedy: an early merge is never undone.
 - BPE picks pairs by raw count. WordPiece divides the pair's count by the product of its two pieces' counts, and Unigram deletes the tokens that help least from a large vocabulary.
 
+The text a tokeniser trains on is cleaned in [pretraining data](/lessons/072-pretraining-data), and [evaluating language models](/lessons/076-evaluating-language-models) shows why token counts break perplexity comparisons.
+
 ## The exercise
 
 You write the eleven functions above, and `_pretokenize` and `build_vocab` are given. The checks verify the bytes of `"hé世🎉"`, the unknown rate, the pair counts, and the merge of `[5, 5, 5]`. They check that `train_bpe` on `aaabdaaabac` returns this chapter's three merges, breaks ties to the smaller pair, never merges across words, and stops when no pair is left. They check that reversing the merge list gives 7 tokens instead of 5, that `decode` handles a split character, and that text round-trips. The last checks cover fertility, tokens per character, the Hindi gap, and the three cuts of `1234`.

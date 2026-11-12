@@ -391,6 +391,8 @@ For $n$ rows and $d$ columns, one SVD costs a few times $nd^2$. After that each 
 - **A fee on the intercept.** A constant offset in the labels should not be shrunk, because shifting every label by the same amount would then change the fit. Subtract the mean from $y$ and from each column first, or leave the bias out of the fee.
 - **Choosing lambda.** Too small and the fit still chases noise. Too large and every weight collapses towards 0. Fit on training data for a grid of lambdas such as 0.001, 0.01, 0.1, 1, and 10, score each fit on held-out data, and keep the lambda that scores best.
 
+The ridge dual, which leads to kernel ridge, is in [convex duality](/lessons/019-convex-duality).
+
 ## The exercise
 
 You build `ridge_objective`, `ridge_gradient`, `ridge_closed_form`, `shrink_factors`, `ridge_svd_path`, and `effective_degrees_of_freedom`.

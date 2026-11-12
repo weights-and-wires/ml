@@ -313,6 +313,8 @@ The posterior costs one ridge solve. Form the $d \times d$ Gram matrix, then sol
 > - The predictive variance is $\sigma^2 + x^\top \Sigma x$. On the two houses it is $16/11$ at size 0 and $100/11$ at size 6.
 > - Swapping $\sigma^2$ with $\tau^2$, or dropping $\sigma^2$ from the predictive variance, both give a confident wrong spread.
 
+[Gaussian processes](/lessons/023-gaussian-processes) put the same error bars on a kernel model, and [uncertainty and conformal prediction](/lessons/044-uncertainty-and-conformal-prediction) gets them without a prior.
+
 ## Build it step by step
 
 Use the two houses as your scratch example: rows $(1, 0)$ and $(1, 2)$, labels $0$ and $2$, with $\sigma^2 = \tau^2 = 1$. Build six functions, in this order.

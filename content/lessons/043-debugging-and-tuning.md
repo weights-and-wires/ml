@@ -289,6 +289,8 @@ The $10^{-3}$ ratio is a heuristic for SGD on the weight matrices, not a constan
 
 Memorising six rows proves the model can fit the numbers it was given. It does not prove those numbers are the features you meant to load. If a shuffled copy of the features memorises equally well, the bug is in the data pipeline.
 
+If the batch you want doesn't fit in memory, see [gradient accumulation and checkpointing](/lessons/070-gradient-accumulation-and-checkpointing).
+
 ## The exercise
 
 You implement `expected_initial_loss`, `check_initial_loss`, `lr_range_test`, `pick_lr`, `random_search`, and `update_ratio_stats`. The network, its cross-entropy, and its SGD step are already in the file. The checks cover $\log C$, a small initialisation that must pass, a loss of $10 \log 10$ that must be flagged, and a network drawn at scale 2 that must be flagged. They rebuild the seeded bowl, require the picked rate to sit within a factor of ten of the bottom, recompute a seeded log-uniform draw, and compare both update ratios with a central finite difference.

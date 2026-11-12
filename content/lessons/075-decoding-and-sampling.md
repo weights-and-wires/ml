@@ -438,6 +438,8 @@ You write thirteen functions, and the checks call them in this order.
 
 The cache grows with every token, so a long conversation eventually does not fit beside the weights, and servers drop old entries, store the cache in fewer bits, or cap the context length. No sampling dial repairs a wrong model. Speculation needs a memory-bound chip, because at a large batch checking extra positions is no longer free, a draft that agrees with the target often, and the target's vocabulary. It also cannot use a large $k$, because the $j$-th draft token survives with chance about $\alpha^j$.
 
+See also [GQA](/lessons/064-modern-transformer-choices).
+
 ## The exercise
 
 You write `arithmetic_intensity`, `decode_seconds_per_token`, `min_batch_to_saturate`, `kv_cache_bytes`, `KVCache`, `cached_attention_step`, `apply_temperature`, `filter_probs`, `sample_token`, `expected_accept_rate`, `residual_distribution`, `speculative_accept`, and `beam_search`. The checks confirm 7 ms per token, a batch of 156, and 96 MiB, that decoding six tokens through the cache matches a full recompute, the hand-worked temperature, top-k, and top-p values, that seeded draws match the filtered distribution, and that 20,000 seeded accept-or-replace rounds give the target distribution. For `beam_search`, a wide beam must equal exhaustive enumeration, a beam of 1 must equal greedy decoding, a beam of 2 must find `b eos` where greedy does not, length normalization must flip the winner on a planted case, and finished hypotheses must leave the beam.

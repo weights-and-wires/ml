@@ -501,6 +501,8 @@ Dropout costs one random draw and one multiply per activation, and a stored mask
 - Label smoothing makes the model's probabilities stop meaning what they say. A calibrated model is right about 80 percent of the time when it says 80 percent, but after smoothing the top probability is pulled toward $1 - \epsilon + \epsilon/K$ whatever the evidence. Skip smoothing when you need calibrated probabilities, or fix them afterwards.
 - A large $\epsilon$ blurs the target so much that the classes look alike, and the model underfits. Small values such as 0.1 are common.
 
+Keeping dropout on at test time gives a cheap ensemble; see [uncertainty and conformal prediction](/lessons/044-uncertainty-and-conformal-prediction).
+
 ## The exercise
 
 You implement `dropout_mask`, `dropout_forward`, `dropout_backward`, `smooth_targets`, `label_smoothing_loss`, and `label_smoothing_grad`.

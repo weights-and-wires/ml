@@ -336,6 +336,8 @@ You write eleven functions, and the checks call them in this order. `predict_los
 
 The constants here are stylised, so the numbers are illustrations, not forecasts. Another data mix, tokeniser, or architecture moves all five, and published fits disagree on the exponents, so a scaling law is a fit to experiments, not a law of physics. A bend in a log-log line is information: if it flattens at the large end, you may have reached the floor, so fit the straight part and be wary of continuing past a bend. Fit the loss above the floor, not the raw loss, which is not a power law. The data also has to exist: at $10^{24}$ flops, $D^{*}$ asks for 1.8 trillion tokens of distinct text, and repeated text helps less than fresh text.
 
+Where the tokens come from is in [pretraining data](/lessons/072-pretraining-data), and how to keep a learning rate as the model widens is in [optimiser scaling rules](/lessons/074-optimiser-scaling-rules).
+
 ## The exercise
 
 You implement `fit_power_law`, `extrapolate`, `loss_terms`, `predict_loss`, `marginal_gain`, `transformer_params`, `training_flops`, `training_days`, `chinchilla_optimal`, `grid_optimal`, and `lifetime_flops` in `starter.py`. The checks verify the fit against a planted law, the hand example, and noise, that extrapolation lands within 10 percent and errs more far away than near, the three loss terms and the 2.3844 total, the closed form for the gain and its independence of $D$, the toy model's hand count and the 154 days, that `chinchilla_optimal` spends the budget, sits at the bottom of the U, and gives a ratio of 19.6, that the grid agrees within 1 percent, and that `lifetime_flops` reproduces the break-even.

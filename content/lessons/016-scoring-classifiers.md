@@ -338,6 +338,8 @@ Copying lengthens the table. Dropping repaid loans until the classes match throw
 > - AUC is the chance a default outranks a repayment, with a tie worth $1/2$, and it matches the trapezoid of the ROC.
 > - ECE is the weighted average gap in a reliability table. Dividing the scores by a fitted temperature lowers it without reordering the loans.
 
+Prediction sets with a coverage guarantee are in [uncertainty and conformal prediction](/lessons/044-uncertainty-and-conformal-prediction).
+
 ## Build it step by step
 
 You write eight functions, in the order the checks test them. Labels are 0 or 1, with 1 for a default. A higher score means a default is more likely.

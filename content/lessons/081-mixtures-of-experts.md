@@ -476,6 +476,8 @@ With $k = 1$ the renormalised gate is always exactly 1, so $c - \bar{c}$ is zero
 
 A balancing weight that is too large forces even routing and can stop experts from specialising, since specialising means unequal traffic. One that is too small leaves the loop running. Narrow fine-tuning data can bring collapse back. And the stored count never shrinks: every expert must sit in memory even if a batch uses only a few.
 
+What a layer's units store, and how to read it, is in [interpretability](/lessons/082-interpretability).
+
 ## The exercise
 
 You write the seven functions above. The checks confirm that the true top-$k$ experts come back best first, that the worked weights are 0.7311 and 0.2689, and that huge logits do not overflow. They confirm the hand gradients $-0.3932$ and $+0.3932$ and that `router_backward` matches finite differences. They also confirm that `expert_load` divides by $n k$, that the loss gives 1.5 on the worked example, 1 for uniform routing, and $E$ or $E/k$ under collapse, and that `expert_capacity` rounds up with a floor of 1. Last, `moe_forward` reproduces the hand mix 5.614, equals the dense sum when $k = E$, drops exactly the overflow, and never drops more as $\gamma$ grows.

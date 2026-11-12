@@ -380,6 +380,8 @@ The starter provides `lipschitz_constant`, which returns the largest eigenvalue 
 - **Correlated columns.** When two columns carry the same signal, the lasso may keep either one, and a small change in the data can swap which one survives. Do not read a zero as proof that a feature is useless.
 - **A step above $1/L$ or a score-based stop.** The guarantee that ISTA's score never rises needs a step of at most $1/L$, and above $2/L$ the walk can blow up. Compute $L$ from the largest eigenvalue of $X^\top X$. FISTA's score can rise, so stop when the KKT violation is small.
 
+A duality gap that tells FISTA when to stop is in [convex duality](/lessons/019-convex-duality).
+
 ## The exercise
 
 You build `soft_threshold`, `lasso_objective`, `lasso_identity`, `ista`, `kkt_violation`, and `fista`.
