@@ -144,7 +144,7 @@ Freezing is bookkeeping in the update step: a frozen parameter keeps its value, 
 > [!KEY]
 > A frozen extractor turns "train a network" into "fit a small linear model on fixed features". Fine-tuning then lets the features adjust, at a small learning rate, after the head has stopped being random.
 
-[Fine-tuning and LoRA](/lessons/077-fine-tuning-and-lora) takes the same idea to language models.
+[Fine-tuning and LoRA](/lessons/078-fine-tuning-and-lora) takes the same idea to language models.
 
 ## Make a layer cheaper without making it weaker
 

@@ -350,7 +350,7 @@ With a handful of weights, seven expensive steps beat hundreds of cheap ones. Wi
 - **A rare class.** If 99 of 100 emails are not spam, a model that always says "no" is 99 percent accurate. Compare `train_accuracy` against that baseline, and check each class separately.
 - **Many weights.** The cost of $H$ and the solve grows with $d^2$ and $d^3$. Use gradient descent or L-BFGS.
 
-A logistic regression on a network's hidden states is a probe; see [interpretability](/lessons/082-interpretability).
+A logistic regression on a network's hidden states is a probe; see [interpretability](/lessons/083-interpretability).
 
 ## The exercise
 
