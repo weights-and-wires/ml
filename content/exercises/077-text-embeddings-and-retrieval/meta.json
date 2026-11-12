@@ -1,0 +1,18 @@
+{
+  "id": "077-text-embeddings-and-retrieval",
+  "title": "Pool, contrast, and rank: a text embedder from hidden states",
+  "brief": "Pool a decoder's hidden states into one unit vector with last-token and mean pooling that respect padding, write InfoNCE with in-batch and hard negatives and its gradient, then score a toy corpus with recall@k and nDCG@k.",
+  "needs_gpu": false,
+  "timeout": 60,
+  "packages": ["numpy"],
+  "hints": [
+    "For last_token_pool, the last real token of a row is the largest position where the mask is 1. Build positions = np.arange(T) and take np.where(mask > 0, positions, -1).max(axis=1). On the lesson example, the right-padded text gives [2, 2] and so does the left-padded one. Index -1 gives [9, 9] on the right-padded one.",
+    "For mean_pool, multiply hidden by mask[:, :, None], sum over time, and divide by the number of real tokens, mask.sum(axis=1, keepdims=True). The lesson example gives [1, 1.3333]. Dividing by T instead gives [0.75, 1.0].",
+    "l2_normalize divides each row by its length: [3, 4] becomes [0.6, 0.8]. embed pools first and normalises second, so every row has length 1 and a dot product between two rows is their cosine.",
+    "info_nce_loss: the logits are q @ docs.T / tau, with shape (B, M). Row i has its positive in column i. The loss for row i is logsumexp(logits[i]) - logits[i, i], and the result is the mean over rows. Subtract each row's maximum before you exponentiate. On the lesson example at tau 0.1, the value is 0.4735. Without the two hard-negative rows it is 0.1269.",
+    "With P the row softmax of the logits, Y a (B, M) matrix with ones at [i, i], and G = (P - Y) / (B * tau), the gradient is dq = G @ docs and ddocs = G.T @ q. Every passage gets pushed away from every query it does not belong to, including hard negatives that belong to no query.",
+    "recall_at_k: rank by descending score with np.argsort(-scores, kind='stable'), take the first k, and count how many have a grade above 0. Divide by the number of passages with a grade above 0, not by k. On the lesson corpus, recall@3 is 1/3.",
+    "ndcg_at_k: the discount at rank r (counting from 1) is 1 / log2(r + 1), which is np.log2(np.arange(2, k + 2)) in the denominator. DCG sums grade times discount over the top k of your ranking. The ideal DCG does the same over the grades sorted from largest to smallest. Divide the first by the second. On the lesson corpus, DCG@3 is 1.8928, ideal DCG@3 is 4.7619, and nDCG@3 is 0.3975.",
+    "search: for unit rows, cosine similarity is q_emb @ doc_emb.T, with shape (Q, N). np.argsort(-sims, axis=1, kind='stable')[:, :k] gives the top k indices per query, best first."
+  ]
+}
