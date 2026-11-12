@@ -35,9 +35,9 @@ Three ideas carry this chapter:
 
 ## Use a few rows per step
 
-Here is the valley as a real fitting problem. The data has 200 rows and two input columns, with spreads 1 and 10. The loss is half the mean squared miss, with curvature 1 along $w_1$ and $10 \times 10 = 100$ along $w_2$. The bottom sits at $(1.04,\ 0.09)$, and you start at $(-1,\ 0.3)$. Subtract the bottom's loss and call the rest the **excess loss**: it is 4.33 at the start. With the exact gradient, the steep axis needs $\text{lr} < 0.02$, and at $\text{lr} = 0.0095$ the flat axis shrinks by only 0.9905 per step, so it crawls.
+Here is the valley as a fitting problem. The data has 200 rows and two input columns, with spreads 1 and 10. The loss is half the mean squared miss, with curvature 1 along $w_1$ and $10 \times 10 = 100$ along $w_2$. The bottom sits at $(1.04,\ 0.09)$, and you start at $(-1,\ 0.3)$. Subtract the bottom's loss and call the rest the **excess loss**: it is 4.33 at the start. With the exact gradient, the steep axis needs $\text{lr} < 0.02$, and at $\text{lr} = 0.0095$ the flat axis shrinks by only 0.9905 per step, so it crawls.
 
-The loss is an average over rows, so the gradient is too. Row $i$ has its own gradient $g_i$, which says how the loss on that row alone changes when you nudge the weights. A **mini-batch** is a small set of rows, picked at random. Its gradient averages only those rows, and a step with it is **stochastic gradient descent** (SGD), where stochastic means random.
+The loss is an average over rows, so the gradient is too. Row $i$ has its own gradient $g_i$: how the loss on that row alone changes when you nudge the weights. A **mini-batch** is a small random set of rows. Its gradient averages only those rows, and a step with it is **stochastic gradient descent** (SGD), where stochastic means random.
 
 Take one weight and four rows whose gradients are 2, −1, 4, and 3. The full gradient is $(2 - 1 + 4 + 3)/4 = 2$. Draw batches of two rows. There are six pairs, and their averages are 0.5, 3, 2.5, 1.5, 1, and 3.5. The six averages themselves average 2, though each is off by up to 1.5. A batch gradient is wrong by a random amount with no preferred direction, which statisticians call **unbiased**. For a batch $B$ of $b$ rows:
 
@@ -45,14 +45,14 @@ $$
 g_B = \frac{1}{b} \sum_{i \in B} g_i
 $$
 
-Read it aloud: add the gradients of the chosen rows and divide by how many you chose. For least squares, row $i$'s gradient is the row times its own miss, $x_i\,(x_i \cdot w - y_i)$. In numpy:
+Read it aloud: add the gradients of the chosen rows and divide by how many you chose. For least squares, row $i$'s gradient is the row times its miss, $x_i\,(x_i \cdot w - y_i)$. In numpy:
 
 ```python
 resid = X[idx] @ w - y[idx]
 grad = X[idx].T @ resid / len(idx)
 ```
 
-At the bottom the exact gradient is zero, but a batch gradient is not, because eight rows disagree about where the bottom is. Each step still moves by the learning rate times that disagreement, so the walk hovers around the bottom. Why not shrink the learning rate until the hovering vanishes? Averaged over 20 runs, a rate of 0.0025 lowers the floor eightfold, but reaching an excess loss of 0.5 takes 290 steps instead of 77. A large rate jitters, and a small rate crawls.
+At the bottom the exact gradient is zero, but a batch gradient is not, because eight rows disagree about where the bottom is. Each step still moves by the learning rate times that disagreement, so the walk hovers around the bottom. Why not shrink the rate until the hovering vanishes? Averaged over 20 runs, a rate of 0.0025 lowers the floor eightfold, but reaching an excess loss of 0.5 takes 290 steps instead of 77. A large rate jitters; a small one crawls.
 
 > [!KEY]
 > A mini-batch gradient is right on average and wrong at each step. The wrongness keeps the walk from settling, and a smaller learning rate lowers that floor at the cost of speed.
@@ -432,11 +432,13 @@ You write twelve functions, in the order the checks test them:
 
 ## Where this breaks
 
-Each of these has a direct remedy:
+Each has a direct remedy:
 
 - Batches that are not random, such as data sorted by class, give biased gradients. Shuffle the rows each epoch.
 - A learning rate over the stability limit sends the loss to infinity. Cut it by three to ten, and lower it when you raise $\beta$.
 - Some libraries call the coupled L2 penalty `weight_decay`, so read the documentation.
+
+Learning rates for wider networks are in [optimiser scaling rules](/lessons/074-optimiser-scaling-rules).
 
 ## The exercise
 

@@ -365,7 +365,7 @@ Depth multiplies here. In the sawtooth's second layer, the reading $y - \tfrac12
 
 ## Hinges reach any curve
 
-Pick points on a curve and join them with straight segments. A one-hidden-layer ReLU network builds that zigzag with one hinge per segment: start at the first height, then at each knot add a hinge that changes the slope.
+Join points on a curve with straight segments. A one-hidden-layer ReLU network builds that zigzag with one hinge per segment: start at the first height, then at each knot add a hinge that changes the slope.
 
 Take the knots $(0,1)$, $(1,3)$, $(2,2)$, $(4,2)$. The segment slopes are $2$, $-1$, $0$. The first hinge, at $x=0$, takes the slope from 0 to 2, so its output weight is $2$. The hinges at $x=1$ and $x=2$ change it by $-3$ and $+1$. At $x=3$ the network gives $1 + 2(3) - 3(2) + 1(1) = 2$, on the flat segment from $(2,2)$ to $(4,2)$. Using the slopes $2, -1, 0$ as output weights instead gives 5.
 
@@ -377,7 +377,7 @@ $$
 
 Read it aloud: "the first height, plus a hinge at each segment's left knot, weighted by the change in slope." On $[x_j, x_{j+1}]$ only hinges $0$ to $j$ are on, and their weights sum to $s_j$, so $f$ follows each segment and hits every knot.
 
-For smooth $g$ and knots $h$ apart, the error is at most $\tfrac{h^2}{8}\max|g''|$. For $\sin$ on $[0, \pi]$ the measured maximum error is $0.0188$ with 8 segments and $0.00479$ with 16, a ratio of $3.93$: doubling the knots cuts the error about 4 times.
+For smooth $g$ and knots $h$ apart, the error is at most $\tfrac{h^2}{8}\max|g''|$. For $\sin$ on $[0, \pi]$ the maximum error is $0.0188$ with 8 segments and $0.00479$ with 16: doubling the knots cuts it about 4 times.
 
 The **universal approximation theorem** makes this general. For a compact set $K \subset \mathbb{R}^d$, a continuous $g$ on $K$, and any $\varepsilon > 0$, some one-hidden-layer network is within $\varepsilon$ of $g$ at every point of $K$. Cybenko (1989) proved it for sigmoid units, Hornik (1991) for bounded, non-constant activations, and Leshno et al. (1993) for locally bounded, piecewise continuous ones exactly when the activation is not a polynomial.
 
@@ -450,7 +450,7 @@ Build twelve functions, in this order.
 
 ## Where this breaks
 
-A ReLU unit whose reading is negative for every input outputs 0 and has slope 0, so nothing flowing back can change it. People call this a dead unit. The sawtooth network exists, but training rarely finds it, so depth makes a function possible, not likely.
+A ReLU unit whose reading is negative for every input outputs 0 and has slope 0, so nothing flowing back can change it. People call this a dead unit. The sawtooth network exists, but training rarely finds it, so depth makes a function possible, not likely. [Approximation theory](/lessons/035-approximation-theory) counts how many units a curve costs.
 
 ## The exercise
 
