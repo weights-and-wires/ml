@@ -336,7 +336,7 @@ You write eleven functions, and the checks call them in this order. `predict_los
 
 The constants here are stylised, so the numbers are illustrations, not forecasts. Another data mix, tokeniser, or architecture moves all five, and published fits disagree on the exponents, so a scaling law is a fit to experiments, not a law of physics. A bend in a log-log line is information: if it flattens at the large end, you may have reached the floor, so fit the straight part and be wary of continuing past a bend. Fit the loss above the floor, not the raw loss, which is not a power law. The data also has to exist: at $10^{24}$ flops, $D^{*}$ asks for 1.8 trillion tokens of distinct text, and repeated text helps less than fresh text.
 
-Where the tokens come from is in [pretraining data](/lessons/072-pretraining-data), and how to keep a learning rate as the model widens is in [optimiser scaling rules](/lessons/074-optimiser-scaling-rules).
+Where the tokens come from is in [pretraining data](/lessons/072-pretraining-data), and how to keep a learning rate as the model widens is in [optimiser scaling rules](/lessons/074-optimiser-scaling-rules). Training in fewer bits shrinks a model's effective parameter count, and the [Scaling Laws for Precision](https://papers.ifkash.dev/precision-scaling/) paper page fits that effect into the same loss.
 
 ## The exercise
 

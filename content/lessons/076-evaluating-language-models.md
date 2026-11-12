@@ -238,6 +238,8 @@ Some tasks have no answer key, such as open-ended chat, so a stronger model is a
 
 Bits per byte compares models on text. It does not say which model is more useful, and a lower value on a web-text sample can come with worse reasoning. A benchmark with a few hundred items cannot separate models that differ by a point or two, and the bootstrap tells you so only when you run it. A pass@k estimate from few samples per problem is noisy, so use more samples than the largest $k$ you report. Overlap checks miss paraphrases, and a benchmark that has been public for years is probably in the corpus. People answer these in practice by holding out private test sets, rotating the questions, and reporting more than one metric.
 
+A retrieval system needs different scores: whether the right passages appear in the top k, and in what order. Recall@k and nDCG are in [text embeddings and retrieval](/lessons/077-text-embeddings-and-retrieval).
+
 > [!KEY]
 > A score is only meaningful when you know the unit, the error bar, and whether the test was seen. Bits per byte fixes the unit across tokenisers, pass@k and normalised log-likelihood say what counts as a hit, the paired bootstrap gives the error bar, and n-gram overlap checks the third.
 

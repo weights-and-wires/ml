@@ -389,6 +389,8 @@ This family needs no negatives and has no collapse, because the target is the da
 - **Augmentations decide what you learn.** The embedding ignores whatever the augmentations change and keeps whatever they leave alone. If colour is never shifted, the encoder can match partners by colour and learn nothing else.
 - **Batch size and cost.** The similarity grid has $N^2$ entries, so the loss costs memory with the square of the batch. A small batch gives few negatives and an easy task, which is why published runs use large batches.
 
+The same loss trains text embeddings for search, with a decoder LLM as the encoder and hard negatives mined from a corpus. That is in [text embeddings and retrieval](/lessons/077-text-embeddings-and-retrieval).
+
 ## The exercise
 
 You build the pipeline in numpy. `l2_normalize`, `info_nce`, and `info_nce_grad` form the core, `clip_loss` reuses `info_nce`, `alignment` and `uniformity` are the diagnostics, and `train_encoder` and `knn_accuracy` train and score a linear encoder.
