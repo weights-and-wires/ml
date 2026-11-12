@@ -1,7 +1,7 @@
 # Machine learning
 
 A hands-on course that teaches machine learning to undergraduates by having them
-build it. Eighty-six chapters run from scoring a guess to a diffusion model. Each one
+build it. Eighty-seven chapters run from scoring a guess to a diffusion model. Each one
 teaches a single topic, two or three closely related ideas in one arc: it starts from a concrete
 question, shows a picture, works a small example by hand, and only then gives
 the formula and walks you through implementing it, in an editor beside the
@@ -32,7 +32,7 @@ computes it. Each lesson ends with a step-by-step guide to its exercise.
 
 | Path | Contents |
 |---|---|
-| `content/lessons/` | Eighty-six chapters and eight projects, in Markdown with YAML front matter and inline SVG figures. |
+| `content/lessons/` | Eighty-seven chapters and eight projects, in Markdown with YAML front matter and inline SVG figures. |
 | `content/renames.json` | Each slug from earlier editions and the chapters that replaced it, so progress carries over. |
 | `content/exercises/` | One directory per exercise: a starter file, checks, and a worked solution. |
 | `backend/` | FastAPI: auth, content, progress, drafts, and the run stream. |
@@ -80,7 +80,7 @@ and retrieval, LoRA, distillation, alignment, mixtures of experts, and interpret
 **Part 8 — Generative models.** A linear autoencoder keeps the first principal
 component, and a variational autoencoder draws a row from a standard normal code.
 A GAN trains a generator against a discriminator, and FID, precision, and
-recall score the result. A diffusion model noises that cloud on a schedule and walks a standard normal back onto it.
+recall score the result. A diffusion model noises that cloud on a schedule and walks a standard normal back onto it. A diffusion language model hides tokens behind a mask and unmasks the sure ones first.
 
 [The full list, with what each exercise delivers](docs/CURRICULUM.md).
 
