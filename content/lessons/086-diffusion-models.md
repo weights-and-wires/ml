@@ -565,6 +565,8 @@ The graded sampler calls the denoiser 80 times for one cloud. A deterministic st
 - **The last ancestral step still adds noise.** $\tilde\beta_1$ is 0, and extra noise there blurs the finished dot.
 - **A straight-path velocity is paired with diffusion coefficients.** The schedules differ, and a mixed step misses $x_0$.
 
+Text has no Gaussian noise to add. A diffusion language model replaces tokens with a mask instead, and that is in [diffusion language models](/lessons/087-diffusion-language-models).
+
 > [!KEY]
 > You draw a dot the field does not contain by noising the flowers down to a standard bell and walking back one step at a time. The walk uses a noise prediction, and that prediction is a scaled score.
 
