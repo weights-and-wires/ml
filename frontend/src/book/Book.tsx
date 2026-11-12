@@ -230,7 +230,7 @@ export default function Book({ data }: { data: BookData }) {
   ].join("\n");
 
   return (
-    <div className="book">
+    <div className="book code-light">
       <style>{`${heads}\n${pageRules}`}</style>
 
       <Cover parts={parts} lessons={chapters} projects={projects} commit={data.commit} />
