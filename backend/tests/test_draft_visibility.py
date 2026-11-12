@@ -35,6 +35,16 @@ exercise: {slug}
 # {slug}
 
 A fixture paragraph.
+
+## First *section*
+
+```python
+## not a heading
+```
+
+### A `code` subsection with $x$
+
+## Second section
 """
 
 
@@ -96,6 +106,18 @@ class DraftVisibilityTest(unittest.TestCase):
         self.assertIn("001-alpha", curriculum.load_exercises())
         published = curriculum.read_lessons(include_drafts=False)
         self.assertEqual([lesson["slug"] for lesson in published], ["001-alpha"])
+
+    def test_lessons_list_plain_text_headings(self) -> None:
+        listed = {lesson["slug"]: lesson for lesson in curriculum.lesson_list()}
+        self.assertEqual(
+            listed["001-alpha"]["headings"],
+            [
+                {"text": "First section", "level": 2},
+                {"text": "A code subsection with x", "level": 3},
+                {"text": "Second section", "level": 2},
+            ],
+        )
+        self.assertNotIn("body", listed["001-alpha"])
 
 
 if __name__ == "__main__":
