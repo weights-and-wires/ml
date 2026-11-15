@@ -293,7 +293,7 @@ The recipes lead to different tools. A causal model generates text. A masked-tok
 > [!KEY]
 > The three objectives differ in what the model may see and in what it is graded on. Causal training grades 511 of 512 positions and reads left only. Masked-token training grades 77 and reads both sides. Span corruption grades 104 target tokens, reads both sides in the encoder, and writes the answer with a causal decoder.
 
-Fine-tuning any of these models on labelled data, including how to mask the loss on a prompt, belongs to the reinforcement learning course. See [supervised fine-tuning and the post-training pipeline](https://rl.ifkash.dev/lessons/050-sft-and-the-post-training-pipeline).
+Fine-tuning any of these models on labelled data, including how to mask the loss on a prompt, belongs to the reinforcement learning course. See [supervised fine-tuning and the post-training pipeline](https://rl.ifkash.dev/lessons/065-sft-and-the-post-training-pipeline).
 
 > [!RECAP]
 > - A mask decides which cells of the score table may take weight. Bidirectional blocks nothing, causal blocks later keys, and padding blocks non-real keys, on the column axis.

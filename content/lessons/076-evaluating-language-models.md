@@ -232,7 +232,7 @@ The detector has a blind spot. It finds copies and near-copies, but not a paraph
 
 ## One paragraph on judges
 
-Some tasks have no answer key, such as open-ended chat, so a stronger model is asked to grade the answers. This is called an LLM judge, and it has biases you have to measure. A judge shown two answers prefers the first more often than chance says it should, which is position bias, and swapping the order exposes it. A judge also tends to prefer the longer answer, which is length bias. The reward-model and judge side of evaluation belongs to the reinforcement learning course, which covers [evaluating a reward model and a judge](https://rl.ifkash.dev/lessons/055-judge-evaluation), including swap consistency and length-controlled win rates.
+Some tasks have no answer key, such as open-ended chat, so a stronger model is asked to grade the answers. This is called an LLM judge, and it has biases you have to measure. A judge shown two answers prefers the first more often than chance says it should, which is position bias, and swapping the order exposes it. A judge also tends to prefer the longer answer, which is length bias. The reward-model and judge side of evaluation belongs to the reinforcement learning course, which covers [evaluating a reward model and a judge](https://rl.ifkash.dev/lessons/068-judge-evaluation), including swap consistency and length-controlled win rates.
 
 ## Where this breaks
 
