@@ -118,10 +118,10 @@ Here is how the two forms connect. Take a three-token answer with one reward, 3.
 
 To go deeper, read these lessons in the RL course:
 
-- [Baselines and actor-critic](https://rl.ifkash.dev/lessons/031-baselines-and-actor-critic)
-- [Generalized advantage estimation](https://rl.ifkash.dev/lessons/032-generalized-advantage-estimation)
-- [Proximal policy optimization](https://rl.ifkash.dev/lessons/034-proximal-policy-optimization)
-- [RLHF with PPO](https://rl.ifkash.dev/lessons/053-rlhf-with-ppo)
+- [Baselines and actor-critic](https://rl.ifkash.dev/lessons/033-baselines-and-actor-critic)
+- [Generalized advantage estimation](https://rl.ifkash.dev/lessons/034-generalized-advantage-estimation)
+- [Proximal policy optimization](https://rl.ifkash.dev/lessons/036-proximal-policy-optimization)
+- [RLHF with PPO](https://rl.ifkash.dev/lessons/069-rlhf-with-ppo)
 
 The exercise has a small `terminal_reward_gae` function that reproduces the numbers above.
 
