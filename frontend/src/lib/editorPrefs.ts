@@ -223,7 +223,8 @@ export function loadEditorFont(id: FontId): Promise<void> {
   return promise;
 }
 
-const OXPROTO_BASE = "https://cdn.jsdelivr.net/gh/0xType/0xProto@2.502/fonts";
+// Self-hosted copy of 0xProto 2.502 (SIL OFL 1.1); see public/fonts/0xproto/LICENSE.
+const OXPROTO_BASE = "/fonts/0xproto";
 
 function load0xProto(): Promise<void> {
   if (document.getElementById("font-0xproto")) return Promise.resolve();

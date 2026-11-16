@@ -157,8 +157,8 @@ npm install monaco-vim@0.4.4 \
 
 0xProto has no fontsource or Google Fonts package. `editorPrefs.ts` injects
 its `@font-face` rules on demand, with a `local()` lookup first and then the
-official 0xType/0xProto 2.502 files on cdn.jsdelivr.net. If a course sends a
-Content Security Policy, allow `font-src https://cdn.jsdelivr.net`, or
+official 0xType/0xProto 2.502 files on /fonts/0xproto (self-hosted in public/fonts/0xproto) If a course sends a
+Content Security Policy, allow `font-src https:///fonts/0xproto (self-hosted in public/fonts/0xproto)`, or
 self-host the two `.woff2` files and change `OXPROTO_BASE`.
 
 Add these aliases to `vite.config.ts`. Both are required for Vim mode:
