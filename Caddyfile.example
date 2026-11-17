@@ -11,23 +11,54 @@
 ml.ifkash.dev {
 	encode zstd gzip
 
-	# Strip any identity headers from the browser before asking Authelia.
+	# Strip any identity headers from the browser before asking Authelia. This
+	# also covers /mcp, so a client can never send an identity on either path.
 	request_header -Remote-User
 	request_header -X-SSO-Proxy
-	forward_auth authelia:9091 {
-		uri /api/authz/forward-auth
-		copy_headers Remote-User
+
+	# The MCP server for AI agents. An agent can't complete the Authelia sign-in
+	# in a browser, so this path skips forward_auth and the app requires a bearer
+	# token instead. Caddy doesn't inject X-SSO-Proxy here, so these headers can
+	# never carry an identity on this path. The app ignores them on /mcp
+	# regardless.
+	#
+	# `handle` blocks are mutually exclusive and run in order of path
+	# specificity, so this block wins over the catch-all below. A bare
+	# forward_auth would otherwise sort before reverse_proxy and gate /mcp too.
+	#
+	# /.well-known/oauth-* skips Authelia too. An MCP client probes it after a
+	# 401, and the app answers 404 there; a 302 to the portal would read as a
+	# broken OAuth server.
+	@mcp path /mcp /mcp/* /.well-known/oauth-*
+	handle @mcp {
+		reverse_proxy ml:8000 {
+			header_up -Remote-User
+			header_up -X-SSO-Proxy
+			flush_interval -1
+			transport http {
+				response_header_timeout 30m
+				read_timeout 30m
+			}
+		}
 	}
 
-	# A run is a server-sent event stream that stays open for as long as the
-	# exercise takes, so response buffering must be off and the timeouts must
-	# outlast the longest GPU lesson.
-	reverse_proxy ml:8000 {
-		header_up X-SSO-Proxy {$ML_SSO_PROXY_SECRET}
-		flush_interval -1
-		transport http {
-			response_header_timeout 30m
-			read_timeout 30m
+	handle {
+		# Authelia is authoritative for every other request to this private course.
+		forward_auth authelia:9091 {
+			uri /api/authz/forward-auth
+			copy_headers Remote-User
+		}
+
+		# A run is a server-sent event stream that stays open for as long as the
+		# exercise takes, so response buffering must be off and the timeouts must
+		# outlast the longest GPU lesson.
+		reverse_proxy ml:8000 {
+			header_up X-SSO-Proxy {$ML_SSO_PROXY_SECRET}
+			flush_interval -1
+			transport http {
+				response_header_timeout 30m
+				read_timeout 30m
+			}
 		}
 	}
 }

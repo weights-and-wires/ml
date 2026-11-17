@@ -27,6 +27,10 @@ class Settings(BaseSettings):
             if sso.strip() and name.strip()
         }
 
+    # The MCP endpoint's public URL, shown on the agent access page with the
+    # client setup. Empty derives it from the request, as `<base URL>/mcp`.
+    mcp_public_url: str = ""
+
     # Paths
     data_dir: Path = REPO_ROOT / "data"
     content_dir: Path = REPO_ROOT / "content"

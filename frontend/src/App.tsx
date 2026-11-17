@@ -6,6 +6,7 @@ import { useBook } from "./components/DownloadBook";
 import Mark from "./components/Mark";
 import SearchDialog from "./components/SearchDialog";
 import StatusMark from "./components/StatusMark";
+import AgentsPage from "./pages/AgentsPage";
 import Dashboard from "./pages/Dashboard";
 import LessonPage from "./pages/LessonPage";
 import Projects from "./pages/Projects";
@@ -184,6 +185,7 @@ export default function App() {
           ...(projects.length > 0
             ? [{ to: "/projects", label: "Projects", icon: "flask" as const, count: projects.length, active: onProject }]
             : []),
+          { to: "/agents", label: "Agent access", icon: "key" as const, active: location.pathname === "/agents" },
         ]}
         sections={sections}
         storageKey="ml.sidebar"
@@ -209,6 +211,7 @@ export default function App() {
             path="/"
             element={<Dashboard parts={chapterParts} projects={projects} progress={progress} />}
           />
+          <Route path="/agents" element={<AgentsPage />} />
           <Route path="/projects" element={<Projects projects={projects} progress={progress} />} />
           <Route
             path="/lessons/:slug"

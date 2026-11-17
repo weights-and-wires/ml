@@ -35,7 +35,7 @@ computes it. Each lesson ends with a step-by-step guide to its exercise.
 | `content/lessons/` | Eighty-seven chapters and eight projects, in Markdown with YAML front matter and inline SVG figures. |
 | `content/renames.json` | Each slug from earlier editions and the chapters that replaced it, so progress carries over. |
 | `content/exercises/` | One directory per exercise: a starter file, checks, and a worked solution. |
-| `backend/` | FastAPI: auth, content, progress, drafts, and the run stream. |
+| `backend/` | FastAPI: auth, content, progress, drafts, the run stream, and the MCP server. |
 | `backend/app/runner/` | The harness, the assertion library the checks use, and the two execution backends. |
 | `frontend/` | React and Vite: the reader, the editor, and the check console. |
 | `frontend/src/book/` | The print layout for the PDF book, and `frontend/scripts/build-book.mjs`, which prints it. |
@@ -179,6 +179,113 @@ without it, the app rejects all identities. Private APIs and the PDF remain
 protected by the identity dependency. `SSO_USERS` can map portal usernames to
 existing progress identities, for example `ifkash:enderboi,ananya:michu`.
 
+## MCP server for AI agents
+
+The app serves a [Model Context Protocol](https://modelcontextprotocol.io)
+server at `https://ml.ifkash.dev/mcp`, over the Streamable HTTP transport. An
+agent such as Claude Code can use it to read the course and work through it as
+you.
+
+The server exposes the following tools:
+
+- `course_overview`, `list_lessons`, `get_lesson`, and `search` for the
+  syllabus, chapter text, and full-text search over chapters, projects,
+  exercises, and the course documents.
+- `list_projects` and `get_project` for the projects, which are lessons that
+  close each part.
+- `list_exercises`, `get_exercise`, and `get_solution` for an exercise's brief,
+  hints, starter code, checks, and worked solution.
+- `get_document` for `docs/CURRICULUM.md` and `docs/CONTENT_CONTRACT.md`, and
+  `get_book` for the PDF book's details.
+- `get_progress`, `list_runs`, `get_draft`, `save_draft`, `reset_draft`,
+  `set_progress`, and `export_my_data` for your progress, run history, and
+  drafts.
+- `run_exercise`, which runs or checks code the same way the editor's **Run**
+  and **Check** buttons do, and `get_compute` for the runner's limits and GPU
+  status.
+
+Lessons and exercise starter files are also resources, at
+`ml://lessons/SLUG` and `ml://exercises/EXERCISE_ID`. Reading a lesson through
+the server doesn't mark it started.
+
+An agent can't complete the Authelia sign-in, so Caddy routes `/mcp` without
+`forward_auth`, and the server requires a bearer token instead. A token acts
+as the reader who owns it. The server ignores the `Remote-User` and `X-SSO-Proxy`
+headers.
+
+**Caution:** A token can run code in the container, the same as a signed-in
+reader. Treat it like a password, and revoke it when you no longer use it.
+
+### Get a token
+
+To create a token, do one of the following:
+
+- On the site, open **Agent access** in the sidebar, at
+  `https://ml.ifkash.dev/agents`. Enter a name and click **Create token**. The
+  page shows the token once, with ready-to-copy client configurations.
+- On the VM, run the command line in the container:
+
+  ```bash
+  docker exec ml python -m backend.app.mcp_tokens create USERNAME --name NAME
+  ```
+
+  Replace the following:
+
+  - `USERNAME`: the reader the token acts as, after `SSO_USERS` mapping, for
+    example `enderboi`.
+  - `NAME`: a label that tells you where the token is used, for example
+    `laptop`.
+
+To see or revoke tokens on the VM, run
+`docker exec ml python -m backend.app.mcp_tokens list` or
+`docker exec ml python -m backend.app.mcp_tokens revoke ID`. The server stores
+only a SHA-256 hash of each token, so a lost token can't be recovered; revoke
+it and create another.
+
+### Connect a client
+
+To connect Claude Code, complete the following steps:
+
+1. Put the token in an environment variable:
+
+   ```bash
+   export TOKEN=TOKEN_VALUE
+   ```
+
+   Replace `TOKEN_VALUE` with the token, which starts with `mlmcp_`.
+
+2. Add the server:
+
+   ```bash
+   claude mcp add --transport http ml https://ml.ifkash.dev/mcp \
+     --header "Authorization: Bearer $TOKEN"
+   ```
+
+For a client that reads an `mcpServers` configuration file, add the following
+entry:
+
+```json
+{
+  "mcpServers": {
+    "ml": {
+      "type": "http",
+      "url": "https://ml.ifkash.dev/mcp",
+      "headers": {
+        "Authorization": "Bearer TOKEN_VALUE"
+      }
+    }
+  }
+}
+```
+
+The server is stateless and answers with plain JSON, so it needs no session
+and works through a proxy that buffers responses. A `run_exercise` call returns
+when the run finishes, which can take up to the exercise's timeout.
+
+Caddy also routes `/.well-known/oauth-*` to the app without `forward_auth`.
+An MCP client probes those paths after a `401`, and the app answers `404`, so
+the client falls back to the bearer token.
+
 ## The GPU backend
 
 One chapter, `069-training-loop-and-cost`, is marked `gpu: true`. Its checks run on the CPU like every other exercise, and
@@ -237,8 +344,8 @@ A deploy has three steps:
 
 The VM never builds from source and holds no copy of the tree. `.env` on the VM
 holds the SSO proxy secret and RunPod key, and a deploy never touches it.
-`Caddyfile.example` holds the vhost block, including the Authelia forward-auth
-and streaming settings. `docker-compose.yml` is an example of the service
+`Caddyfile.example` holds the vhost block, including the Authelia forward-auth,
+the streaming settings, and the `/mcp` route that skips forward-auth. `docker-compose.yml` is an example of the service
 definition.
 
 The image also prints the PDF book, in a build stage that holds Chromium and
@@ -277,8 +384,11 @@ more than once, so that the contents carry real page numbers. The PDF and its
 
 The build fails on any formula KaTeX can't render and on anything wider than
 the page, because Chrome shrinks every page to fit the widest element. It skips
-itself when no lesson or layout file has changed; to rebuild anyway, pass
-`--force`. The image build prints the book, so a deploy needs no local build.
+itself when no lesson or layout file has changed. The layout files are
+`frontend/src/book/` and the files it imports, which `BOOK_SOURCES` in
+`build-book.mjs` lists; a change elsewhere in `frontend/src/` doesn't reprint
+the book. The Dockerfile's book stage copies the same files, so keep the two
+lists in step. To rebuild anyway, pass `--force`. The image build prints the book, so a deploy needs no local build.
 CI also builds the book on every push and keeps it as a workflow artifact for
 seven days.
 
