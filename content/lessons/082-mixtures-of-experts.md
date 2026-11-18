@@ -478,6 +478,8 @@ A balancing weight that is too large forces even routing and can stop experts fr
 
 What a layer's units store, and how to read it, is in [interpretability](/lessons/083-interpretability).
 
+Routing isn't limited to the feed-forward layer. The [K2-Horizon](https://papers.ifkash.dev/k2-horizon/) paper page shows Mixture-of-Value Attention, which sends each token to a few value experts and mixes their outputs before attention, so the KV cache stays the same size.
+
 ## The exercise
 
 You write the seven functions above. The checks confirm that the true top-$k$ experts come back best first, that the worked weights are 0.7311 and 0.2689, and that huge logits do not overflow. They confirm the hand gradients $-0.3932$ and $+0.3932$ and that `router_backward` matches finite differences. They also confirm that `expert_load` divides by $n k$, that the loss gives 1.5 on the worked example, 1 for uniform routing, and $E$ or $E/k$ under collapse, and that `expert_capacity` rounds up with a floor of 1. Last, `moe_forward` reproduces the hand mix 5.614, equals the dense sum when $k = E$, drops exactly the overflow, and never drops more as $\gamma$ grows.
